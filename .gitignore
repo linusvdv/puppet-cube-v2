@@ -30,12 +30,3 @@
 *.exe
 *.out
 *.app
-
-
-# build project
-build
-out
-.cache
-.idea
-.vs
-.vscode
