@@ -1,12 +1,15 @@
+#include "error_handler.h"
 #include "renderer.h"
 #include "settings.h"
 
 
 int main (int argc, char *argv[]) {
-    Setting settings(argc, argv);
+    ErrorHandler error_handler(ErrorHandler::Level::kAll);
+
+    Setting settings(error_handler, argc, argv);
 
     if (settings.gui) {
-        Renderer(settings);
+        Renderer(error_handler, settings);
     }
 
     return 0;

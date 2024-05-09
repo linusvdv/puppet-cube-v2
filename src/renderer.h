@@ -1,4 +1,5 @@
+#include "error_handler.h"
 #include "settings.h"
 
 
-int Renderer (Setting settings);
+int Renderer (ErrorHandler error_handler, Setting settings);

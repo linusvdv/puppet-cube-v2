@@ -1,11 +1,14 @@
 #include <cstddef>
+#include <ranges>
 #include <string>
 #include <vector>
 
+
+#include "error_handler.h"
 #include "settings.h"
 
 
-Setting::Setting(int argc, char *argv[]) {
+Setting::Setting(ErrorHandler error_handler, int argc, char *argv[]) {
     std::vector<std::string> arguments(argv, argv+argc);
 
     // get root path
@@ -15,14 +18,39 @@ Setting::Setting(int argc, char *argv[]) {
     temp_root_path.append("/../../");
     rootPath = temp_root_path;
 
-    for (std::string argument : arguments) {
-        // gui
+    for (std::string argument : arguments | std::views::drop(1)) {
         if (argument == "nogui") {
             gui = false;
         }
-        // root path
+
         else if (argument.find("rootPath=") == 0) {
             rootPath = argument.erase(0, std::string("rootPath=").size());
+        }
+
+        else if (argument.find("errorLevel=") == 0) {
+            std::string error_level = argument.erase(0, std::string("errorLevel=").size());
+            if (error_level == "criticalError") {
+                error_handler.SetErrorLevel(ErrorHandler::Level::kCriticalError);
+            }
+            else if (error_level == "error") {
+                error_handler.SetErrorLevel(ErrorHandler::Level::kError);
+            }
+            else if (error_level == "warning") {
+                error_handler.SetErrorLevel(ErrorHandler::Level::kWarning);
+            }
+            else if (error_level == "info") {
+                error_handler.SetErrorLevel(ErrorHandler::Level::kInfo);
+            }
+            else if (error_level == "all") {
+                error_handler.SetErrorLevel(ErrorHandler::Level::kAll);
+            }
+            else {
+                error_handler.Handle(ErrorHandler::Level::kWarning, "settings.cpp", "error level type " + error_level + " not found");
+            }
+        }
+
+        else {
+            error_handler.Handle(ErrorHandler::Level::kInfo, "settings.cpp", "could not find a setting for: " + argument);
         }
     }
 }

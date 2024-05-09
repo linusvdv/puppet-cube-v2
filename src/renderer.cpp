@@ -4,33 +4,34 @@
 #include <GLFW/glfw3.h>
 
 
+#include "error_handler.h"
 #include "settings.h"
 #include "shader.h"
 
 
 static void ErrorCallback(int error, const char* description) {
-    std::cerr << "ERROR: " << description << std::endl;
+    std::cout << "ERROR: in file rendere.cpp --- " << error << " " << description;
 }
 
 
-static void KeyCallback(GLFWwindow* window, int key, int scancode, int action, int mods) {
+static void KeyCallback(GLFWwindow* window, int key, int scancode [[maybe_unused]], int action, int mods [[maybe_unused]]) {
     if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS) {
         glfwSetWindowShouldClose(window, GLFW_TRUE);
     }
 }
 
 
-void FramebufferSizeCallback(GLFWwindow* window, int width, int height) {
+void FramebufferSizeCallback(GLFWwindow* window [[maybe_unused]], int width, int height) {
     glViewport(0, 0, width, height);
 }
 
 
-int Renderer (Setting settings) {
+int Renderer (ErrorHandler error_handler, Setting settings) {
     glfwSetErrorCallback(ErrorCallback);
 
     // initialising GLFW
     if (glfwInit() == 0) {
-        return -1;
+        error_handler.Handle(ErrorHandler::Level::kCriticalError, "renderer.cpp", "glfw initialization failed");
     }
 
     // create window with OpenGL 3.x or higher
@@ -39,8 +40,7 @@ int Renderer (Setting settings) {
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
     GLFWwindow* window = glfwCreateWindow(640, 480, "Puppet Cube V2", NULL, NULL);
     if (window == nullptr) {
-        glfwTerminate();
-        return -1;
+        error_handler.Handle(ErrorHandler::Level::kCriticalError, "renderer.cpp", "glfw creation of window failed");
     }
 
     glfwSetKeyCallback(window, KeyCallback);
@@ -51,8 +51,7 @@ int Renderer (Setting settings) {
 
     // initialising GLAD
     if (gladLoadGLLoader((GLADloadproc)glfwGetProcAddress) == 0) {
-        std::cout << "Faild to initialize GLAD" << std::endl;
-        return -1;
+        error_handler.Handle(ErrorHandler::Level::kCriticalError, "renderer.cpp", "glad initialization failed");
     }
 
 
@@ -60,7 +59,7 @@ int Renderer (Setting settings) {
     std::string fragment_shader_path = "src/shader.frag";
     vertex_shader_path.insert(0, settings.rootPath);
     fragment_shader_path.insert(0, settings.rootPath);
-    Shader our_shader(vertex_shader_path.c_str(), fragment_shader_path.c_str());
+    Shader our_shader(error_handler, vertex_shader_path.c_str(), fragment_shader_path.c_str());
 
     // drawing two triangle
     float vertices[] = {
