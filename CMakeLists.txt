@@ -24,7 +24,8 @@ target_include_directories(glad PRIVATE src/)
 add_executable(PuppetCubeV2
     src/main.cpp
     src/renderer.cpp
-    src/shader.cpp)
+    src/shader.cpp
+    src/settings.cpp)
 
 target_link_libraries(PuppetCubeV2 PRIVATE glfw glad)
 

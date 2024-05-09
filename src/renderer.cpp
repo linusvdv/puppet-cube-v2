@@ -1,33 +1,35 @@
-#include "shader.h"
 #include <iostream>
 
 #include <glad/glad.h>
-
 #include <GLFW/glfw3.h>
 
 
-static void error_callback(int error, const char* description) {
+#include "settings.h"
+#include "shader.h"
+
+
+static void ErrorCallback(int error, const char* description) {
     std::cerr << "ERROR: " << description << std::endl;
 }
 
 
-static void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods) {
+static void KeyCallback(GLFWwindow* window, int key, int scancode, int action, int mods) {
     if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS) {
         glfwSetWindowShouldClose(window, GLFW_TRUE);
     }
 }
 
 
-void framebuffer_size_callback(GLFWwindow* window, int width, int height) {
+void FramebufferSizeCallback(GLFWwindow* window, int width, int height) {
     glViewport(0, 0, width, height);
 }
 
 
-int renderer () {
-    glfwSetErrorCallback(error_callback);
+int Renderer (Setting settings) {
+    glfwSetErrorCallback(ErrorCallback);
 
     // initialising GLFW
-    if (!glfwInit()) {
+    if (glfwInit() == 0) {
         return -1;
     }
 
@@ -36,33 +38,37 @@ int renderer () {
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
     GLFWwindow* window = glfwCreateWindow(640, 480, "Puppet Cube V2", NULL, NULL);
-    if (!window) {
+    if (window == nullptr) {
         glfwTerminate();
         return -1;
     }
 
-    glfwSetKeyCallback(window, key_callback);
-    glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
+    glfwSetKeyCallback(window, KeyCallback);
+    glfwSetFramebufferSizeCallback(window, FramebufferSizeCallback);
 
     glfwMakeContextCurrent(window);
 
 
     // initialising GLAD
-    if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress)) {
+    if (gladLoadGLLoader((GLADloadproc)glfwGetProcAddress) == 0) {
         std::cout << "Faild to initialize GLAD" << std::endl;
         return -1;
     }
 
 
-    Shader ourShader("shader.vert", "shader.frag");
+    std::string vertex_shader_path = "src/shader.vert";
+    std::string fragment_shader_path = "src/shader.frag";
+    vertex_shader_path.insert(0, settings.rootPath);
+    fragment_shader_path.insert(0, settings.rootPath);
+    Shader our_shader(vertex_shader_path.c_str(), fragment_shader_path.c_str());
 
     // drawing two triangle
     float vertices[] = {
         // position          colors
-         0.5f,  0.5f,  0.0f, 1.0f, 0.0f, 0.0f,
-         0.5f, -0.5f,  0.0f, 0.0f, 1.0f, 0.0f,
-        -0.0f, -0.5f,  0.0f, 0.0f, 0.0f, 1.0f,
-        -0.0f,  0.5f,  0.0f, 1.0f, 1.0f, 0.0f
+         0.5F,  0.5F,  0.0F, 1.0F, 0.0F, 0.0F,
+         0.5F, -0.5F,  0.0F, 0.0F, 1.0F, 0.0F,
+        -0.0F, -0.5F,  0.0F, 0.0F, 0.0F, 1.0F,
+        -0.0F,  0.5F,  0.0F, 1.0F, 1.0F, 0.0F
     };
     unsigned int indices[] = {
         0, 1, 3,
@@ -72,22 +78,22 @@ int renderer () {
 
 
     // vertex buffer objects
-    unsigned int VBO;
-    glGenBuffers(1, &VBO);
-    glBindBuffer(GL_ARRAY_BUFFER, VBO);
+    unsigned int vbo;
+    glGenBuffers(1, &vbo);
+    glBindBuffer(GL_ARRAY_BUFFER, vbo);
     glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
 
 
     // vertex array object
-    unsigned int VAO;
-    glGenVertexArrays(1, &VAO);
-    glBindVertexArray(VAO);
+    unsigned int vao;
+    glGenVertexArrays(1, &vao);
+    glBindVertexArray(vao);
 
 
     // element buffer objects
-    unsigned int EBO;
-    glGenBuffers(1, &EBO);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
+    unsigned int ebo;
+    glGenBuffers(1, &ebo);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo);
     glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
 
 
@@ -105,13 +111,13 @@ int renderer () {
     // Wireframe mode
     // glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 
-    while (!glfwWindowShouldClose(window)) {
+    while (glfwWindowShouldClose(window) == 0) {
         // clear background
-        glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
+        glClearColor(0.2F, 0.3F, 0.3F, 1.0F);
         glClear(GL_COLOR_BUFFER_BIT);
 
-        ourShader.use();
-        glBindVertexArray(VAO);
+        our_shader.Use();
+        glBindVertexArray(vao);
         glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
 
         glfwSwapBuffers(window);

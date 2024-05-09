@@ -5,5 +5,4 @@ cmake -B build
 cmake --build build --config Release
 
 Run:
-cd src/
-./../build/bin/PuppetCubeV2
+./build/bin/PuppetCubeV2

@@ -1,9 +1,13 @@
 #include "renderer.h"
+#include "settings.h"
 
 
 int main (int argc, char *argv[]) {
-    if (renderer() != 0) {
-        return -1;
+    Setting settings(argc, argv);
+
+    if (settings.gui) {
+        Renderer(settings);
     }
+
     return 0;
 }

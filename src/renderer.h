@@ -1,1 +1,4 @@
-int renderer ();
+#include "settings.h"
+
+
+int Renderer (Setting settings);
