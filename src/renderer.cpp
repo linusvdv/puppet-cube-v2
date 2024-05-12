@@ -1,7 +1,13 @@
+#include <glm/ext/matrix_float4x4.hpp>
+#include <glm/ext/vector_float3.hpp>
+#include <glm/trigonometric.hpp>
 #include <iostream>
 
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
+#include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/type_ptr.hpp>
 
 
 #include "error_handler.h"
@@ -22,7 +28,7 @@ static void KeyCallback(GLFWwindow* window, int key, int scancode [[maybe_unused
 
 
 void FramebufferSizeCallback(GLFWwindow* window [[maybe_unused]], int width, int height) {
-    glViewport(0, 0, width, height);
+    glViewport(0, 0, std::min(width, height), std::min(width, height));
 }
 
 
@@ -64,16 +70,21 @@ int Renderer (ErrorHandler error_handler, Setting settings) {
     // drawing two triangle
     float vertices[] = {
         // position          colors
-         0.5F,  0.5F,  0.0F, 1.0F, 0.0F, 0.0F,
-         0.5F, -0.5F,  0.0F, 0.0F, 1.0F, 0.0F,
-        -0.0F, -0.5F,  0.0F, 0.0F, 0.0F, 1.0F,
-        -0.0F,  0.5F,  0.0F, 1.0F, 1.0F, 0.0F
+         0.2F,  0.2F,  0.6F, 1.0F, 0.5F, 0.0F,
+         0.2F, -0.2F,  0.6F, 1.0F, 0.5F, 0.0F,
+        -0.2F, -0.2F,  0.6F, 1.0F, 0.5F, 0.0F,
+        -0.2F,  0.2F,  0.6F, 1.0F, 0.5F, 0.0F,
+         0.2F,  0.6F, -0.2F, 1.0F, 1.0F, 0.0F,
+         0.2F,  0.6F,  0.2F, 1.0F, 1.0F, 0.0F,
+        -0.2F,  0.6F,  0.2F, 1.0F, 1.0F, 0.0F,
+        -0.2F,  0.6F, -0.2F, 1.0F, 1.0F, 0.0F
     };
     unsigned int indices[] = {
-        0, 1, 3,
-        1, 2, 3
+        0, 1, 2,
+        0, 2, 3,
+        4, 5, 6,
+        4, 6, 7
     };
-
 
 
     // vertex buffer objects
@@ -115,9 +126,26 @@ int Renderer (ErrorHandler error_handler, Setting settings) {
         glClearColor(0.2F, 0.3F, 0.3F, 1.0F);
         glClear(GL_COLOR_BUFFER_BIT);
 
+        // view
+        glm::mat4 view_rotation = glm::mat4(1.0F);
+        view_rotation = glm::rotate(view_rotation, glm::radians(40.0F), glm::vec3(1.0, 0.0, 0.0)); // second
+        view_rotation = glm::rotate(view_rotation, glm::radians(40.0F), glm::vec3(0.0, 1.0, 0.0)); // first
+        unsigned int view_rotation_loc = glGetUniformLocation(our_shader.ID, "view_rotation");
+        glUniformMatrix4fv(view_rotation_loc, 1, GL_FALSE, glm::value_ptr(view_rotation));
+
+
+        // rotation of pieces
+        glm::mat4 trans = glm::mat4(1.0F);
+        trans = glm::scale(trans, glm::vec3(0.5, 0.5, 0.5));
+        trans = glm::rotate(trans, (float)glfwGetTime(), glm::vec3(0.0, 1.0, 0.0));
+
+        unsigned int transform_loc = glGetUniformLocation(our_shader.ID, "transform");
+        glUniformMatrix4fv(transform_loc, 1, GL_FALSE, glm::value_ptr(trans));
+
+
         our_shader.Use();
         glBindVertexArray(vao);
-        glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+        glDrawElements(GL_TRIANGLES, 12, GL_UNSIGNED_INT, 0);
 
         glfwSwapBuffers(window);
 
