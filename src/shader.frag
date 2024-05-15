@@ -4,6 +4,10 @@ out vec4 FragColor;
 
 in vec4 ourColor;
 
+
+uniform float transparency = 1.0;
+
+
 void main() {
-   FragColor = ourColor;
+   FragColor = vec4(ourColor.rgb, transparency);
 }

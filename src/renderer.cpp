@@ -63,26 +63,36 @@ int Renderer (ErrorHandler error_handler, Setting settings) {
     std::string fragment_shader_path = "src/shader.frag";
     vertex_shader_path.insert(0, settings.rootPath);
     fragment_shader_path.insert(0, settings.rootPath);
-    Shader our_shader(error_handler, vertex_shader_path.c_str(), fragment_shader_path.c_str());
 
-    Cube cube;
+    Shader shader(error_handler, vertex_shader_path.c_str(), fragment_shader_path.c_str());
 
     glEnable(GL_DEPTH_TEST);
+    shader.Use();
 
-    our_shader.Use();
+
+    Cube cube(shader);
+
     while (glfwWindowShouldClose(window) == 0) {
         // clear background
         glClearColor(0.2F, 0.3F, 0.3F, 1.0F);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
+        // rotation
+        glm::mat4 trans = glm::mat4(1.0F);
+        trans = glm::scale(trans, glm::vec3(0.5, 0.5, 0.5));
+        trans = glm::rotate(trans, (float)glfwGetTime(), glm::vec3(0.0, 1.0, 0.0));
+
+        unsigned int transform_loc = glGetUniformLocation(shader.ID, "current_rotation_axis");
+        glUniformMatrix4fv(transform_loc, 1, GL_FALSE, glm::value_ptr(trans));
+
         // view
         glm::mat4 view_rotation = glm::mat4(1.0F);
         view_rotation = glm::rotate(view_rotation, glm::radians(40.0F), glm::vec3(1.0, 0.0, 0.0)); // second
         view_rotation = glm::rotate(view_rotation, glm::radians(40.0F), glm::vec3(0.0, 1.0, 0.0)); // first
-        unsigned int view_rotation_loc = glGetUniformLocation(our_shader.ID, "view_rotation");
+        unsigned int view_rotation_loc = glGetUniformLocation(shader.ID, "view_rotation");
         glUniformMatrix4fv(view_rotation_loc, 1, GL_FALSE, glm::value_ptr(view_rotation));
 
-        cube.Draw(our_shader);
+        cube.Draw(shader);
 
         glfwSwapBuffers(window);
 
