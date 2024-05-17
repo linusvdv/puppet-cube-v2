@@ -67,6 +67,7 @@ int Renderer (ErrorHandler error_handler, Setting settings) {
     Shader shader(error_handler, vertex_shader_path.c_str(), fragment_shader_path.c_str());
 
     glEnable(GL_DEPTH_TEST);
+    glEnable(GL_LINE_SMOOTH);
     shader.Use();
 
 
@@ -79,7 +80,6 @@ int Renderer (ErrorHandler error_handler, Setting settings) {
 
         // rotation
         glm::mat4 trans = glm::mat4(1.0F);
-        trans = glm::scale(trans, glm::vec3(0.5, 0.5, 0.5));
         trans = glm::rotate(trans, (float)glfwGetTime(), glm::vec3(0.0, 1.0, 0.0));
 
         unsigned int transform_loc = glGetUniformLocation(shader.ID, "current_rotation_axis");
@@ -87,6 +87,7 @@ int Renderer (ErrorHandler error_handler, Setting settings) {
 
         // view
         glm::mat4 view_rotation = glm::mat4(1.0F);
+        view_rotation = glm::scale(view_rotation, glm::vec3(0.5, 0.5, 0.5));
         view_rotation = glm::rotate(view_rotation, glm::radians(40.0F), glm::vec3(1.0, 0.0, 0.0)); // second
         view_rotation = glm::rotate(view_rotation, glm::radians(40.0F), glm::vec3(0.0, 1.0, 0.0)); // first
         unsigned int view_rotation_loc = glGetUniformLocation(shader.ID, "view_rotation");

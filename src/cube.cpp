@@ -4,7 +4,6 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
-#include <iostream>
 
 
 #include "cube.h"
@@ -66,6 +65,11 @@ void Cube::Draw(Shader shader) const {
             continue;
         }
 
+        Mesh mesh = meshes_[pieces_[i].type];
+
+        // send the vertex buffer objects
+        glBufferData(GL_ARRAY_BUFFER, sizeof(float)*mesh.points.size(), mesh.points.data(), GL_STATIC_DRAW);
+
         // go over all colors of this piece type
         for (int color_index = 0; color_index < pieces_[i].colors.size(); color_index++) {
             // convert the piece index, color index and effected by rotation of current move into one unsigned int
@@ -74,10 +78,6 @@ void Cube::Draw(Shader shader) const {
                                       ( (int)pieces_[i].current_rotation << 8 );    // effected by current rotation
             glUniform1ui(piece_data_location_, piece_data);
 
-            Mesh mesh = meshes_[pieces_[i].type];
-
-            // send the vertex buffer objects
-            glBufferData(GL_ARRAY_BUFFER, sizeof(float)*mesh.points.size(), mesh.points.data(), GL_STATIC_DRAW);
             // send the element buffer objects
             glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(int)*mesh.triangles[color_index].size(), mesh.triangles[color_index].data(), GL_STATIC_DRAW);
 
@@ -85,16 +85,17 @@ void Cube::Draw(Shader shader) const {
 
             glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
             glDrawElements(GL_TRIANGLES, mesh.triangles[color_index].size(), GL_UNSIGNED_INT, 0);
-
-
-            piece_data = ( i) |                          // piece index
-                         ( Colors::kBlack << 5 ) |   // color index
-                         ( (int)pieces_[i].current_rotation << 8 );    // effected by current rotation
-            glUniform1ui(piece_data_location_, piece_data);
-
-
-            glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-            glDrawElements(GL_TRIANGLES, mesh.triangles[color_index].size(), GL_UNSIGNED_INT, 0);
         }
+
+
+        unsigned int piece_data = ( i ) |                       // piece index
+                ( Colors::kBlack << 5 ) |                       // color index
+                ( (int)pieces_[i].current_rotation << 8 );      // effected by current rotation
+        glUniform1ui(piece_data_location_, piece_data);
+
+        glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(int)*mesh.lines.size(), mesh.lines.data(), GL_STATIC_DRAW);
+        glBindVertexArray(vertex_array_object_);
+
+        glDrawElements(GL_LINES, mesh.lines.size(), GL_UNSIGNED_INT, 0);
     }
 }

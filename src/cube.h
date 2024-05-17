@@ -78,21 +78,21 @@ private:
         int type;
         std::vector<Colors> colors;
         glm::mat4 rotation;
-        bool current_rotation = true;
+        bool current_rotation = false;
     };
 
     static const unsigned int kNumPieces = 26;
     std::array<Piece, kNumPieces> pieces_ = {{
-        {0, {Colors::kYellow}, GetRotationMatrix(  0.0,   0.0,   0.0)},
+        {0, {Colors::kYellow}, GetRotationMatrix(  0.0,   0.0,   0.0), true},
         {0, {Colors::kOrange}, GetRotationMatrix( 90.0,   0.0,   0.0)},
         {0, {Colors::kGreen }, GetRotationMatrix(  0.0,   0.0,  90.0)},
         {0, {Colors::kRed   }, GetRotationMatrix(-90.0,   0.0,   0.0)},
         {0, {Colors::kBlue  }, GetRotationMatrix(  0.0,   0.0, -90.0)},
         {0, {Colors::kWhite }, GetRotationMatrix(180.0,   0.0,   0.0)},
-        {1, {Colors::kYellow, Colors::kOrange}, GetRotationMatrix(  0.0,   0.0,   0.0)},
-        {1, {Colors::kYellow, Colors::kGreen }, GetRotationMatrix(  0.0, -90.0,   0.0)},
-        {1, {Colors::kYellow, Colors::kRed   }, GetRotationMatrix(  0.0, 180.0,   0.0)},
-        {1, {Colors::kYellow, Colors::kBlue  }, GetRotationMatrix(  0.0,  90.0,   0.0)},
+        {1, {Colors::kYellow, Colors::kOrange}, GetRotationMatrix(  0.0,   0.0,   0.0), true},
+        {1, {Colors::kYellow, Colors::kGreen }, GetRotationMatrix(  0.0, -90.0,   0.0), true},
+        {1, {Colors::kYellow, Colors::kRed   }, GetRotationMatrix(  0.0, 180.0,   0.0), true},
+        {1, {Colors::kYellow, Colors::kBlue  }, GetRotationMatrix(  0.0,  90.0,   0.0), true},
         {1, {Colors::kBlue,   Colors::kOrange}, GetRotationMatrix(  0.0,   0.0, -90.0)},
         {1, {Colors::kGreen,  Colors::kOrange}, GetRotationMatrix(  0.0,   0.0,  90.0)},
         {1, {Colors::kGreen,  Colors::kRed   }, GetRotationMatrix(  0.0, 180.0, -90.0)},
@@ -115,10 +115,12 @@ private:
         std::vector<float> points;
         // vector of triangles for different color
         std::vector<std::vector<int>> triangles;
+        std::vector<int> lines;
     };
 
     const std::array<Mesh, 6> meshes_ = {{
         // centers (default yellow)
+        // points
         {{ 0.2,  0.6,  0.2,
            0.2,  0.6, -0.2,
           -0.2,  0.6, -0.2,
@@ -128,6 +130,7 @@ private:
           -0.2,  0.2, -0.2,
           -0.2,  0.2,  0.2},
 
+        // triangles
          {{0, 1, 2,
            0, 2, 3,
            0, 4, 5,
@@ -137,10 +140,25 @@ private:
            2, 6, 7,
            2, 3, 7,
            3, 7, 4,
-           3, 0, 4}}
+           3, 0, 4}},
+
+         // lines
+          {0, 1,
+           1, 2,
+           2, 3,
+           3, 0,
+           0, 4,
+           1, 5,
+           2, 6,
+           3, 7,
+           4, 5,
+           5, 6,
+           6, 7,
+           7, 4}
         },
 
         // edges (default yellow/orange)
+        // points
         {{ 0.2,  0.6,  0.6,
            0.2,  0.6,  0.2,
           -0.2,  0.6,  0.2,
@@ -150,6 +168,7 @@ private:
           -0.2,  0.2,  0.2,
           -0.2,  0.2,  0.6},
 
+        // triangles
          {{0, 1, 2,
            0, 2, 3,
            0, 5, 1,
@@ -161,7 +180,21 @@ private:
            0, 4, 5,
            4, 5, 6,
            4, 6, 7,
-           3, 6, 7}}
+           3, 6, 7}},
+
+         // lines
+          {0, 1,
+           1, 2,
+           2, 3,
+           3, 0,
+           0, 4,
+           1, 5,
+           2, 6,
+           3, 7,
+           4, 5,
+           5, 6,
+           6, 7,
+           7, 4}
         },
     }};
 
