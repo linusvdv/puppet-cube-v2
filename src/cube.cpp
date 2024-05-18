@@ -173,7 +173,6 @@ Cube::~Cube() {
 
 void Cube::Draw(Shader shader) const {
     for (int i = 0; i < pieces_.size(); i++) {
-
         Mesh mesh = meshes_[pieces_[i].type];
 
         // send the vertex buffer objects

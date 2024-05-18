@@ -86,7 +86,7 @@ private:
         int type;
         std::vector<Colors> colors;
         glm::mat4 rotation;
-        bool current_rotation = false;
+        bool current_rotation;
     };
 
     static const unsigned int kNumPieces = 26;
@@ -110,9 +110,9 @@ private:
         {1, {Colors::kWhite,  Colors::kRed   }, GetRotationMatrix(  0.0, 180.0, 180.0)},
         {1, {Colors::kWhite,  Colors::kBlue  }, GetRotationMatrix(  0.0,  90.0, 180.0)},
         {2, {Colors::kYellow, Colors::kOrange, Colors::kBlue  }, GetRotationMatrix(  0.0,   0.0,   0.0), true},
-        {3, },
-        {3, },
-        {3, },
+        {3, {Colors::kYellow, Colors::kGreen,  Colors::kOrange}, GetRotationMatrix(  0.0,   0.0,   0.0), true},
+        {3, {Colors::kOrange, Colors::kWhite,  Colors::kBlue  }, GetRotationMatrix( 90.0,  90.0,   0.0)},
+        {3, {Colors::kBlue,   Colors::kRed,    Colors::kYellow}, GetRotationMatrix(-90.0,   0.0, -90.0), true},
         {4, {Colors::kYellow, Colors::kRed,    Colors::kGreen }, GetRotationMatrix(  0.0,   0.0,   0.0), true},
         {4, {Colors::kOrange, Colors::kGreen,  Colors::kWhite }, GetRotationMatrix(  0.0,  90.0,  90.0)},
         {4, {Colors::kBlue,   Colors::kWhite,  Colors::kRed   }, GetRotationMatrix(-90.0,   0.0, -90.0)},
@@ -250,7 +250,53 @@ private:
 
         // one direction facing out (default yellow/green/orange)
         // some of this initialisation is done in cube.cpp
-        {},
+        // points
+        {{-0.2,  0.6,  0.2,
+          -0.2,  0.6,  0.6,
+          -1.0,  0.6,  0.6,
+          -1.0,  0.6, -0.2,
+          -0.6,  0.6, -0.2,
+          -0.6,  0.6,  0.2,
+          -0.2,  0.2,  0.2,
+          -0.2,  0.2,  0.6,
+          -0.6,  0.2,  0.6,
+          -0.6, -0.2,  0.6,
+          -1.0, -0.2,  0.6,
+          -1.0, -0.2, -0.2,
+         },
+
+        // triangles
+         {{0, 1, 2,
+           2, 3, 4,
+           4, 5, 2,
+           5, 2, 0,
+           0, 1, 6},
+          {2, 3, 10,
+           10, 11, 3},
+          {6, 7, 1,
+           7, 1, 2,
+           7, 8, 2,
+           2, 8, 9,
+           2, 9, 10}},
+
+        // lines
+         {0, 1,
+          1, 2,
+          2, 3,
+          3, 4,
+          4, 5,
+          5, 0,
+          0, 6,
+          6, 7,
+          7, 1,
+          7, 8,
+          8, 9,
+          9, 10,
+          10, 11,
+          2, 10,
+          3, 11
+         }
+        },
 
         // corner two directions facing out (default yellow/red/green)
         // some of this initialisation is done in cube.cpp

@@ -88,8 +88,8 @@ int Renderer (ErrorHandler error_handler, Setting settings) {
         // view
         glm::mat4 view_rotation = glm::mat4(1.0F);
         view_rotation = glm::scale(view_rotation, glm::vec3(0.5, 0.5, 0.5));
-        view_rotation = glm::rotate(view_rotation, glm::radians(30.0F), glm::vec3(1.0, 0.0, 0.0)); // second
-        view_rotation = glm::rotate(view_rotation, glm::radians(-20.0F), glm::vec3(0.0, 1.0, 0.0)); // first
+        view_rotation = glm::rotate(view_rotation, glm::radians( 30.0F), glm::vec3(1.0, 0.0, 0.0)); // second
+        view_rotation = glm::rotate(view_rotation, glm::radians(-40.0F), glm::vec3(0.0, 1.0, 0.0)); // first
         unsigned int view_rotation_loc = glGetUniformLocation(shader.ID, "view_rotation");
         glUniformMatrix4fv(view_rotation_loc, 1, GL_FALSE, glm::value_ptr(view_rotation));
 
