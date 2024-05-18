@@ -10,6 +10,9 @@
 #include "shader.h"
 
 
+
+
+
 Cube::Cube(Shader shader) {
     // OpenGL objects
     glGenVertexArrays(1, &vertex_array_object_);
@@ -26,16 +29,13 @@ Cube::Cube(Shader shader) {
     glEnableVertexAttribArray(0);
 
     // unbind
-    // glBindBuffer(GL_ARRAY_BUFFER, 0);
-    // glBindVertexArray(0);
+    glBindVertexArray(0);
 
 
-    // colors
-    glUniform3fv(glGetUniformLocation(shader.ID, "colors"), 6, *colors_);
-
+    // piece data location
     piece_data_location_ = glGetUniformLocation(shader.ID, "piece_data");
 
-
+    // colors
     unsigned int colors_index = glGetUniformLocation(shader.ID, "colors");
     glUniform4fv(colors_index, kNumColors, *colors_);
 
@@ -45,23 +45,21 @@ Cube::Cube(Shader shader) {
     }
     rotations_location_ = glGetUniformLocation(shader.ID, "rotations");
     glUniformMatrix4fv(rotations_location_, kNumPieces, GL_FALSE, glm::value_ptr(rotations[0]));
-    // (current_rotation_axis)
-    // (view_rotation)
 }
 
 
-/*
+
 Cube::~Cube() {
-    glDeleteVertexArrays(1, &vertex_array_object_);
-    glDeleteBuffers(1, &vertex_buffer_objects_);
-    glDeleteBuffers(1, &element_buffer_object_);
+    // glDeleteVertexArrays(1, &vertex_array_object_);
+    // glDeleteBuffers(1, &vertex_buffer_objects_);
+    // glDeleteBuffers(1, &element_buffer_object_);
 }
-*/
+
 
 
 void Cube::Draw(Shader shader) const {
     for (int i = 0; i < pieces_.size(); i++) {
-        if (pieces_[i].type > 1) { // TODO: corners
+        if (pieces_[i].type == 3) { // TODO: corners
             continue;
         }
 
