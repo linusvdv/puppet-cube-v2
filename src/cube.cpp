@@ -1,5 +1,6 @@
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
+#include <cmath>
 #include <glm/ext/matrix_float4x4.hpp>
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
@@ -10,7 +11,118 @@
 #include "shader.h"
 
 
+void Cube::MeshInitialisation() {
+    // corner two directions facing out
+    int current_triangle_size = meshes_[4].points.size() / 3;
+    const int num_edges_radius = 20; // multible of two
+    const float begin_angle = asin(1 / (sqrt(2) * 3));
+    const float end_angle = asin(1 / sqrt(2));
+    const float length = -0.2*sqrt(2)*3;
 
+    for (int i = 0; i < num_edges_radius/2; i++) {
+        float angle = begin_angle + (end_angle - begin_angle) / (num_edges_radius/2) * i;
+
+        // left bottom
+        meshes_[4].points.insert(meshes_[4].points.end(),
+                {float(length * cos(angle)), -0.2, float(length * sin(angle))});
+        // left top 
+        meshes_[4].points.insert(meshes_[4].points.end(),
+                {float(length * cos(angle)),  0.2, float(length * sin(angle))});
+        // right bottom
+        meshes_[4].points.insert(meshes_[4].points.end(),
+                {float(length * sin(angle)), -0.2, float(length * cos(angle))});
+        // right top
+        meshes_[4].points.insert(meshes_[4].points.end(),
+                {float(length * sin(angle)),  0.2, float(length * cos(angle))});
+
+        if (i == 0) {
+            continue;
+        }
+
+        meshes_[4].triangles[1].push_back(current_triangle_size + i*4 + 2);
+        meshes_[4].triangles[1].push_back(current_triangle_size + i*4 + 3);
+        meshes_[4].triangles[1].push_back(current_triangle_size + i*4 - 1);
+
+        meshes_[4].triangles[1].push_back(current_triangle_size + i*4 + 2);
+        meshes_[4].triangles[1].push_back(current_triangle_size + i*4 - 2);
+        meshes_[4].triangles[1].push_back(current_triangle_size + i*4 - 1);
+
+        meshes_[4].triangles[1].push_back(current_triangle_size + i*4 + 3);
+        meshes_[4].triangles[1].push_back(current_triangle_size + i*4 - 1);
+        meshes_[4].triangles[1].push_back(7);
+
+        meshes_[4].triangles[1].push_back(current_triangle_size + i*4 + 2);
+        meshes_[4].triangles[1].push_back(current_triangle_size + i*4 - 2);
+        meshes_[4].triangles[1].push_back(5);
+
+
+        meshes_[4].triangles[2].push_back(current_triangle_size + i*4 + 0);
+        meshes_[4].triangles[2].push_back(current_triangle_size + i*4 + 1);
+        meshes_[4].triangles[2].push_back(current_triangle_size + i*4 - 3);
+
+        meshes_[4].triangles[2].push_back(current_triangle_size + i*4 + 0);
+        meshes_[4].triangles[2].push_back(current_triangle_size + i*4 - 4);
+        meshes_[4].triangles[2].push_back(current_triangle_size + i*4 - 3);
+
+        meshes_[4].triangles[2].push_back(current_triangle_size + i*4 + 1);
+        meshes_[4].triangles[2].push_back(current_triangle_size + i*4 - 3);
+        meshes_[4].triangles[2].push_back(7);
+
+        meshes_[4].triangles[2].push_back(current_triangle_size + i*4 + 0);
+        meshes_[4].triangles[2].push_back(current_triangle_size + i*4 - 4);
+        meshes_[4].triangles[2].push_back(5);
+
+
+        meshes_[4].lines.push_back(current_triangle_size + i*4 - 4);
+        meshes_[4].lines.push_back(current_triangle_size + i*4 + 0);
+        meshes_[4].lines.push_back(current_triangle_size + i*4 - 2);
+        meshes_[4].lines.push_back(current_triangle_size + i*4 + 2);
+    }
+
+    // middle
+    meshes_[4].points.insert(meshes_[4].points.end(),
+            {float(length * cos(end_angle)), -0.2, float(length * sin(end_angle))});
+    meshes_[4].points.insert(meshes_[4].points.end(),
+            {float(length * cos(end_angle)), 0.2, float(length * sin(end_angle))});
+
+    meshes_[4].triangles[1].push_back(current_triangle_size + num_edges_radius/2*4 + 0);
+    meshes_[4].triangles[1].push_back(current_triangle_size + num_edges_radius/2*4 + 1);
+    meshes_[4].triangles[1].push_back(current_triangle_size + num_edges_radius/2*4 - 1);
+
+    meshes_[4].triangles[1].push_back(current_triangle_size + num_edges_radius/2*4 + 0);
+    meshes_[4].triangles[1].push_back(current_triangle_size + num_edges_radius/2*4 - 2);
+    meshes_[4].triangles[1].push_back(current_triangle_size + num_edges_radius/2*4 - 1);
+
+    meshes_[4].triangles[1].push_back(current_triangle_size + num_edges_radius/2*4 + 1);
+    meshes_[4].triangles[1].push_back(current_triangle_size + num_edges_radius/2*4 - 1);
+    meshes_[4].triangles[1].push_back(7);
+
+    meshes_[4].triangles[1].push_back(current_triangle_size + num_edges_radius/2*4 + 0);
+    meshes_[4].triangles[1].push_back(current_triangle_size + num_edges_radius/2*4 - 2);
+    meshes_[4].triangles[1].push_back(5);
+
+
+    meshes_[4].triangles[2].push_back(current_triangle_size + num_edges_radius/2*4 + 0);
+    meshes_[4].triangles[2].push_back(current_triangle_size + num_edges_radius/2*4 + 1);
+    meshes_[4].triangles[2].push_back(current_triangle_size + num_edges_radius/2*4 - 3);
+
+    meshes_[4].triangles[2].push_back(current_triangle_size + num_edges_radius/2*4 + 0);
+    meshes_[4].triangles[2].push_back(current_triangle_size + num_edges_radius/2*4 - 4);
+    meshes_[4].triangles[2].push_back(current_triangle_size + num_edges_radius/2*4 - 3);
+
+    meshes_[4].triangles[2].push_back(current_triangle_size + num_edges_radius/2*4 + 1);
+    meshes_[4].triangles[2].push_back(current_triangle_size + num_edges_radius/2*4 - 3);
+    meshes_[4].triangles[2].push_back(7);
+
+    meshes_[4].triangles[2].push_back(current_triangle_size + num_edges_radius/2*4 + 0);
+    meshes_[4].triangles[2].push_back(current_triangle_size + num_edges_radius/2*4 - 4);
+    meshes_[4].triangles[2].push_back(5);
+
+    meshes_[4].lines.push_back(current_triangle_size + num_edges_radius/2*4 - 4);
+    meshes_[4].lines.push_back(current_triangle_size + num_edges_radius/2*4 + 0);
+    meshes_[4].lines.push_back(current_triangle_size + num_edges_radius/2*4 - 2);
+    meshes_[4].lines.push_back(current_triangle_size + num_edges_radius/2*4 + 0);
+}
 
 
 Cube::Cube(Shader shader) {
@@ -45,6 +157,8 @@ Cube::Cube(Shader shader) {
     }
     rotations_location_ = glGetUniformLocation(shader.ID, "rotations");
     glUniformMatrix4fv(rotations_location_, kNumPieces, GL_FALSE, glm::value_ptr(rotations[0]));
+
+    MeshInitialisation();
 }
 
 
@@ -59,9 +173,6 @@ Cube::~Cube() {
 
 void Cube::Draw(Shader shader) const {
     for (int i = 0; i < pieces_.size(); i++) {
-        if (pieces_[i].type == 3) { // TODO: corners
-            continue;
-        }
 
         Mesh mesh = meshes_[pieces_[i].type];
 

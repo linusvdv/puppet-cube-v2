@@ -86,7 +86,7 @@ private:
         int type;
         std::vector<Colors> colors;
         glm::mat4 rotation;
-        bool current_rotation = true;
+        bool current_rotation = false;
     };
 
     static const unsigned int kNumPieces = 26;
@@ -119,12 +119,15 @@ private:
         {5, {Colors::kWhite,  Colors::kGreen,  Colors::kRed   }, GetRotationMatrix(180.0, -90.0,   0.0)}
     }};
 
+
     struct Mesh {
         std::vector<float> points;
         // vector of triangles for different color
         std::vector<std::vector<int>> triangles;
         std::vector<int> lines;
     };
+
+    void MeshInitialisation();
 
     std::array<Mesh, 6> meshes_ = {{
         // centers (default yellow)
@@ -274,10 +277,16 @@ private:
            0, 10, 3},
           {1, 4, 5,
            1, 5, 2,
-           8, 9, 1},
+           8, 9, 1,
+           4, 9, 14,
+           9, 14, 15,
+           4, 5, 14},
           {2, 5, 6,
            2, 6, 3,
-           10, 11, 3}},
+           10, 11, 3,
+           6, 11, 12,
+           11, 12, 13,
+           5, 6, 12}},
 
         // lines
          {0, 1,
@@ -288,7 +297,14 @@ private:
           2, 5,
           3, 6,
           4, 5,
-          5, 6}
+          5, 6,
+          0, 7,
+          7, 13,
+          7, 15,
+          12, 13,
+          14, 15,
+          12, 6,
+          14, 4}
         },
 
         // big corners (default white/orange/blue)
