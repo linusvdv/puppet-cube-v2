@@ -5,6 +5,7 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
+#include <ostream>
 
 
 #include "cube.h"
@@ -21,6 +22,50 @@ static void ErrorCallback(int error, const char* description) {
 static void KeyCallback(GLFWwindow* window, int key, int scancode [[maybe_unused]], int action, int mods [[maybe_unused]]) {
     if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS) {
         glfwSetWindowShouldClose(window, GLFW_TRUE);
+    }
+}
+
+
+static void CursorPosCallback(GLFWwindow* window, double xpos, double ypos) {
+    Setting* settings = (Setting *)glfwGetWindowUserPointer(window);
+    const float full_rotation = 360;
+
+    if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS) {
+        float rotation_x_offset = xpos - settings->last_position.first;
+        float rotation_y_offset = ypos - settings->last_position.second;
+
+        settings->rotation.first += rotation_x_offset * (((settings->rotation.second > full_rotation/4) ||
+                                                         (settings->rotation.second < -full_rotation/4)) ? -1 : 1);
+        if (settings->rotation.first > full_rotation/2) {
+            settings->rotation.first -= full_rotation;
+        }
+        else if (settings->rotation.first < -full_rotation/2) {
+            settings->rotation.first += full_rotation;
+        }
+
+        settings->rotation.second += rotation_y_offset;
+        if (settings->rotation.second > full_rotation/2) {
+            settings->rotation.second -= full_rotation;
+        }
+        else if (settings->rotation.second < -full_rotation/2) {
+            settings->rotation.second += full_rotation;
+        }
+    }
+
+    settings->last_position = {xpos, ypos};
+}
+
+
+static void ScrollCallback(GLFWwindow* window, double xoffset [[maybe_unused]], double yoffset) {
+    Setting* settings = (Setting *)glfwGetWindowUserPointer(window);
+
+    settings->scroll *= 1+yoffset/6;
+
+    if (settings->scroll > 4) {
+        settings->scroll = 4;
+    }
+    if (settings->scroll < 1.F/4) {
+        settings->scroll = 1.F/4;
     }
 }
 
@@ -47,7 +92,11 @@ int Renderer (ErrorHandler error_handler, Setting settings) {
         error_handler.Handle(ErrorHandler::Level::kCriticalError, "renderer.cpp", "glfw creation of window failed");
     }
 
+    glfwSetWindowUserPointer(window, (void *)&settings);
+
     glfwSetKeyCallback(window, KeyCallback);
+    glfwSetScrollCallback(window, ScrollCallback);
+    glfwSetCursorPosCallback(window, CursorPosCallback);
     glfwSetFramebufferSizeCallback(window, FramebufferSizeCallback);
 
     glfwMakeContextCurrent(window);
@@ -87,9 +136,9 @@ int Renderer (ErrorHandler error_handler, Setting settings) {
 
         // view
         glm::mat4 view_rotation = glm::mat4(1.0F);
-        view_rotation = glm::scale(view_rotation, glm::vec3(0.5, 0.5, 0.5));
-        view_rotation = glm::rotate(view_rotation, glm::radians( 30.0F), glm::vec3(1.0, 0.0, 0.0)); // second
-        view_rotation = glm::rotate(view_rotation, glm::radians(140.0F), glm::vec3(0.0, 1.0, 0.0)); // first
+        view_rotation = glm::scale(view_rotation, glm::vec3(settings.scroll/2));
+        view_rotation = glm::rotate(view_rotation, glm::radians(settings.rotation.second), glm::vec3(1.0, 0.0, 0.0)); // second
+        view_rotation = glm::rotate(view_rotation, glm::radians(settings.rotation.first), glm::vec3(0.0, 1.0, 0.0)); // first
         unsigned int view_rotation_loc = glGetUniformLocation(shader.ID, "view_rotation");
         glUniformMatrix4fv(view_rotation_loc, 1, GL_FALSE, glm::value_ptr(view_rotation));
 

@@ -46,5 +46,5 @@ void main() {
     // view rotation
     vec4 view_position = view_rotation * rotated_position;
 
-    gl_Position = vec4(view_position.xy, -view_position.z, view_position.w);
+    gl_Position = vec4(view_position.xy, -view_position.z/16, view_position.w);
 }
