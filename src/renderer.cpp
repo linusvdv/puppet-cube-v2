@@ -66,8 +66,8 @@ int Renderer (ErrorHandler error_handler, Setting settings) {
 
     Shader shader(error_handler, vertex_shader_path.c_str(), fragment_shader_path.c_str());
 
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     glEnable(GL_DEPTH_TEST);
-    glEnable(GL_LINE_SMOOTH);
     shader.Use();
 
 
@@ -88,8 +88,8 @@ int Renderer (ErrorHandler error_handler, Setting settings) {
         // view
         glm::mat4 view_rotation = glm::mat4(1.0F);
         view_rotation = glm::scale(view_rotation, glm::vec3(0.5, 0.5, 0.5));
-        view_rotation = glm::rotate(view_rotation, glm::radians(-30.0F), glm::vec3(1.0, 0.0, 0.0)); // second
-        view_rotation = glm::rotate(view_rotation, glm::radians( 70.0F), glm::vec3(0.0, 1.0, 0.0)); // first
+        view_rotation = glm::rotate(view_rotation, glm::radians( 30.0F), glm::vec3(1.0, 0.0, 0.0)); // second
+        view_rotation = glm::rotate(view_rotation, glm::radians(140.0F), glm::vec3(0.0, 1.0, 0.0)); // first
         unsigned int view_rotation_loc = glGetUniformLocation(shader.ID, "view_rotation");
         glUniformMatrix4fv(view_rotation_loc, 1, GL_FALSE, glm::value_ptr(view_rotation));
 

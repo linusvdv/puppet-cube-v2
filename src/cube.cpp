@@ -58,10 +58,29 @@ Cube::~Cube() {
 
 
 void Cube::Draw(Shader shader) const {
+    // black outline
+    glEnable(GL_LINE_SMOOTH);
     for (int i = 0; i < pieces_.size(); i++) {
+        unsigned int piece_data = ( i ) |                       // piece index
+                ( Colors::kBlack << 5 ) |                       // color index
+                ( (int)pieces_[i].current_rotation << 8 );      // effected by current rotation
+        glUniform1ui(piece_data_location_, piece_data);
 
         Mesh mesh = meshes_[pieces_[i].type];
+        // send the vertex buffer objects
+        glBufferData(GL_ARRAY_BUFFER, sizeof(float)*mesh.points.size(), mesh.points.data(), GL_STATIC_DRAW);
 
+        glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(int)*mesh.lines.size(), mesh.lines.data(), GL_STATIC_DRAW);
+        glBindVertexArray(vertex_array_object_);
+
+        glDrawElements(GL_LINES, mesh.lines.size(), GL_UNSIGNED_INT, 0);
+    }
+    glDisable(GL_LINE_SMOOTH);
+
+    glEnable(GL_BLEND);
+    // pieces
+    for (int i = 0; i < pieces_.size(); i++) {
+        Mesh mesh = meshes_[pieces_[i].type];
         // send the vertex buffer objects
         glBufferData(GL_ARRAY_BUFFER, sizeof(float)*mesh.points.size(), mesh.points.data(), GL_STATIC_DRAW);
 
@@ -81,18 +100,8 @@ void Cube::Draw(Shader shader) const {
             glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
             glDrawElements(GL_TRIANGLES, mesh.triangles[color_index].size(), GL_UNSIGNED_INT, 0);
         }
-
-        // black outline
-        unsigned int piece_data = ( i ) |                       // piece index
-                ( Colors::kBlack << 5 ) |                       // color index
-                ( (int)pieces_[i].current_rotation << 8 );      // effected by current rotation
-        glUniform1ui(piece_data_location_, piece_data);
-
-        glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(int)*mesh.lines.size(), mesh.lines.data(), GL_STATIC_DRAW);
-        glBindVertexArray(vertex_array_object_);
-
-        glDrawElements(GL_LINES, mesh.lines.size(), GL_UNSIGNED_INT, 0);
     }
+    glDisable(GL_BLEND);
 }
 
 
