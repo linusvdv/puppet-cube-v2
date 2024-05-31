@@ -1,5 +1,7 @@
 cmake_minimum_required(VERSION 3.16)
 
+include(FetchContent)
+
 project(PuppetCubeV2)
 
 
@@ -15,8 +17,23 @@ find_package(OpenGL REQUIRED)
 include_directories(${OPENGL_INCLUDE_DIRS})
 
 # glfw
-find_package(glfw3 REQUIRED)
+FetchContent_Declare(glfw
+    GIT_REPOSITORY "https://github.com/glfw/glfw"
+    GIT_TAG "3.3.2"
+    GIT_SHALLOW ON
+)
+FetchContent_MakeAvailable(glfw)
 
+# glm
+FetchContent_Declare(
+    glm
+    GIT_REPOSITORY "https://github.com/g-truc/glm.git"
+    GIT_TAG "0.9.9.8"
+    GIT_SHALLOW ON
+)
+FetchContent_MakeAvailable(glm)
+
+# glad
 add_library(glad src/glad.c)
 target_include_directories(glad PUBLIC include/)
 target_include_directories(glad PRIVATE src/)
@@ -29,7 +46,7 @@ add_executable(PuppetCubeV2
     src/error_handler.cpp
     src/cube.cpp)
 
-target_link_libraries(PuppetCubeV2 PRIVATE glfw glad)
+target_link_libraries(PuppetCubeV2 PRIVATE glfw glad glm)
 
 target_compile_features(PuppetCubeV2 PRIVATE cxx_std_20)
 

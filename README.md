@@ -1,8 +1,12 @@
 # puppet-cube-v2
 
-Compilation:
+## Compilation:
+```bash
 cmake -B build
 cmake --build build --config Release
+```
 
-Run:
+## Run:
+```bash
 ./build/bin/PuppetCubeV2
+```
