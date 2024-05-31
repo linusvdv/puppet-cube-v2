@@ -143,7 +143,7 @@ int Renderer (ErrorHandler error_handler, Setting settings) {
         unsigned int view_rotation_loc = glGetUniformLocation(shader.ID, "view_rotation");
         glUniformMatrix4fv(view_rotation_loc, 1, GL_FALSE, glm::value_ptr(view_rotation));
 
-        cube.Draw(shader);
+        cube.Draw();
 
         glfwSwapBuffers(window);
 

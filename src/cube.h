@@ -35,7 +35,7 @@ public:
 
     Cube(Shader shader);
     ~Cube();
-    void Draw(Shader shader) const;
+    void Draw() const;
 
     void Rotate(Rotations rotation);
 

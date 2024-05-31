@@ -39,7 +39,7 @@ Cube::Cube(Shader shader) {
     glUniform4fv(colors_index, kNumColors, *colors_);
 
     glm::mat4 rotations[kNumPieces];
-    for (int i = 0; i < kNumPieces; i++) {
+    for (int i = 0; i < int(kNumPieces); i++) {
         rotations[i] = pieces_[i].rotation;
     }
     rotations_location_ = glGetUniformLocation(shader.ID, "rotations");
@@ -57,10 +57,10 @@ Cube::~Cube() {
 }
 
 
-void Cube::Draw(Shader shader) const {
+void Cube::Draw() const {
     // black outline
     glEnable(GL_LINE_SMOOTH);
-    for (int i = 0; i < pieces_.size(); i++) {
+    for (int i = 0; i < int(pieces_.size()); i++) {
         unsigned int piece_data = ( i ) |                       // piece index
                 ( Colors::kBlack << 5 ) |                       // color index
                 ( (int)pieces_[i].current_rotation << 8 );      // effected by current rotation
@@ -79,13 +79,13 @@ void Cube::Draw(Shader shader) const {
 
     glEnable(GL_BLEND);
     // pieces
-    for (int i = 0; i < pieces_.size(); i++) {
+    for (int i = 0; i < int(pieces_.size()); i++) {
         Mesh mesh = meshes_[pieces_[i].type];
         // send the vertex buffer objects
         glBufferData(GL_ARRAY_BUFFER, sizeof(float)*mesh.points.size(), mesh.points.data(), GL_STATIC_DRAW);
 
         // go over all colors of this piece type
-        for (int color_index = 0; color_index < pieces_[i].colors.size(); color_index++) {
+        for (int color_index = 0; color_index < int(pieces_[i].colors.size()); color_index++) {
             // convert the piece index, color index and effected by rotation of current move into one unsigned int
             unsigned int piece_data = ( i ) |                                       // piece index
                                       (   pieces_[i].colors[color_index] << 5 ) |   // color index
@@ -186,7 +186,7 @@ void Cube::MeshInitialisationOneCorner() {
         for (int j = 0; j <= num_square; j++) {
             float angle_j = end_angle - (2 * end_angle) / num_square * j;
             meshes_[3].points.insert(meshes_[3].points.end(),
-                    {-float(length * std::max(cos(angle_i), cos(angle_j))), length * sin(angle_j), length * sin(angle_i)});
+                    {-float(length * std::max(cos(angle_i), cos(angle_j))), float(length * sin(angle_j)), float(length * sin(angle_i))});
 
             // area
             int last_batch = meshes_[3].points.size() / 3 - 1;
