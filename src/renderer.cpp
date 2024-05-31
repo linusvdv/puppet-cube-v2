@@ -71,7 +71,8 @@ static void ScrollCallback(GLFWwindow* window, double xoffset [[maybe_unused]], 
 
 
 void FramebufferSizeCallback(GLFWwindow* window [[maybe_unused]], int width, int height) {
-    glViewport(0, 0, std::min(width, height), std::min(width, height));
+    int square = std::min(width, height);
+    glViewport((width - square)/2, (height - square)/2, square, square);
 }
 
 
