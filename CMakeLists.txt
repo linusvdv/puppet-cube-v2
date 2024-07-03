@@ -47,7 +47,8 @@ add_executable(PuppetCubeV2
     src/shader.cpp
     src/settings.cpp
     src/error_handler.cpp
-    src/cube.cpp)
+    src/cube.cpp
+    src/mesh.cpp)
 
 target_link_libraries(PuppetCubeV2 PRIVATE glfw glad glm)
 
