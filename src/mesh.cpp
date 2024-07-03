@@ -1,4 +1,5 @@
 #include <array>
+#include <cassert>
 #include <cmath>
 #include <complex>
 #include <cstddef>
@@ -46,9 +47,9 @@ struct VertexPieceValue {
 
 
 std::array<float, 3> CrossProduct(const std::array<float, 3>& vec1, const std::array<float, 3>& vec2) {
-    return {vec1[2]*vec2[3] - vec1[3]*vec2[2],
-            vec1[3]*vec2[1] - vec1[1]*vec2[3],
-            vec1[1]*vec2[2] - vec1[2]*vec2[1]};
+    return {vec1[1]*vec2[2] - vec1[2]*vec2[1],
+            vec1[2]*vec2[0] - vec1[0]*vec2[2],
+            vec1[0]*vec2[1] - vec1[1]*vec2[0]};
 }
 
 
@@ -67,25 +68,25 @@ std::array<float, 3> GetNormal(const std::array<float, 3>& first,
 }
 
 
-float DotProduct(std::array<float, 3> vec1, std::array<float, 3> vec2) {
+float DotProduct(const std::array<float, 3>& vec1, const std::array<float, 3>& vec2) {
     return vec1[0]*vec2[0] + vec1[1]*vec2[1] + vec1[2]*vec2[2];
 }
 
 
-float GetMagnetude(std::array<float, 3> vec) {
+float GetMagnetude(const std::array<float, 3>& vec) {
     return sqrt(vec[0]*vec[0] + vec[1]*vec[1] + vec[2]*vec[2]);
 }
 
 
-float GetSmallestAngle(std::array<float, 3> first,
-                       std::array<float, 3> second) {
+float GetSmallestAngle(const std::array<float, 3>& first,
+                       const std::array<float, 3>& second) {
     float angle = std::acos(DotProduct(first, second) / (GetMagnetude(first) * GetMagnetude(second)));
     return std::min({std::abs(angle), std::abs(M_PIf - angle), std::abs(angle - M_PIf)});
 }
 
 
-std::array<float, 3> AddVecMaxMagnetude(std::array<float, 3> vec1,
-                               std::array<float, 3> vec2) {
+std::array<float, 3> AddVecMaxMagnetude(const std::array<float, 3>& vec1,
+                                        const std::array<float, 3>& vec2) {
     return std::max(std::array<float, 3>{vec1[0] + vec2[0], vec1[1] + vec2[1], vec1[2] + vec2[2]},
                     std::array<float, 3>{vec1[0] - vec2[0], vec1[1] - vec2[1], vec1[2] - vec2[2]},
                     [](const std::array<float, 3>& first,
@@ -96,6 +97,7 @@ std::array<float, 3> AddVecMaxMagnetude(std::array<float, 3> vec1,
 
 std::array<float, 3> GetVertexOfPieceMesh(const std::array<PieceMesh, kNumPieceTypes>& piece_meshes, int piece_type, int color, int index) {
     int piece_mesh_index = piece_meshes[piece_type].triangles[color][index];
+    assert((size_t)piece_mesh_index*3+2 < piece_meshes[piece_type].points.size());
     return {piece_meshes[piece_type].points[piece_mesh_index*3],
             piece_meshes[piece_type].points[piece_mesh_index*3+1],
             piece_meshes[piece_type].points[piece_mesh_index*3+2]};
@@ -117,37 +119,19 @@ void TransformPieceMeshToVertexPieceData(std::map<VertexPieceIndex, VertexPieceV
         decltype(vertex_piece_data_comparision)>& vertex_piece_data, const std::array<PieceMesh, kNumPieceTypes>& piece_meshes) {
     int triangle_index = 0;
     int line_index = 0;
-    for (int piece_index = 0; piece_index < kNumPieces; piece_index++) {
-        int i = kPieceColorTypes[piece_index].type;
+    for (int piece_index = 0; piece_index < (int)kNumPieces; piece_index++) {
+        int piece_type = kPieceColorTypes[piece_index].type;
         // pieces
-        for (size_t j = 0; j < piece_meshes[i].triangles.size(); j++) {
-            for (size_t k = 0; k < piece_meshes[i].triangles[j].size(); k+=3) {
-                std::array<float, 3> normal = GetNormal(GetVertexOfPieceMesh(piece_meshes, i, j, k),
-                                                        GetVertexOfPieceMesh(piece_meshes, i, j, k+1),
-                                                        GetVertexOfPieceMesh(piece_meshes, i, j, k+2));
-                if (GetMagnetude(normal) < 0.00001) {
-                std::cout << "x1:\t" << GetVertexOfPieceMesh(piece_meshes, i, j, k)[0] << "\t"
-                                     << GetVertexOfPieceMesh(piece_meshes, i, j, k)[1] << "\t"
-                                     << GetVertexOfPieceMesh(piece_meshes, i, j, k)[2] << "\n";
-                std::cout << "x2:\t" << GetVertexOfPieceMesh(piece_meshes, i, j, k+1)[0] << "\t"
-                                     << GetVertexOfPieceMesh(piece_meshes, i, j, k+1)[1] << "\t"
-                                     << GetVertexOfPieceMesh(piece_meshes, i, j, k+1)[2] << "\n";
-                std::cout << "x3:\t" << GetVertexOfPieceMesh(piece_meshes, i, j, k+2)[0] << "\t"
-                                     << GetVertexOfPieceMesh(piece_meshes, i, j, k+2)[1] << "\t"
-                                     << GetVertexOfPieceMesh(piece_meshes, i, j, k+2)[2] << "\n";
-                std::cout << "x start: " << normal[0] << "\t" << normal[1] << "\t" << normal[2] << "\n";
-                std::array<float, 3> vec1 = GetVector(GetVertexOfPieceMesh(piece_meshes, i, j, k), GetVertexOfPieceMesh(piece_meshes, i, j, k+2));
-                std::cout << "x debug: " << vec1[0] << "\t" << vec1[1] << "\t" << vec1[2] << "\n";
-                std::array<float, 3> vec2 = GetVector(GetVertexOfPieceMesh(piece_meshes, i, j, k), GetVertexOfPieceMesh(piece_meshes, i, j, k+1));
-                std::cout << "x debug: " << vec2[0] << "\t" << vec2[1] << "\t" << vec2[2] << "\n";
-                std::array<float, 3> cross = CrossProduct(vec1, vec2);
-                std::cout << "x cross: " << cross[0] << "\t" << cross[1] << "\t" << cross[2] << "\n";
-                }
+        for (size_t j = 0; j < piece_meshes[piece_type].triangles.size(); j++) {
+            for (size_t k = 0; k < piece_meshes[piece_type].triangles[j].size(); k+=3) {
+                std::array<float, 3> normal = GetNormal(GetVertexOfPieceMesh(piece_meshes, piece_type, j, k),
+                                                        GetVertexOfPieceMesh(piece_meshes, piece_type, j, k+1),
+                                                        GetVertexOfPieceMesh(piece_meshes, piece_type, j, k+2));
 
                 for (int vertex = 0; vertex < 3; vertex++) {
-                    VertexPieceIndex vertex_piece_index = {i,
-                        GetVertexOfPieceMesh(piece_meshes, i, j, k+vertex),
-                        kPieceColorTypes[i].colors[j]};
+                    VertexPieceIndex vertex_piece_index = {piece_type,
+                        GetVertexOfPieceMesh(piece_meshes, piece_type, j, k+vertex),
+                        kPieceColorTypes[piece_index].colors[j]};
 
                     vertex_piece_data[vertex_piece_index].triangle_index.push_back(triangle_index);
                     vertex_piece_data[vertex_piece_index].normals.push_back(normal);
@@ -158,11 +142,11 @@ void TransformPieceMeshToVertexPieceData(std::map<VertexPieceIndex, VertexPieceV
         }
 
         // lines
-        for (size_t j = 0; j < piece_meshes[i].lines.size(); j++) {
-            VertexPieceIndex vertex_piece_index = {i,
-                {piece_meshes[i].points[piece_meshes[i].lines[j]*3],
-                 piece_meshes[i].points[piece_meshes[i].lines[j]*3+1],
-                 piece_meshes[i].points[piece_meshes[i].lines[j]*3+2]},
+        for (size_t j = 0; j < piece_meshes[piece_type].lines.size(); j++) {
+            VertexPieceIndex vertex_piece_index = {piece_type,
+                {piece_meshes[piece_type].points[piece_meshes[piece_type].lines[j]*3],
+                 piece_meshes[piece_type].points[piece_meshes[piece_type].lines[j]*3+1],
+                 piece_meshes[piece_type].points[piece_meshes[piece_type].lines[j]*3+2]},
                 Colors::kBlack
             };
             vertex_piece_data[vertex_piece_index];
@@ -212,13 +196,11 @@ CubeMesh CubeMeshInitialisation() {
         std::vector<int> different_normal_index;
 
         for (size_t i = 0; i < vertex_piece_value.triangle_index.size(); i++) {
-            std::cout << "pre: " << vertex_piece_value.normals[i][0] << "\t" << vertex_piece_value.normals[i][1] << "\t" << vertex_piece_value.normals[i][2] << "\n";
             WeightedNormalAverage(vertex_piece_value, different_normals, different_normal_index, i);
         }
 
         // Normalize the NormalVector
         for (std::array<float, 3>& normal : different_normals) {
-            std::cout << "normals: " << normal[0] << "\t" << normal[1] << "\t" << normal[2] << "\n";
             float magnetude = GetMagnetude(normal);
             normal = {normal[0]/magnetude, normal[1]/magnetude, normal[2]/magnetude};
             std::cout << "Normalized: " << normal[0] << "\t" << normal[1] << "\t" << normal[2] << "\n";

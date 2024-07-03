@@ -54,4 +54,4 @@ target_link_libraries(PuppetCubeV2 PRIVATE glfw glad glm)
 
 target_compile_features(PuppetCubeV2 PRIVATE cxx_std_20)
 
-target_compile_options(PuppetCubeV2 PRIVATE -Wall -Wextra)
+target_compile_options(PuppetCubeV2 PRIVATE -Wall -Wextra -g)
