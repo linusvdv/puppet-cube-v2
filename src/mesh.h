@@ -10,7 +10,7 @@ struct Vertex {
 
     // color data
     unsigned int color_index;
-    std::array<float, 3> norm;
+    std::array<float, 4> norm;
 };
 
 

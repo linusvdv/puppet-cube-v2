@@ -116,7 +116,8 @@ auto vertex_piece_data_comparision = [](const VertexPieceIndex& first, const Ver
 // convertes form piece mesh to vertex piece vertex_piece_data
 // calculates face normals
 void TransformPieceMeshToVertexPieceData(std::map<VertexPieceIndex, VertexPieceValue,
-        decltype(vertex_piece_data_comparision)>& vertex_piece_data, const std::array<PieceMesh, kNumPieceTypes>& piece_meshes) {
+        decltype(vertex_piece_data_comparision)>& vertex_piece_data, const std::array<PieceMesh, kNumPieceTypes>& piece_meshes,
+        int& num_triangles, int& num_lines) {
     int triangle_index = 0;
     int line_index = 0;
     for (int piece_index = 0; piece_index < (int)kNumPieces; piece_index++) {
@@ -149,12 +150,14 @@ void TransformPieceMeshToVertexPieceData(std::map<VertexPieceIndex, VertexPieceV
                  piece_meshes[piece_type].points[piece_meshes[piece_type].lines[j]*3+2]},
                 Colors::kBlack
             };
-            vertex_piece_data[vertex_piece_index];
+            vertex_piece_data[vertex_piece_index].line_index.push_back(line_index);
             if (j%2 == 1) {
                 line_index++;
             }
         }
     }
+    num_triangles = triangle_index;
+    num_lines = line_index;
 }
 
 
@@ -180,14 +183,19 @@ CubeMesh CubeMeshInitialisation() {
     PieceMeshInitialisationOneCorner(piece_meshes);
     PieceMeshInitialisationTwoCorners(piece_meshes);
 
+
     // conversion to vertex piece data
     // index position, color and piece type
     // value triangles, lines and normals of area
     std::map<VertexPieceIndex, VertexPieceValue,
         decltype(vertex_piece_data_comparision)> vertex_piece_data;
-    TransformPieceMeshToVertexPieceData(vertex_piece_data, piece_meshes);
+    int num_triangles = 0;
+    int num_lines = 0;
+    TransformPieceMeshToVertexPieceData(vertex_piece_data, piece_meshes, num_triangles, num_lines);
 
-    CubeMesh cube_mesh;
+
+    // initialize all triangle indices to -1
+    CubeMesh cube_mesh = {{}, std::vector<std::array<int, 3>>(num_triangles, {-1, -1, -1}), std::vector<std::array<int, 2>>(num_lines, {-1, -1})};
     for (auto it = vertex_piece_data.begin(); it != vertex_piece_data.end(); it++) {
         VertexPieceValue vertex_piece_value = it->second;
 
@@ -203,10 +211,40 @@ CubeMesh CubeMeshInitialisation() {
         for (std::array<float, 3>& normal : different_normals) {
             float magnetude = GetMagnetude(normal);
             normal = {normal[0]/magnetude, normal[1]/magnetude, normal[2]/magnetude};
-            std::cout << "Normalized: " << normal[0] << "\t" << normal[1] << "\t" << normal[2] << "\n";
         }
 
         // creating CubeMesh
+        int index = cube_mesh.vertices.size();
+        // normal
+        for (std::array<float, 3>& normal : different_normals) {
+            cube_mesh.vertices.push_back(
+                    {(unsigned int)it->first.piece_index,
+                     {it->first.position[0], it->first.position[1], it->first.position[2], 0},
+                     it->first.color,
+                     {normal[0], normal[1], normal[2], 0}}
+            );
+        }
+        // triangle
+        assert(vertex_piece_value.triangle_index.size() == different_normal_index.size());
+        for (int i = 0; i < vertex_piece_value.triangle_index.size(); i++) {
+            // set the first -1 to the desired index
+            for (int j = 0; j < 3; j++) {
+                if (cube_mesh.triangles[vertex_piece_value.triangle_index[i]][j] == -1) {
+                    cube_mesh.triangles[vertex_piece_value.triangle_index[i]][j] = index + different_normal_index[i];
+                    break;
+                }
+            }
+        }
+        // lines
+        for (int i = 0; i < vertex_piece_value.line_index.size(); i++) {
+            // set the first -1 to the desired index
+            for (int j = 0; j < 2; j++) {
+                if (cube_mesh.lines[vertex_piece_value.line_index[i]][j] == -1) {
+                    cube_mesh.lines[vertex_piece_value.line_index[i]][j] = index;
+                    break;
+                }
+            }
+        }
     }
 
     return cube_mesh;
