@@ -128,22 +128,7 @@ int Renderer (ErrorHandler error_handler, Setting settings) {
         glClearColor(0.2F, 0.3F, 0.3F, 1.0F);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        // rotation
-        glm::mat4 trans = glm::mat4(1.0F);
-        trans = glm::rotate(trans, (float)glfwGetTime(), glm::vec3(0.0, 1.0, 0.0));
-
-        unsigned int transform_loc = glGetUniformLocation(shader.ID, "current_rotation_axis");
-        glUniformMatrix4fv(transform_loc, 1, GL_FALSE, glm::value_ptr(trans));
-
-        // view
-        glm::mat4 view_rotation = glm::mat4(1.0F);
-        view_rotation = glm::scale(view_rotation, glm::vec3(settings.scroll/2));
-        view_rotation = glm::rotate(view_rotation, glm::radians(settings.rotation.second), glm::vec3(1.0, 0.0, 0.0)); // second
-        view_rotation = glm::rotate(view_rotation, glm::radians(settings.rotation.first), glm::vec3(0.0, 1.0, 0.0)); // first
-        unsigned int view_rotation_loc = glGetUniformLocation(shader.ID, "view_rotation");
-        glUniformMatrix4fv(view_rotation_loc, 1, GL_FALSE, glm::value_ptr(view_rotation));
-
-        cube.Draw();
+        cube.Draw(settings);
 
         glfwSwapBuffers(window);
 

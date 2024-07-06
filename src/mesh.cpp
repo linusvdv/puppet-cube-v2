@@ -151,6 +151,7 @@ void TransformPieceMeshToVertexPieceData(std::map<VertexPieceIndex, VertexPieceV
                 Colors::kBlack
             };
             vertex_piece_data[vertex_piece_index].line_index.push_back(line_index);
+            vertex_piece_data[vertex_piece_index].normals.push_back({-1, -1, -1});
             if (j%2 == 1) {
                 line_index++;
             }
@@ -164,7 +165,7 @@ void TransformPieceMeshToVertexPieceData(std::map<VertexPieceIndex, VertexPieceV
 void WeightedNormalAverage(VertexPieceValue& vertex_piece_value, 
         std::vector<std::array<float, 3>>& different_normals, std::vector<int>& different_normal_index, int index) {
     for (size_t j = 0; j < different_normals.size(); j++) {
-        if (GetSmallestAngle(different_normals[j], vertex_piece_value.normals[index]) < M_PIf / 8) { // TODO: Get min angle
+        if (GetSmallestAngle(different_normals[j], vertex_piece_value.normals[index]) < M_PIf / 8 && false) { // TODO: Get min angle
             different_normals[j] = AddVecMaxMagnetude(different_normals[j], vertex_piece_value.normals[index]);
             different_normal_index.push_back(j);
             return;
@@ -206,6 +207,9 @@ CubeMesh CubeMeshInitialisation() {
         for (size_t i = 0; i < vertex_piece_value.triangle_index.size(); i++) {
             WeightedNormalAverage(vertex_piece_value, different_normals, different_normal_index, i);
         }
+        if (vertex_piece_value.triangle_index.empty()) {
+            different_normals = {{-1, -1, -1}};
+        }
 
         // Normalize the NormalVector
         for (std::array<float, 3>& normal : different_normals) {
@@ -215,15 +219,17 @@ CubeMesh CubeMeshInitialisation() {
 
         // creating CubeMesh
         int index = cube_mesh.vertices.size();
-        // normal
+
+        // adding the vertex to cube mesh
         for (std::array<float, 3>& normal : different_normals) {
             cube_mesh.vertices.push_back(
                     {(unsigned int)it->first.piece_index,
-                     {it->first.position[0], it->first.position[1], it->first.position[2], 0},
-                     it->first.color,
-                     {normal[0], normal[1], normal[2], 0}}
+                     {it->first.position[0], it->first.position[1], it->first.position[2], 1.0},
+                     {normal[0], normal[1], normal[2], 1.0},
+                     {kColors[it->first.color][0], kColors[it->first.color][1], kColors[it->first.color][2]}}
             );
         }
+        assert(index < cube_mesh.vertices.size());
         // triangle
         assert(vertex_piece_value.triangle_index.size() == different_normal_index.size());
         for (int i = 0; i < vertex_piece_value.triangle_index.size(); i++) {

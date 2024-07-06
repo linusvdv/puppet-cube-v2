@@ -2,12 +2,13 @@
 
 out vec4 FragColor;
 
-in vec4 ourColor;
+in vec4 myNormal;
+in vec3 myColor;
 
 
-uniform float transparency = 0.7;
+uniform float transparency = 1.0;
 
 
 void main() {
-   FragColor = vec4(ourColor.rgb, transparency);
+   FragColor = vec4(myColor.rgb, transparency);
 }

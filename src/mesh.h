@@ -2,15 +2,17 @@
 #include <array>
 #include <vector>
 
+#include <glm/glm.hpp>
+
 
 struct Vertex {
     // position data
     unsigned int piece_index;
-    std::array<float, 4> position;
+    glm::vec4 position;
 
     // color data
-    unsigned int color_index;
-    std::array<float, 4> norm;
+    glm::vec4 normal;
+    std::array<float, 3> color;
 };
 
 

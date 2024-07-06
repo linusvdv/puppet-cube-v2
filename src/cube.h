@@ -9,6 +9,8 @@
 #include <glm/gtc/type_ptr.hpp>
 
 
+#include "mesh.h"
+#include "settings.h"
 #include "shader.h"
 
 
@@ -35,7 +37,7 @@ public:
 
     Cube(Shader shader);
     ~Cube();
-    void Draw() const;
+    void Draw(Setting settings) const;
 
     void Rotate(Rotations rotation);
 
@@ -48,6 +50,8 @@ private:
 
     unsigned int piece_data_location_;
     unsigned int rotations_location_;
+
+    CubeMesh cube_mesh_;
 
     static glm::mat4 GetRotationMatrix(float rotation_x, float rotation_y, float rotation_z) {
         return glm::rotate(glm::rotate(glm::rotate(glm::mat4(1.0), glm::radians(rotation_x), {1, 0, 0}),
