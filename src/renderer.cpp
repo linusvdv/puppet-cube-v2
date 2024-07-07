@@ -121,7 +121,7 @@ int Renderer (ErrorHandler error_handler, Setting settings) {
     shader.Use();
 
 
-    Cube cube(shader);
+    Cube cube;
 
     while (glfwWindowShouldClose(window) == 0) {
         // clear background

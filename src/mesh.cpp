@@ -229,10 +229,9 @@ CubeMesh CubeMeshInitialisation() {
                      {kColors[it->first.color][0], kColors[it->first.color][1], kColors[it->first.color][2]}}
             );
         }
-        assert(index < cube_mesh.vertices.size());
         // triangle
         assert(vertex_piece_value.triangle_index.size() == different_normal_index.size());
-        for (int i = 0; i < vertex_piece_value.triangle_index.size(); i++) {
+        for (size_t i = 0; i < vertex_piece_value.triangle_index.size(); i++) {
             // set the first -1 to the desired index
             for (int j = 0; j < 3; j++) {
                 if (cube_mesh.triangles[vertex_piece_value.triangle_index[i]][j] == -1) {
@@ -242,7 +241,7 @@ CubeMesh CubeMeshInitialisation() {
             }
         }
         // lines
-        for (int i = 0; i < vertex_piece_value.line_index.size(); i++) {
+        for (size_t i = 0; i < vertex_piece_value.line_index.size(); i++) {
             // set the first -1 to the desired index
             for (int j = 0; j < 2; j++) {
                 if (cube_mesh.lines[vertex_piece_value.line_index[i]][j] == -1) {

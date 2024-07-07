@@ -35,7 +35,7 @@ public:
     float rotation_angle;
     std::queue<Rotations> nextRotations;
 
-    Cube(Shader shader);
+    Cube();
     ~Cube();
     void Draw(Setting settings) const;
 

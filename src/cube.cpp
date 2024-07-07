@@ -4,8 +4,6 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
-#include <iostream>
-#include <ostream>
 
 
 #include "cube.h"
@@ -13,7 +11,7 @@
 #include "settings.h"
 
 
-Cube::Cube(Shader shader) {
+Cube::Cube() {
     cube_mesh_ = CubeMeshInitialisation();
 
     // OpenGL objects
@@ -29,13 +27,13 @@ Cube::Cube(Shader shader) {
     // linking vertex attributes
     glVertexAttribPointer(0, 4, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, position));
     glEnableVertexAttribArray(0);
-//    glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, normal));
-//    glEnableVertexAttribArray(1);
-    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, color));
+    glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, normal));
     glEnableVertexAttribArray(1);
+    glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, color));
+    glEnableVertexAttribArray(2);
 
     // unbind
-    // glBindVertexArray(0);
+    glBindVertexArray(0);
 }
 
 
@@ -53,9 +51,9 @@ void Cube::Draw(Setting settings) const {
 
     // view
     glm::mat4 view_rotation = glm::mat4(1.0F);
-    view_rotation = glm::scale(view_rotation, glm::vec3(settings.scroll/2));
     view_rotation = glm::rotate(view_rotation, glm::radians(settings.rotation.second), glm::vec3(1.0, 0.0, 0.0)); // second
     view_rotation = glm::rotate(view_rotation, glm::radians(settings.rotation.first), glm::vec3(0.0, 1.0, 0.0)); // first
+    glm::mat4 scale = glm::scale(glm::mat4(1.0F), glm::vec3(settings.scroll/2));
 
     // calculate rotation
     CubeMesh rotated_cube_mesh = cube_mesh_;
@@ -72,39 +70,25 @@ void Cube::Draw(Setting settings) const {
 
         // view rotation
         vertex.position = view_rotation * vertex.position;
+        vertex.position = scale * vertex.position;
         vertex.normal   = view_rotation * vertex.normal;
     }
 
-    std::vector<int> line_indices;
-    for (std::array<int, 2> indices : rotated_cube_mesh.lines) {
-        line_indices.push_back(indices[0]);
-        line_indices.push_back(indices[1]);
-    }
+    glBufferData(GL_ARRAY_BUFFER, sizeof(Vertex)*rotated_cube_mesh.vertices.size(), rotated_cube_mesh.vertices.data(), GL_STATIC_DRAW);
+    glBindVertexArray(vertex_array_object_);
 
     // black outline
     glEnable(GL_LINE_SMOOTH);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(Vertex)*rotated_cube_mesh.vertices.size(), rotated_cube_mesh.vertices.data(), GL_STATIC_DRAW);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, line_indices.size() * sizeof(unsigned int), line_indices.data(), GL_STATIC_DRAW);
-
-    glBindVertexArray(vertex_array_object_);
-    glDrawElements(GL_LINES, static_cast<unsigned int>(line_indices.size()), GL_UNSIGNED_INT, 0);
-
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, rotated_cube_mesh.lines.size() * sizeof(std::array<int, 2>), rotated_cube_mesh.lines.data(), GL_STATIC_DRAW);
+    glDrawElements(GL_LINES, 2 * rotated_cube_mesh.lines.size(), GL_UNSIGNED_INT, 0);
     glDisable(GL_LINE_SMOOTH);
 
-    std::vector<int> triangle_indices;
-    for (std::array<int, 3> indices : rotated_cube_mesh.triangles) {
-        triangle_indices.push_back(indices[0]);
-        triangle_indices.push_back(indices[1]);
-        triangle_indices.push_back(indices[2]);
-    }
-
-
+    // triangles
     glEnable(GL_BLEND);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(Vertex)*rotated_cube_mesh.vertices.size(), rotated_cube_mesh.vertices.data(), GL_STATIC_DRAW);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, triangle_indices.size() * sizeof(unsigned int), triangle_indices.data(), GL_STATIC_DRAW);
-
-    glBindVertexArray(vertex_array_object_);
     glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
-    glDrawElements(GL_TRIANGLES, triangle_indices.size(), GL_UNSIGNED_INT, 0);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, rotated_cube_mesh.triangles.size() * sizeof(std::array<int, 3>), rotated_cube_mesh.triangles.data(), GL_STATIC_DRAW);
+    glDrawElements(GL_TRIANGLES, 3 * rotated_cube_mesh.triangles.size(), GL_UNSIGNED_INT, 0);
     glDisable(GL_BLEND);
+
+    glBindVertexArray(0);
 }
