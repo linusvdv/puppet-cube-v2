@@ -12,7 +12,7 @@ struct Vertex {
 
     // color data
     glm::vec4 normal;
-    std::array<float, 3> color;
+    float color[3];
 };
 
 

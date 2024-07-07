@@ -130,7 +130,7 @@ void TransformPieceMeshToVertexPieceData(std::map<VertexPieceIndex, VertexPieceV
                                                         GetVertexOfPieceMesh(piece_meshes, piece_type, j, k+2));
 
                 for (int vertex = 0; vertex < 3; vertex++) {
-                    VertexPieceIndex vertex_piece_index = {piece_type,
+                    VertexPieceIndex vertex_piece_index = {piece_index,
                         GetVertexOfPieceMesh(piece_meshes, piece_type, j, k+vertex),
                         kPieceColorTypes[piece_index].colors[j]};
 
@@ -144,7 +144,7 @@ void TransformPieceMeshToVertexPieceData(std::map<VertexPieceIndex, VertexPieceV
 
         // lines
         for (size_t j = 0; j < piece_meshes[piece_type].lines.size(); j++) {
-            VertexPieceIndex vertex_piece_index = {piece_type,
+            VertexPieceIndex vertex_piece_index = {piece_index,
                 {piece_meshes[piece_type].points[piece_meshes[piece_type].lines[j]*3],
                  piece_meshes[piece_type].points[piece_meshes[piece_type].lines[j]*3+1],
                  piece_meshes[piece_type].points[piece_meshes[piece_type].lines[j]*3+2]},
