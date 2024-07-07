@@ -79,40 +79,18 @@ void Cube::Draw(Setting settings) const {
     for (std::array<int, 2> indices : rotated_cube_mesh.lines) {
         line_indices.push_back(indices[0]);
         line_indices.push_back(indices[1]);
-        /*
-        std::cout << rotated_cube_mesh.vertices.size() << ": ";
-        std::cout << indices[0] << " " << indices[1] << "\n";
-        std::cout << rotated_cube_mesh.vertices[indices[0]].position[0] << " "
-                  << rotated_cube_mesh.vertices[indices[0]].position[1] << " "
-                  << rotated_cube_mesh.vertices[indices[0]].position[2] << " "
-                  << rotated_cube_mesh.vertices[indices[0]].position[3] << " "
-                  << rotated_cube_mesh.vertices[indices[0]].color[0]    << " "
-                  << rotated_cube_mesh.vertices[indices[0]].color[1]    << " "
-                  << rotated_cube_mesh.vertices[indices[0]].color[2]    << "\n";
-        std::cout << rotated_cube_mesh.vertices[indices[1]].position[0] << " "
-                  << rotated_cube_mesh.vertices[indices[1]].position[1] << " "
-                  << rotated_cube_mesh.vertices[indices[1]].position[2] << " "
-                  << rotated_cube_mesh.vertices[indices[1]].position[3] << " "
-                  << rotated_cube_mesh.vertices[indices[1]].color[0]    << " "
-                  << rotated_cube_mesh.vertices[indices[1]].color[1]    << " "
-                  << rotated_cube_mesh.vertices[indices[1]].color[2]    << "\n\n";
-    }
-    std::cout << std::flush;
-    std::cout << (rotated_cube_mesh.vertices.data())->position[0] << std::endl;
-    exit(0);*/
     }
 
     // black outline
-/*    glEnable(GL_LINE_SMOOTH);
+    glEnable(GL_LINE_SMOOTH);
     glBufferData(GL_ARRAY_BUFFER, sizeof(Vertex)*rotated_cube_mesh.vertices.size(), rotated_cube_mesh.vertices.data(), GL_STATIC_DRAW);
     glBufferData(GL_ELEMENT_ARRAY_BUFFER, line_indices.size() * sizeof(unsigned int), line_indices.data(), GL_STATIC_DRAW);
 
     glBindVertexArray(vertex_array_object_);
     glDrawElements(GL_LINES, static_cast<unsigned int>(line_indices.size()), GL_UNSIGNED_INT, 0);
-    glBindVertexArray(0);
 
     glDisable(GL_LINE_SMOOTH);
-*/
+
     std::vector<int> triangle_indices;
     for (std::array<int, 3> indices : rotated_cube_mesh.triangles) {
         triangle_indices.push_back(indices[0]);
@@ -120,83 +98,13 @@ void Cube::Draw(Setting settings) const {
         triangle_indices.push_back(indices[2]);
     }
 
-/*
-    //glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, color));
-    std::cout << sizeof(Vertex) << " " << offsetof(Vertex, color) << " " << std::endl;
-    
-    for (int i = 0; i < 0; i++) {
-        std::cout << i << std::endl;
-        std::cout << rotated_cube_mesh.vertices[triangle_indices[i]].position[0] << " "
-                  << rotated_cube_mesh.vertices[triangle_indices[i]].position[1] << " "
-                  << rotated_cube_mesh.vertices[triangle_indices[i]].position[2] << " "
-                  << rotated_cube_mesh.vertices[triangle_indices[i]].position[3] << " " << std::endl;
-        std::cout << rotated_cube_mesh.vertices[triangle_indices[i]].color[0] << " "
-                  << rotated_cube_mesh.vertices[triangle_indices[i]].color[1] << " "
-                  << rotated_cube_mesh.vertices[triangle_indices[i]].color[2] << " " << "\n" << std::endl;
-        rotated_cube_mesh.vertices[triangle_indices[i]].color[0] = 0.5;
-        rotated_cube_mesh.vertices[triangle_indices[i]].color[1] = 0.5;
-        rotated_cube_mesh.vertices[triangle_indices[i]].color[2] = 0.5;
-    }
-    std::cout << triangle_indices[0] << " " << triangle_indices[1] << " " << triangle_indices[2] << std::endl;
-    std::cout << triangle_indices[3] << " " << triangle_indices[4] << " " << triangle_indices[5] << std::endl;
-    std::cout << line_indices[0] << " " << line_indices[1] << " " << line_indices[2] << std::endl;
-    std::cout << line_indices[3] << " " << line_indices[4] << " " << line_indices[5] << std::endl;
-    std::cout << std::endl;
-*/
 
     glEnable(GL_BLEND);
     glBufferData(GL_ARRAY_BUFFER, sizeof(Vertex)*rotated_cube_mesh.vertices.size(), rotated_cube_mesh.vertices.data(), GL_STATIC_DRAW);
     glBufferData(GL_ELEMENT_ARRAY_BUFFER, triangle_indices.size() * sizeof(unsigned int), triangle_indices.data(), GL_STATIC_DRAW);
-//    std::cout << "XXX: " << triangle_indices.size() * sizeof(unsigned int) << std::endl;
 
     glBindVertexArray(vertex_array_object_);
     glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
     glDrawElements(GL_TRIANGLES, triangle_indices.size(), GL_UNSIGNED_INT, 0);
     glDisable(GL_BLEND);
-
-
-//    std::cout << "it should work" << std::endl;
-
-/*    for (size_t i = 0; i < pieces_.size(); i++) {
-        unsigned int piece_data = ( i ) |                       // piece index
-                ( Colors::kBlack << 5 ) |                       // color index
-                ( (int)pieces_[i].current_rotation << 8 );      // effected by current rotation
-        glUniform1ui(piece_data_location_, piece_data);
-
-        Mesh mesh = meshes_[pieces_[i].type];
-        // send the vertex buffer objects
-        glBufferData(GL_ARRAY_BUFFER, sizeof(float)*mesh.points.size(), mesh.points.data(), GL_STATIC_DRAW);
-
-        glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(int)*mesh.lines.size(), mesh.lines.data(), GL_STATIC_DRAW);
-        glBindVertexArray(vertex_array_object_);
-
-        glDrawElements(GL_LINES, mesh.lines.size(), GL_UNSIGNED_INT, 0);
-    }
-    glDisable(GL_LINE_SMOOTH);
-
-    glEnable(GL_BLEND);
-    // pieces
-    for (size_t i = 0; i < pieces_.size(); i++) {
-        Mesh mesh = meshes_[pieces_[i].type];
-        // send the vertex buffer objects
-        glBufferData(GL_ARRAY_BUFFER, sizeof(float)*mesh.points.size(), mesh.points.data(), GL_STATIC_DRAW);
-
-        // go over all colors of this piece type
-        for (int color_index = 0; color_index < int(pieces_[i].colors.size()); color_index++) {
-            // convert the piece index, color index and effected by rotation of current move into one unsigned int
-            unsigned int piece_data = ( i ) |                                       // piece index
-                                      (   pieces_[i].colors[color_index] << 5 ) |   // color index
-                                      ( (int)pieces_[i].current_rotation << 8 );    // effected by current rotation
-            glUniform1ui(piece_data_location_, piece_data);
-
-            // send the element buffer objects
-            glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(int)*mesh.triangles[color_index].size(), mesh.triangles[color_index].data(), GL_STATIC_DRAW);
-
-            glBindVertexArray(vertex_array_object_);
-
-            glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
-            glDrawElements(GL_TRIANGLES, mesh.triangles[color_index].size(), GL_UNSIGNED_INT, 0);
-        }
-    }*/
-    //glDisable(GL_BLEND);
 }
