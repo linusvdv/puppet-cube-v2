@@ -11,6 +11,16 @@
 #include "settings.h"
 
 
+const std::array<glm::vec4, kNumPieces> kPieceOffset =
+    {glm::vec4( 0.F,  1.F,  0.F,  0.F),
+     glm::vec4( 0.F,  1.F,  1.F,  0.F),
+     glm::vec4( 1.F,  1.F,  1.F,  0.F),
+     glm::vec4(-1.F,  1.F,  1.F,  0.F),
+     glm::vec4(-1.F,  1.F, -1.F,  0.F),
+     glm::vec4( 1.F,  1.F,  1.F,  0.F),
+    };
+
+
 Cube::Cube() {
     cube_mesh_ = CubeMeshInitialisation();
 
@@ -45,6 +55,13 @@ Cube::~Cube() {
 
 
 void Cube::Draw(Setting settings) const {
+    CubeMesh rotated_cube_mesh = cube_mesh_;
+
+    // translate the pieces
+    for (Vertex& vertex : rotated_cube_mesh.vertices) {
+        vertex.position += kPieceOffset[pieces_[vertex.piece_index].type] * settings.pieceOffset;
+    }
+
     // current rotation
     glm::mat4 current_rotation = glm::mat4(1.0F);
     current_rotation = glm::rotate(current_rotation, (float)glfwGetTime(), glm::vec3(0.0, 1.0, 0.0));
@@ -56,7 +73,6 @@ void Cube::Draw(Setting settings) const {
     glm::mat4 scale = glm::scale(glm::mat4(1.0F), glm::vec3(settings.scroll/2));
 
     // calculate rotation
-    CubeMesh rotated_cube_mesh = cube_mesh_;
     for (Vertex& vertex : rotated_cube_mesh.vertices) {
         // piece rotation
         vertex.position = pieces_[vertex.piece_index].rotation * vertex.position;

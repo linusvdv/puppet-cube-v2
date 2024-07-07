@@ -88,38 +88,37 @@ private:
     // 5: big corner
     struct Piece {
         int type;
-        std::vector<Colors> colors;
         glm::mat4 rotation;
         bool current_rotation = false;
     };
 
     static const unsigned int kNumPieces = 26;
     std::array<Piece, kNumPieces> pieces_ = {{
-        {0, {Colors::kYellow}, GetRotationMatrix(  0.0,   0.0,   0.0), true},
-        {0, {Colors::kOrange}, GetRotationMatrix( 90.0,   0.0,   0.0)},
-        {0, {Colors::kGreen }, GetRotationMatrix(  0.0,   0.0,  90.0)},
-        {0, {Colors::kRed   }, GetRotationMatrix(-90.0,   0.0,   0.0)},
-        {0, {Colors::kBlue  }, GetRotationMatrix(  0.0,   0.0, -90.0)},
-        {0, {Colors::kWhite }, GetRotationMatrix(180.0,   0.0,   0.0)},
-        {1, {Colors::kYellow, Colors::kOrange}, GetRotationMatrix(  0.0,   0.0,   0.0), true},
-        {1, {Colors::kYellow, Colors::kGreen }, GetRotationMatrix(  0.0, -90.0,   0.0), true},
-        {1, {Colors::kYellow, Colors::kRed   }, GetRotationMatrix(  0.0, 180.0,   0.0), true},
-        {1, {Colors::kYellow, Colors::kBlue  }, GetRotationMatrix(  0.0,  90.0,   0.0), true},
-        {1, {Colors::kBlue,   Colors::kOrange}, GetRotationMatrix(  0.0,   0.0, -90.0)},
-        {1, {Colors::kGreen,  Colors::kOrange}, GetRotationMatrix(  0.0,   0.0,  90.0)},
-        {1, {Colors::kGreen,  Colors::kRed   }, GetRotationMatrix(  0.0, 180.0, -90.0)},
-        {1, {Colors::kBlue,   Colors::kRed   }, GetRotationMatrix(  0.0, 180.0,  90.0)},
-        {1, {Colors::kWhite,  Colors::kOrange}, GetRotationMatrix(  0.0,   0.0, 180.0)},
-        {1, {Colors::kWhite,  Colors::kGreen }, GetRotationMatrix(  0.0, -90.0, 180.0)},
-        {1, {Colors::kWhite,  Colors::kRed   }, GetRotationMatrix(  0.0, 180.0, 180.0)},
-        {1, {Colors::kWhite,  Colors::kBlue  }, GetRotationMatrix(  0.0,  90.0, 180.0)},
-        {2, {Colors::kYellow, Colors::kOrange, Colors::kBlue  }, GetRotationMatrix(  0.0,   0.0,   0.0), true},
-        {3, {Colors::kYellow, Colors::kGreen,  Colors::kOrange}, GetRotationMatrix(  0.0,   0.0,   0.0), true},
-        {3, {Colors::kOrange, Colors::kWhite,  Colors::kBlue  }, GetRotationMatrix( 90.0,  90.0,   0.0)},
-        {3, {Colors::kBlue,   Colors::kRed,    Colors::kYellow}, GetRotationMatrix(-90.0,   0.0, -90.0), true},
-        {4, {Colors::kYellow, Colors::kRed,    Colors::kGreen }, GetRotationMatrix(  0.0,   0.0,   0.0), true},
-        {4, {Colors::kOrange, Colors::kGreen,  Colors::kWhite }, GetRotationMatrix(  0.0,  90.0,  90.0)},
-        {4, {Colors::kBlue,   Colors::kWhite,  Colors::kRed   }, GetRotationMatrix(-90.0,   0.0, -90.0)},
-        {5, {Colors::kWhite,  Colors::kGreen,  Colors::kRed   }, GetRotationMatrix(180.0, -90.0,   0.0)}
+        {0, GetRotationMatrix(  0.0,   0.0,   0.0), true},
+        {0, GetRotationMatrix( 90.0,   0.0,   0.0)},
+        {0, GetRotationMatrix(  0.0,   0.0,  90.0)},
+        {0, GetRotationMatrix(-90.0,   0.0,   0.0)},
+        {0, GetRotationMatrix(  0.0,   0.0, -90.0)},
+        {0, GetRotationMatrix(180.0,   0.0,   0.0)},
+        {1, GetRotationMatrix(  0.0,   0.0,   0.0), true},
+        {1, GetRotationMatrix(  0.0, -90.0,   0.0), true},
+        {1, GetRotationMatrix(  0.0, 180.0,   0.0), true},
+        {1, GetRotationMatrix(  0.0,  90.0,   0.0), true},
+        {1, GetRotationMatrix(  0.0,   0.0, -90.0)},
+        {1, GetRotationMatrix(  0.0,   0.0,  90.0)},
+        {1, GetRotationMatrix(  0.0, 180.0, -90.0)},
+        {1, GetRotationMatrix(  0.0, 180.0,  90.0)},
+        {1, GetRotationMatrix(  0.0,   0.0, 180.0)},
+        {1, GetRotationMatrix(  0.0, -90.0, 180.0)},
+        {1, GetRotationMatrix(  0.0, 180.0, 180.0)},
+        {1, GetRotationMatrix(  0.0,  90.0, 180.0)},
+        {2, GetRotationMatrix(  0.0,   0.0,   0.0), true},
+        {3, GetRotationMatrix(  0.0,   0.0,   0.0), true},
+        {3, GetRotationMatrix( 90.0,  90.0,   0.0)},
+        {3, GetRotationMatrix(-90.0,   0.0, -90.0), true},
+        {4, GetRotationMatrix(  0.0,   0.0,   0.0), true},
+        {4, GetRotationMatrix(  0.0,  90.0,  90.0)},
+        {4, GetRotationMatrix(-90.0,   0.0, -90.0)},
+        {5, GetRotationMatrix(180.0, -90.0,   0.0)}
     }};
 };

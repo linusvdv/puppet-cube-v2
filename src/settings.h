@@ -16,8 +16,8 @@ public:
     std::pair<float, float> rotation = {140, 30};
     std::pair<double, double> last_position = {0, 0};
 
-    // scroll
     double scroll = 1;
+    float pieceOffset = 0.001;
 
     Setting(ErrorHandler error_handler, int argc, char *argv[]);
 };

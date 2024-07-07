@@ -305,7 +305,9 @@ const std::array<PieceMesh, kNumPieceTypes> kPieceMeshPreInitialisation = {{
        2, 6, 7,
        2, 3, 7,
        3, 7, 4,
-       3, 0, 4}},
+       3, 0, 4,
+       4, 5, 6,
+       4, 6, 7}},
 
     // lines
      {0, 1,
