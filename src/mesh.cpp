@@ -1,11 +1,8 @@
 #include <array>
 #include <cassert>
 #include <cmath>
-#include <complex>
 #include <cstddef>
-#include <iostream>
 #include <map>
-#include <ostream>
 #include <vector>
 
 
@@ -165,7 +162,7 @@ void TransformPieceMeshToVertexPieceData(std::map<VertexPieceIndex, VertexPieceV
 void WeightedNormalAverage(VertexPieceValue& vertex_piece_value, 
         std::vector<std::array<float, 3>>& different_normals, std::vector<int>& different_normal_index, int index) {
     for (size_t j = 0; j < different_normals.size(); j++) {
-        if (GetSmallestAngle(different_normals[j], vertex_piece_value.normals[index]) < M_PIf / 8 && false) { // TODO: Get min angle
+        if (GetSmallestAngle(different_normals[j], vertex_piece_value.normals[index]) < M_PIf / 8) {
             different_normals[j] = AddVecMaxMagnetude(different_normals[j], vertex_piece_value.normals[index]);
             different_normal_index.push_back(j);
             return;

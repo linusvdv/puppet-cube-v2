@@ -74,6 +74,13 @@ void Cube::Draw(Setting settings) const {
         vertex.normal   = view_rotation * vertex.normal;
     }
 
+    rotated_cube_mesh.triangles = {};
+    for (std::array<int, 3> triangle : cube_mesh_.triangles) {
+        if (rotated_cube_mesh.vertices[triangle[0]].piece_index == 20 || true) {
+            rotated_cube_mesh.triangles.push_back(triangle);
+        }
+    }
+
     glBufferData(GL_ARRAY_BUFFER, sizeof(Vertex)*rotated_cube_mesh.vertices.size(), rotated_cube_mesh.vertices.data(), GL_STATIC_DRAW);
     glBindVertexArray(vertex_array_object_);
 
