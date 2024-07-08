@@ -64,7 +64,7 @@ void Cube::Draw(Setting settings) const {
 
     // current rotation
     glm::mat4 current_rotation = glm::mat4(1.0F);
-    current_rotation = glm::rotate(current_rotation, (float)glfwGetTime(), glm::vec3(0.0, 1.0, 0.0));
+    current_rotation = glm::rotate(current_rotation, (float)glfwGetTime()/4, glm::vec3(0.0, 1.0, 0.0));
 
     // view
     glm::mat4 view_rotation = glm::mat4(1.0F);
@@ -96,6 +96,14 @@ void Cube::Draw(Setting settings) const {
             rotated_cube_mesh.triangles.push_back(triangle);
         }
     }
+
+    std::sort(rotated_cube_mesh.triangles.begin(), rotated_cube_mesh.triangles.end(),
+            [=](std::array<int, 3> first, std::array<int, 3> second){return rotated_cube_mesh.vertices[first[0] ].position[2] +
+                                                                            rotated_cube_mesh.vertices[first[1] ].position[2] +
+                                                                            rotated_cube_mesh.vertices[first[2] ].position[2] <
+                                                                            rotated_cube_mesh.vertices[second[0]].position[2] +
+                                                                            rotated_cube_mesh.vertices[second[1]].position[2] +
+                                                                            rotated_cube_mesh.vertices[second[2]].position[2];});
 
     glBufferData(GL_ARRAY_BUFFER, sizeof(Vertex)*rotated_cube_mesh.vertices.size(), rotated_cube_mesh.vertices.data(), GL_STATIC_DRAW);
     glBindVertexArray(vertex_array_object_);
