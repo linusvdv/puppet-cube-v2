@@ -13,11 +13,13 @@ public:
     bool gui = true;
 
     // mouse rotation
-    std::pair<float, float> rotation = {140, 30};
+    std::pair<float, float> rotation = {-40, 30};
     std::pair<double, double> last_position = {0, 0};
 
     double scroll = 1;
     float pieceOffset = 0.001;
+
+    float min_elapsed_time_since_last_rotation = 0.5; // seconds
 
     Setting(ErrorHandler error_handler, int argc, char *argv[]);
 };

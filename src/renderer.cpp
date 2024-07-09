@@ -122,12 +122,24 @@ int Renderer (ErrorHandler error_handler, Setting settings) {
 
 
     Cube cube;
+    cube.AddRotation(Cube::Rotations::kL);
+    cube.AddRotation(Cube::Rotations::kU);
+    cube.AddRotation(Cube::Rotations::kR);
+    cube.AddRotation(Cube::Rotations::kBc);
+    cube.AddRotation(Cube::Rotations::kDc);
+    cube.AddRotation(Cube::Rotations::kM);
+    cube.AddRotation(Cube::Rotations::kD);
+    cube.AddRotation(Cube::Rotations::kB);
+    cube.AddRotation(Cube::Rotations::kRc);
+    cube.AddRotation(Cube::Rotations::kUc);
+    cube.AddRotation(Cube::Rotations::kLc);
 
     while (glfwWindowShouldClose(window) == 0) {
         // clear background
         glClearColor(0.2F, 0.3F, 0.3F, 1.0F);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
+        cube.Rotate(settings);
         cube.Draw(settings);
 
         glfwSwapBuffers(window);

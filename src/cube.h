@@ -8,6 +8,8 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
+#include <glad/glad.h>
+#include <GLFW/glfw3.h>
 
 #include "mesh.h"
 #include "settings.h"
@@ -16,6 +18,7 @@
 
 class Cube {
 public:
+    static const int kNumRotations = 18;
     enum Rotations {
         kL,
         kLc,
@@ -28,18 +31,27 @@ public:
         kF,
         kFc,
         kB,
-        kBc
+        kBc,
+        kM,
+        kMc,
+        kE,
+        kEc,
+        kS,
+        kSc
     };
 
-    Rotations current_rotation;
-    float rotation_angle;
     std::queue<Rotations> nextRotations;
 
     Cube();
     ~Cube();
     void Draw(Setting settings) const;
 
-    void Rotate(Rotations rotation);
+    void AddRotation(Rotations rotation) {
+        nextRotations.push(rotation);
+    }
+    bool should_rotate = true;
+
+    void Rotate(Setting settings);
 
 
 private:
@@ -88,37 +100,46 @@ private:
     // 5: big corner
     struct Piece {
         int type;
+        std::array<int, 3> orientation;
         glm::mat4 rotation;
         bool current_rotation = false;
     };
 
     static const unsigned int kNumPieces = 26;
     std::array<Piece, kNumPieces> pieces_ = {{
-        {0, GetRotationMatrix(  0.0,   0.0,   0.0), true},
-        {0, GetRotationMatrix( 90.0,   0.0,   0.0)},
-        {0, GetRotationMatrix(  0.0,   0.0,  90.0)},
-        {0, GetRotationMatrix(-90.0,   0.0,   0.0)},
-        {0, GetRotationMatrix(  0.0,   0.0, -90.0)},
-        {0, GetRotationMatrix(180.0,   0.0,   0.0)},
-        {1, GetRotationMatrix(  0.0,   0.0,   0.0), true},
-        {1, GetRotationMatrix(  0.0, -90.0,   0.0), true},
-        {1, GetRotationMatrix(  0.0, 180.0,   0.0), true},
-        {1, GetRotationMatrix(  0.0,  90.0,   0.0), true},
-        {1, GetRotationMatrix(  0.0,   0.0, -90.0)},
-        {1, GetRotationMatrix(  0.0,   0.0,  90.0)},
-        {1, GetRotationMatrix(  0.0, 180.0, -90.0)},
-        {1, GetRotationMatrix(  0.0, 180.0,  90.0)},
-        {1, GetRotationMatrix(  0.0,   0.0, 180.0)},
-        {1, GetRotationMatrix(  0.0, -90.0, 180.0)},
-        {1, GetRotationMatrix(  0.0, 180.0, 180.0)},
-        {1, GetRotationMatrix(  0.0,  90.0, 180.0)},
-        {2, GetRotationMatrix(  0.0,   0.0,   0.0), true},
-        {3, GetRotationMatrix(  0.0,   0.0,   0.0), true},
-        {3, GetRotationMatrix( 90.0,  90.0,   0.0)},
-        {3, GetRotationMatrix(-90.0,   0.0, -90.0), true},
-        {4, GetRotationMatrix(  0.0,   0.0,   0.0), true},
-        {4, GetRotationMatrix(  0.0,  90.0,  90.0)},
-        {4, GetRotationMatrix(-90.0,   0.0, -90.0)},
-        {5, GetRotationMatrix(180.0, -90.0,   0.0)}
+        {0, { 0,  1,  0}, GetRotationMatrix(  0.0,   0.0,   0.0)},
+        {0, { 0,  0,  1}, GetRotationMatrix( 90.0,   0.0,   0.0)},
+        {0, {-1,  0,  0}, GetRotationMatrix(  0.0,   0.0,  90.0)},
+        {0, { 0,  0, -1}, GetRotationMatrix(-90.0,   0.0,   0.0)},
+        {0, { 1,  0,  0}, GetRotationMatrix(  0.0,   0.0, -90.0)},
+        {0, { 0, -1,  0}, GetRotationMatrix(180.0,   0.0,   0.0)},
+        {1, { 0,  1,  1}, GetRotationMatrix(  0.0,   0.0,   0.0)},
+        {1, {-1,  1,  0}, GetRotationMatrix(  0.0, -90.0,   0.0)},
+        {1, { 0,  1, -1}, GetRotationMatrix(  0.0, 180.0,   0.0)},
+        {1, { 1,  1,  0}, GetRotationMatrix(  0.0,  90.0,   0.0)},
+        {1, { 1,  0,  1}, GetRotationMatrix(  0.0,   0.0, -90.0)},
+        {1, {-1,  0,  1}, GetRotationMatrix(  0.0,   0.0,  90.0)},
+        {1, {-1,  0, -1}, GetRotationMatrix(  0.0, 180.0, -90.0)},
+        {1, { 1,  0, -1}, GetRotationMatrix(  0.0, 180.0,  90.0)},
+        {1, { 0, -1,  1}, GetRotationMatrix(  0.0,   0.0, 180.0)},
+        {1, {-1, -1,  0}, GetRotationMatrix(  0.0, -90.0, 180.0)},
+        {1, { 0, -1, -1}, GetRotationMatrix(  0.0, 180.0, 180.0)},
+        {1, { 1, -1,  0}, GetRotationMatrix(  0.0,  90.0, 180.0)},
+        {2, { 1,  1,  1}, GetRotationMatrix(  0.0,   0.0,   0.0)},
+        {3, {-1,  1,  1}, GetRotationMatrix(  0.0,   0.0,   0.0)},
+        {3, { 1, -1,  1}, GetRotationMatrix( 90.0,  90.0,   0.0)},
+        {3, { 1,  1, -1}, GetRotationMatrix(-90.0,   0.0, -90.0)},
+        {4, {-1,  1, -1}, GetRotationMatrix(  0.0,   0.0,   0.0)},
+        {4, {-1, -1,  1}, GetRotationMatrix(  0.0,  90.0,  90.0)},
+        {4, { 1, -1, -1}, GetRotationMatrix(-90.0,   0.0, -90.0)},
+        {5, {-1, -1, -1}, GetRotationMatrix(180.0, -90.0,   0.0)}
     }};
+
+
+    Rotations current_rotation_;
+    glm::vec3 current_rotation_vector_;
+    bool started_current_rotation_ = false;
+    float elapsed_time_since_last_rotation_ = 0;
+    float rotation_angle_ = 0;
+    float last_time_ = glfwGetTime();
 };
