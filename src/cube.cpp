@@ -195,24 +195,24 @@ void Cube::Rotate(Setting settings) {
     float old_time = last_time_;
     last_time_ = glfwGetTime();
 
-    if (!should_rotate) {
+    if (!settings.should_rotate) {
         return;
     }
 
     if (!started_current_rotation_) {
-        if (elapsed_time_since_last_rotation_ < settings.min_elapsed_time_since_last_rotation / 4) {
+        if (elapsed_time_since_last_rotation_ < settings.min_elapsed_time_since_last_rotation) {
             elapsed_time_since_last_rotation_ += last_time_ - old_time;
             return;
         }
 
-        if (nextRotations.empty()) {
+        if (nextRotations_.empty()) {
             return;
         }
 
         started_current_rotation_ = true;
-        current_rotation_ = nextRotations.front();
-        nextRotations.pop();
-        nextRotations.push(current_rotation_);
+        current_rotation_ = nextRotations_.front();
+        nextRotations_.pop();
+        nextRotations_.push(current_rotation_);
 
         current_rotation_vector_ = kPieceRotationMatrices[current_rotation_].rotation_axis;
 
@@ -223,6 +223,8 @@ void Cube::Rotate(Setting settings) {
             }
         }
     }
+
+    rotation_angle_ += (last_time_ - old_time) *2;
 
 
     if (rotation_angle_ > M_PIf / 2) {
@@ -244,6 +246,4 @@ void Cube::Rotate(Setting settings) {
         }
         return;
     }
-
-    rotation_angle_ += (last_time_ - old_time) *2;
 }

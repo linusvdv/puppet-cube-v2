@@ -40,16 +40,13 @@ public:
         kSc
     };
 
-    std::queue<Rotations> nextRotations;
-
     Cube();
     ~Cube();
     void Draw(Setting settings) const;
 
     void AddRotation(Rotations rotation) {
-        nextRotations.push(rotation);
+        nextRotations_.push(rotation);
     }
-    bool should_rotate = true;
 
     void Rotate(Setting settings);
 
@@ -136,6 +133,7 @@ private:
     }};
 
 
+    std::queue<Rotations> nextRotations_;
     Rotations current_rotation_;
     glm::vec3 current_rotation_vector_;
     bool started_current_rotation_ = false;

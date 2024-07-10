@@ -20,8 +20,12 @@ static void ErrorCallback(int error, const char* description) {
 
 
 static void KeyCallback(GLFWwindow* window, int key, int scancode [[maybe_unused]], int action, int mods [[maybe_unused]]) {
+    Setting* settings = (Setting *)glfwGetWindowUserPointer(window);
     if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS) {
         glfwSetWindowShouldClose(window, GLFW_TRUE);
+    }
+    if (key == GLFW_KEY_SPACE && action == GLFW_PRESS) {
+        settings->should_rotate = !settings->should_rotate;
     }
 }
 

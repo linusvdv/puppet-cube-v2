@@ -19,7 +19,8 @@ public:
     double scroll = 1;
     float pieceOffset = 0.001;
 
-    float min_elapsed_time_since_last_rotation = 0.5; // seconds
+    float min_elapsed_time_since_last_rotation = 0.2; // seconds
+    bool should_rotate = true;
 
     Setting(ErrorHandler error_handler, int argc, char *argv[]);
 };
