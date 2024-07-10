@@ -21,6 +21,7 @@ public:
 
     float min_elapsed_time_since_last_rotation = 0.2; // seconds
     bool should_rotate = true;
+    float rotation_speed = 2;
 
     Setting(ErrorHandler error_handler, int argc, char *argv[]);
 };

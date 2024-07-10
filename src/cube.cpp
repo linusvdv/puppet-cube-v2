@@ -4,7 +4,7 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
-#include <iostream>
+#include <random>
 
 
 #include "cube.h"
@@ -206,6 +206,7 @@ void Cube::Rotate(Setting settings) {
         }
 
         if (nextRotations_.empty()) {
+//        nextRotations_.push(Rotations(std::rand()%kNumRotations));
             return;
         }
 
@@ -224,7 +225,7 @@ void Cube::Rotate(Setting settings) {
         }
     }
 
-    rotation_angle_ += (last_time_ - old_time) *2;
+    rotation_angle_ += (last_time_ - old_time) * settings.rotation_speed;
 
 
     if (rotation_angle_ > M_PIf / 2) {
