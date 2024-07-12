@@ -144,8 +144,10 @@ int main() {
     std::map<std::array<std::array<int, 4>, kNumPieces>, PositionValue> positions;
     std::queue<std::pair<int, std::array<Piece, kNumPieces>>> next_positions;
     next_positions.push({0, pieces});
+    std::array<std::array<int, 4>, kNumPieces> position_index = GetPositionIndex(pieces);
+    positions[position_index] = {0, {}};
 
-    uint64_t num_positions = 0;
+    uint64_t num_positions = 1;
 
     while (!next_positions.empty()) {
         int depth = next_positions.front().first;
@@ -153,15 +155,6 @@ int main() {
         next_positions.pop();
 //        DebugPiecesOut(current_position);
 
-        // get position index from current position
-        std::array<std::array<int, 4>, kNumPieces> position_index = GetPositionIndex(current_position);
-
-        // position already looked at
-        if (positions.contains(position_index)) {
-            continue;
-        }
-        num_positions++;
-        positions[position_index] = {depth+1, {}};
         if (num_positions % 100000 == 0) {
             std::cout << depth << " " << positions.size() << " " << next_positions.size() << std::endl;
             std::cout << sizeof(*positions.begin())*positions.size()    / 1000000 << " MB "
@@ -187,6 +180,8 @@ int main() {
             if (positions.contains(position_index)) {
                 continue;
             }
+            positions[position_index] = {depth+1, {}};
+            num_positions++;
 
 
             next_positions.push({depth+1, next_position});
