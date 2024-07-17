@@ -1,5 +1,6 @@
 #include <sys/types.h>
 #include <array>
+#include <bitset>
 #include <cassert>
 #include <cstdint>
 #include <map>
@@ -111,7 +112,6 @@ void DebugPiecesOut (std::array<Piece, kNumPieces> pieces) {
                           << PrintNegSpace(piece.orientation[1]) << ","
                           << PrintNegSpace(piece.orientation[2]) << "}}," << std::endl;
     }
-    std::cout << std::endl;
 }
 
 
@@ -244,7 +244,62 @@ struct NextPosition {
 };
 
 
+struct ProtrudingPieces {
+    bool x = true;
+    bool y = true;
+};
+
+
+bool IsLegal(std::array<Piece, kNumPieces> position) {
+    // [0], -[0]
+    // [1], -[1]
+    // [2], -[2]
+    for (int i = 0; i < 6; i++) {
+        int imp = i/2;
+        int sign = i%2==0 ? 1 : -1;
+        int c_x = (imp + 1) % 3;
+        int c_y = (imp + 2) % 3;
+        // + +
+        // + -
+        // - +
+        // - -
+        std::array<ProtrudingPieces, 4> protruding_pieces = {};
+        for (Piece piece : position) {
+            if (piece.position[imp] - piece.protruding[imp] == 2*sign) {
+                int index = (piece.position[c_x]+1) + (piece.position[c_y]+1)/2;
+                protruding_pieces[index].x = piece.protruding[c_x] != 0;
+                protruding_pieces[index].y = piece.protruding[c_y] != 0;
+            }
+        }
+
+        if (!protruding_pieces[0].x && !protruding_pieces[2].x) { // +x
+            return false;
+        }
+        if (!protruding_pieces[1].x && !protruding_pieces[3].x) { // -x
+            return false;
+        }
+        if (!protruding_pieces[0].y && !protruding_pieces[1].y) { // +y
+            return false;
+        }
+        if (!protruding_pieces[2].y && !protruding_pieces[3].y) { // -y
+            return false;
+        }
+        if (!protruding_pieces[0].x && !protruding_pieces[0].y &&
+            !protruding_pieces[3].x && !protruding_pieces[3].y) { // diagonal
+            return false;
+        }
+        if (!protruding_pieces[1].x && !protruding_pieces[1].y &&
+            !protruding_pieces[2].x && !protruding_pieces[2].y) { // diagonal
+            return false;
+        }
+    }
+    return true;
+}
+
+
 int main() {
+    bool debug = false;
+
     std::array<Piece, kNumPieces> pieces = {{
         {{ 1,  1,  1}, { 0,  0,  0}, { 1,  0,  0}},     // Yellow, Orange, Blue  
         {{-1,  1,  1}, { 1,  0,  0}, { 1,  0,  0}},     // Yellow, Green,  Orange
@@ -273,7 +328,9 @@ int main() {
         std::array<Piece, kNumPieces> current_position = DecodePositionHash(next_positions.front().position_hash, next_positions.front().protruding_hash);
         next_positions.pop();
 
-        //DebugPiecesOut(current_position);
+        if (debug) {
+            DebugPiecesOut(current_position);
+        }
 
         if (num_positions % 100000 == 0) {
             std::cout << depth << " " << num_positions << " " << next_positions.size() << std::endl;
@@ -296,11 +353,20 @@ int main() {
             }
             
             // check if legal
+            if (!IsLegal(next_position)) {
+                if (debug) {
+                    std::cout << rotation << " impossible" << std::endl;
+                }
+                continue;
+            }
+            if (debug) {
+                std::cout << rotation << " possible" << std::endl;
+            }
 
             // add this move to legal moves
-            // the opposite turn is always allowed "L == R'"
-            if (rotation%2 == 0) {
-                legal_moves |= 1 << (rotation/2);
+            // the opposite turn is always allowed "L == R"
+            if (rotation%4 <= 1) {
+                legal_moves |= 1 << (rotation/2+rotation%4);
             }
 
             // position already looked at
@@ -316,6 +382,14 @@ int main() {
 
         positions[position_index] = legal_moves | (depth << kNumRotations/2);
         num_positions++;
+
+        //DebugPiecesOut(current_position);
+        if (debug) {
+            std::cout << std::bitset<6>(legal_moves) << std::endl << std::endl;
+            if (num_positions >= 13) {
+                break;
+            }
+        }
     }
 
     std::cout << num_positions << std::endl;
