@@ -1,13 +1,21 @@
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
+#include <bitset>
+#include <cassert>
 #include <cstddef>
+#include <cstdint>
+#include <iostream>
+#include <map>
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
+#include <ostream>
 #include <random>
+#include <vector>
 
 
 #include "cube.h"
+#include "error_handler.h"
 #include "mesh.h"
 #include "settings.h"
 
@@ -22,7 +30,21 @@ const std::array<glm::vec4, kNumPieces> kPieceOffset =
     };
 
 
-Cube::Cube() {
+Cube::Cube(ErrorHandler error_handler, Setting settings) {
+    legal_moves_ = std::vector<uint16_t>(kNumOrientations, 0);
+    std::string legal_move_path = "legal-move-generation/legal_moves.bin";
+    legal_move_path.insert(0, settings.rootPath);
+    if (std::FILE* file = std::fopen(legal_move_path.c_str(), "rb")) {
+        std::fread(legal_moves_.data(), sizeof(legal_moves_[0]), legal_moves_.size(), file);
+        std::fclose(file);
+    }
+    else {
+        error_handler.Handle(ErrorHandler::kCriticalError, "cube.cpp", "legal_moves file not found");
+    }
+    for (int i = 0; i < 100; i++) {
+        std::cout << i << ": " << legal_moves_[i] << std::endl;
+    }
+
     cube_mesh_ = CubeMeshInitialisation();
 
     // OpenGL objects
@@ -191,6 +213,62 @@ std::array<int, 3> IntMat3MultWithVec3(const std::array<std::array<int, 3>, 3>& 
 }
 
 
+const unsigned int kEightFac = 40320; // 8!
+const int kCornerOffset = 18;
+unsigned int Cube::GetPositionHash() const {
+    const std::map<std::array<int, 3>, unsigned int> corner_index = {
+        {{ 1,  1,  1}, 0},
+        {{-1,  1,  1}, 1},
+        {{ 1, -1,  1}, 2},
+        {{ 1,  1, -1}, 3},
+        {{-1,  1, -1}, 4},
+        {{-1, -1,  1}, 5},
+        {{ 1, -1, -1}, 6},
+        {{-1, -1, -1}, 7}
+    };
+
+    std::array<bool, kNumPieces> used;
+    used.fill(false);
+
+    unsigned int orientation_hash = 0;
+    unsigned int hash = 0;
+    for (int i = 0; i < kNumCorners-1; i++) {
+        // index compressed to 8!
+        // 0 to 8!-1
+        unsigned int corner = corner_index.find(pieces_[i+kCornerOffset].orientation)->second;
+        std::cout << corner << " " << pieces_[i+kCornerOffset].orientation[0] << " " 
+            << pieces_[i+kCornerOffset].orientation[1] << " " <<
+            pieces_[i+kCornerOffset].orientation[2] << std::endl;
+        unsigned int small_corner_index = 0;
+        for (int j = 0; j < corner; j++) {
+            small_corner_index += u_int(!used[j]);
+        }
+        std::cout << small_corner_index << std::endl;
+        used[corner] = true;
+        hash *= kNumCorners-i;
+        hash += small_corner_index;
+
+        // piece orientation
+        int orientation = 0;
+        for (; orientation < 3; orientation++) {
+            if (corner_orientation_[i][orientation] != 0) {
+                break;
+            }
+        }
+        orientation_hash *= 3;
+        orientation_hash += orientation;
+    }
+    std::cout << "hash: " << hash << std::endl;
+    std::cout << "hash: " << orientation_hash << std::endl;
+
+    hash += orientation_hash * kEightFac;
+    std::cout << "hash: " << hash << std::endl;
+
+    assert(hash < kNumOrientations);
+    return hash;
+}
+
+
 void Cube::Rotate(Setting settings) {
     float old_time = last_time_;
     last_time_ = glfwGetTime();
@@ -205,15 +283,35 @@ void Cube::Rotate(Setting settings) {
             return;
         }
 
-        if (nextRotations_.empty()) {
-//        nextRotations_.push(Rotations(std::rand()%kNumRotations));
+        uint hash = GetPositionHash();
+        if (legal_moves_[hash] == 0) {
+            exit(0);
+        }
+        std::cout << hash << std::endl;
+        std::cout << legal_moves_[hash] << std::endl;
+        std::cout << std::bitset<6>(legal_moves_[hash]) << std::endl;
+        while (nextRotations_.empty()) {
+            Rotations random_rotation = Rotations(std::rand()%kNumRotations);
+            if (random_rotation <= Rotations::kBc){
+                if (random_rotation%4 <= 1) {
+                    if ((legal_moves_[hash] & (1 << (random_rotation/2+random_rotation%4))) == 0) {
+                        continue;
+                    }
+                }
+                else {
+                    if ((legal_moves_[hash] & (1 << (random_rotation/2-3+random_rotation%4))) == 0) {
+                        continue;
+                    }
+                }
+            }
+            nextRotations_.push(random_rotation);
+            std::cout << "random_rotation: " << random_rotation << std::endl;
             return;
         }
 
         started_current_rotation_ = true;
         current_rotation_ = nextRotations_.front();
         nextRotations_.pop();
-        nextRotations_.push(current_rotation_);
 
         current_rotation_vector_ = kPieceRotationMatrices[current_rotation_].rotation_axis;
 
@@ -237,13 +335,16 @@ void Cube::Rotate(Setting settings) {
         rotation_angle_ = 0;
         elapsed_time_since_last_rotation_ = 0;
 
-        for (Piece& piece : pieces_) {
-            if (!piece.current_rotation) {
+        for (int i = 0; i < kNumPieces; i++) {
+            if (!pieces_[i].current_rotation) {
                 continue;
             }
-            piece.current_rotation = false;
-            piece.orientation = IntMat3MultWithVec3(kPieceRotationMatrices[current_rotation_].full_rotation, piece.orientation);
-            piece.rotation = current_rotation * piece.rotation;
+            pieces_[i].current_rotation = false;
+            pieces_[i].orientation = IntMat3MultWithVec3(kPieceRotationMatrices[current_rotation_].full_rotation, pieces_[i].orientation);
+            if (pieces_[i].type >= 2) {
+                corner_orientation_[i-kCornerOffset] = IntMat3MultWithVec3(kPieceRotationMatrices[current_rotation_].full_rotation, corner_orientation_[i-kCornerOffset]);
+            }
+            pieces_[i].rotation = current_rotation * pieces_[i].rotation;
         }
         return;
     }

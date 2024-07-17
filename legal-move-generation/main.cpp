@@ -8,6 +8,7 @@
 #include <iostream>
 #include <queue>
 #include <string>
+#include <vector>
 
 
 struct Piece {
@@ -313,13 +314,13 @@ int main() {
                                                         // last orientation is unimportant because only legal positions are looked at
     }};
 
-    std::array<uint16_t, kNumOrientations> positions = {};
+    std::vector<uint16_t> positions(kNumOrientations, 0);
 
     std::queue<NextPosition> next_positions;
     next_positions.push({0, GetPositionHash(pieces), GetProtrudingHash(pieces)});
 
     unsigned int position_index = GetPositionHash(pieces);
-    positions[position_index] = (1 << kNumRotations)-1; // all moves are legal
+    positions[position_index] = (1 << kNumRotations/2)-1; // all moves are legal
 
 
     uint64_t num_positions = 1;
@@ -371,7 +372,8 @@ int main() {
             }
 
             // position already looked at
-            unsigned int position_index = GetPositionHash(next_position);
+            position_index = GetPositionHash(next_position);
+            std::cout << rotation << ": " << position_index << std::endl;
             if (positions[position_index] != 0) {
                 continue;
             }
@@ -380,7 +382,9 @@ int main() {
 
             next_positions.push({depth+1, GetPositionHash(next_position), GetProtrudingHash(next_position)});
         }
+        exit(0);
 
+        position_index = GetPositionHash(current_position);
         positions[position_index] = legal_moves | (depth << kNumRotations/2);
         num_positions++;
 
@@ -398,5 +402,11 @@ int main() {
     if (std::FILE* file = std::fopen("legal_moves.bin", "wb")) {
         std::fwrite(positions.data(), sizeof(positions[0]), positions.size(), file);
         std::fclose(file);
+    }
+    for (int i = 0; i < 100; i++) {
+        std::cout << i << ": " << positions[i] << std::endl;
+    }
+    for (auto a : positions) {
+        assert(a < 2000);
     }
 }

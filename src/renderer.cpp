@@ -125,18 +125,7 @@ int Renderer (ErrorHandler error_handler, Setting settings) {
     shader.Use();
 
 
-    Cube cube;
-    cube.AddRotation(Cube::Rotations::kL);
-    cube.AddRotation(Cube::Rotations::kU);
-    cube.AddRotation(Cube::Rotations::kR);
-    cube.AddRotation(Cube::Rotations::kBc);
-    cube.AddRotation(Cube::Rotations::kDc);
-    cube.AddRotation(Cube::Rotations::kM);
-    cube.AddRotation(Cube::Rotations::kD);
-    cube.AddRotation(Cube::Rotations::kB);
-    cube.AddRotation(Cube::Rotations::kRc);
-    cube.AddRotation(Cube::Rotations::kUc);
-    cube.AddRotation(Cube::Rotations::kLc);
+    Cube cube(error_handler, settings);
 
     while (glfwWindowShouldClose(window) == 0) {
         // clear background

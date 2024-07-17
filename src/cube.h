@@ -40,7 +40,7 @@ public:
         kSc
     };
 
-    Cube();
+    Cube(ErrorHandler error_handler, Setting settings);
     ~Cube();
     void Draw(Setting settings) const;
 
@@ -131,7 +131,17 @@ private:
         {4, { 1, -1, -1}, GetRotationMatrix(-90.0,   0.0, -90.0)},
         {5, {-1, -1, -1}, GetRotationMatrix(180.0, -90.0,   0.0)}
     }};
-
+    static const int kNumCorners = 8;
+    std::array<std::array<int, 3>, kNumCorners> corner_orientation_ = {{
+        { 1,  0,  0},
+        { 1,  0,  0},
+        { 1,  0,  0},
+        { 1,  0,  0},
+        { 1,  0,  0},
+        { 1,  0,  0},
+        { 1,  0,  0},
+        {-1, -1, -1},
+    }};
 
     std::queue<Rotations> nextRotations_;
     Rotations current_rotation_;
@@ -140,4 +150,9 @@ private:
     float elapsed_time_since_last_rotation_ = 0;
     float rotation_angle_ = 0;
     float last_time_ = glfwGetTime();
+
+
+    static const int kNumOrientations = 88179840; //8! * 3^7
+    std::vector<uint16_t> legal_moves_;
+    unsigned int GetPositionHash() const;
 };
