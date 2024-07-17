@@ -3,6 +3,7 @@
 #include <bitset>
 #include <cassert>
 #include <cstdint>
+#include <cstdio>
 #include <map>
 #include <iostream>
 #include <queue>
@@ -393,9 +394,9 @@ int main() {
     }
 
     std::cout << num_positions << std::endl;
-    /*
-    for (auto a : positions) {
-        std::cout << a << std::endl;
+
+    if (std::FILE* file = std::fopen("legal_moves.bin", "wb")) {
+        std::fwrite(positions.data(), sizeof(positions[0]), positions.size(), file);
+        std::fclose(file);
     }
-    */
 }
