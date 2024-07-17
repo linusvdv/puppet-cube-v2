@@ -12,7 +12,7 @@ struct Piece {
     // direction away from the origin
     std::array<int, 3> position;
     // directions where the piece is bigger than the edge pieces
-    std::array<int, 3> protuding;
+    std::array<int, 3> protruding;
     // distinguish the different orientations
     std::array<int, 3> orientation;
 };
@@ -104,9 +104,9 @@ void DebugPiecesOut (std::array<Piece, kNumPieces> pieces) {
         std::cout << "{{" << PrintNegSpace(piece.position[0]) << ","
                           << PrintNegSpace(piece.position[1]) << ","
                           << PrintNegSpace(piece.position[2]) << "}, {"
-                          << PrintNegSpace(piece.protuding[0]) << ","
-                          << PrintNegSpace(piece.protuding[1]) << ","
-                          << PrintNegSpace(piece.protuding[2]) << "}, {"
+                          << PrintNegSpace(piece.protruding[0]) << ","
+                          << PrintNegSpace(piece.protruding[1]) << ","
+                          << PrintNegSpace(piece.protruding[2]) << "}, {"
                           << PrintNegSpace(piece.orientation[0]) << ","
                           << PrintNegSpace(piece.orientation[1]) << ","
                           << PrintNegSpace(piece.orientation[2]) << "}}," << std::endl;
@@ -166,6 +166,84 @@ unsigned int GetPositionHash (std::array<Piece, kNumPieces>& position) {
 }
 
 
+uint64_t GetProtrudingHash(std::array<Piece, kNumPieces>& position) {
+    uint64_t hash = 0;
+    for (int i = 0; i < kNumPieces; i++) {
+        for (int j = 0; j < 3; j++) {
+            hash *= 3;
+            hash += position[i].protruding[j]+1;
+        }
+    }
+    return hash;
+}
+
+
+std::array<Piece, kNumPieces> DecodePositionHash(uint hash, uint64_t protruding) {
+    std::array<Piece, kNumPieces> position = {};
+    // orientation back to front
+    uint orientation_hash = hash / kEightFac;
+    hash %= kEightFac;
+    for (int i = kNumPieces-2; i >= 0; i--) {
+        position[i].orientation = {int(orientation_hash%3==0),
+                                   int(orientation_hash%3==1),
+                                   int(orientation_hash%3==2)};
+        orientation_hash /= 3;
+    }
+    // last orientation 
+    position[kNumPieces-1].orientation = {-1, -1, -1};
+
+
+    // position
+    std::array<std::array<int, 3>, kNumPieces> corner_value = {{
+        { 1,  1,  1},
+        {-1,  1,  1},
+        { 1, -1,  1},
+        { 1,  1, -1},
+        {-1,  1, -1},
+        {-1, -1,  1},
+        { 1, -1, -1},
+        {-1, -1, -1},
+    }};
+
+    std::array<bool, kNumPieces> found;
+    found.fill(false);
+    int shift = kEightFac;
+    for (int i = 0; i < kNumPieces; i++) {
+        shift /= kNumPieces - i;
+
+        int small_corner_index = hash / shift;
+        hash %= shift;
+
+        for (int j = 0; j < kNumPieces; j++) {
+            if (!found[j]) {
+                small_corner_index--;
+            }
+            if (small_corner_index == -1) {
+                position[i].position = corner_value[j];
+                found[j] = true;
+                break;
+            }
+        }
+    }
+    
+    // protruding
+    for (int i = kNumPieces-1; i >= 0; i--) {
+        for (int j = 3-1; j >= 0; j--) {
+            position[i].protruding[j] = (protruding%3) - 1;
+            protruding /= 3;
+        }
+    }
+    return position;
+}
+
+
+struct NextPosition {
+    int depth;
+    uint position_hash;
+    uint64_t protruding_hash;
+};
+
+
 int main() {
     std::array<Piece, kNumPieces> pieces = {{
         {{ 1,  1,  1}, { 0,  0,  0}, { 1,  0,  0}},     // Yellow, Orange, Blue  
@@ -175,31 +253,35 @@ int main() {
         {{-1,  1, -1}, { 1,  0,  1}, { 1,  0,  0}},     // Yellow, Red,    Green 
         {{-1, -1,  1}, { 1,  1,  0}, { 1,  0,  0}},     // Orange, Green,  White 
         {{ 1, -1, -1}, { 0,  1,  1}, { 1,  0,  0}},     // Blue,   White,  Red   
-        {{-1, -1, -1}, { 1,  1,  1}, { 1,  0,  0}}      // White,  Green,  Red   
+        {{-1, -1, -1}, { 1,  1,  1}, {-1, -1, -1}}      // White,  Green,  Red   
+                                                        // last orientation is unimportant because only legal positions are looked at
     }};
 
-    std::array<PositionValue, kNumOrientations> positions = {};
+    std::array<uint16_t, kNumOrientations> positions = {};
 
-    std::queue<std::pair<int, std::array<Piece, kNumPieces>>> next_positions;
-    next_positions.push({0, pieces});
+    std::queue<NextPosition> next_positions;
+    next_positions.push({0, GetPositionHash(pieces), GetProtrudingHash(pieces)});
 
     unsigned int position_index = GetPositionHash(pieces);
-    positions[position_index] = {true, 0, {}};
+    positions[position_index] = (1 << kNumRotations)-1; // all moves are legal
 
 
     uint64_t num_positions = 1;
 
     while (!next_positions.empty()) {
-        int depth = next_positions.front().first;
-        std::array<Piece, kNumPieces> current_position = next_positions.front().second;
+        int depth = next_positions.front().depth;
+        std::array<Piece, kNumPieces> current_position = DecodePositionHash(next_positions.front().position_hash, next_positions.front().protruding_hash);
         next_positions.pop();
-//        DebugPiecesOut(current_position);
+
+        //DebugPiecesOut(current_position);
 
         if (num_positions % 100000 == 0) {
-            std::cout << depth << " " << positions.size() << " " << next_positions.size() << std::endl;
+            std::cout << depth << " " << num_positions << " " << next_positions.size() << std::endl;
             std::cout << sizeof(*positions.begin())*positions.size()    / 1000000 << " MB "
-                      << sizeof(current_position)*next_positions.size() / 1000000 << " MB" << std::endl;
+                      << sizeof(NextPosition)*next_positions.size() / 1000000 << " MB" << std::endl;
         }
+
+        unsigned int legal_moves = 0;
 
         // go over all legal moves
         for (int rotation = Rotations::kL; rotation <= Rotations::kBc; rotation++) {
@@ -210,23 +292,36 @@ int main() {
                 }
                 piece.orientation = IntMat3MultWithVec3(kPieceRotationMatrices[rotation].full_rotation, piece.orientation);
                 piece.position    = IntMat3MultWithVec3(kPieceRotationMatrices[rotation].full_rotation, piece.position);
-                piece.protuding   = IntMat3MultWithVec3(kPieceRotationMatrices[rotation].full_rotation, piece.protuding);
+                piece.protruding   = IntMat3MultWithVec3(kPieceRotationMatrices[rotation].full_rotation, piece.protruding);
             }
             
             // check if legal
 
+            // add this move to legal moves
+            // the opposite turn is always allowed "L == R'"
+            if (rotation%2 == 0) {
+                legal_moves |= 1 << (rotation/2);
+            }
+
             // position already looked at
             unsigned int position_index = GetPositionHash(next_position);
-            if (positions[position_index].found) {
+            if (positions[position_index] != 0) {
                 continue;
             }
-            positions[position_index] = {true, depth+1, {}};
-            num_positions++;
+            positions[position_index] = -1; // mark as to be visited
 
 
-            next_positions.push({depth+1, next_position});
+            next_positions.push({depth+1, GetPositionHash(next_position), GetProtrudingHash(next_position)});
         }
+
+        positions[position_index] = legal_moves | (depth << kNumRotations/2);
+        num_positions++;
     }
 
     std::cout << num_positions << std::endl;
+    /*
+    for (auto a : positions) {
+        std::cout << a << std::endl;
+    }
+    */
 }
