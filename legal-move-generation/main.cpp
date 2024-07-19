@@ -373,7 +373,6 @@ int main() {
 
             // position already looked at
             position_index = GetPositionHash(next_position);
-            std::cout << rotation << ": " << position_index << std::endl;
             if (positions[position_index] != 0) {
                 continue;
             }
@@ -382,7 +381,6 @@ int main() {
 
             next_positions.push({depth+1, GetPositionHash(next_position), GetProtrudingHash(next_position)});
         }
-        exit(0);
 
         position_index = GetPositionHash(current_position);
         positions[position_index] = legal_moves | (depth << kNumRotations/2);
