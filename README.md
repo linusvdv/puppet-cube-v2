@@ -1,10 +1,10 @@
 # puppet-cube-v2
 
 ## Pre compilation of legal-move-generation
-time: ca. 1 min.
+time: ca. 20 sec.
 ```bash
 cd legal-move-generation/
-g++ -Wall -Wextra -fdiagnostics-color=always -Wno-sign-compare -std=c++20 -O3 -static main.cpp -o legal-move-generation
+g++ -Wall -Wextra -g3 -std=c++20 -O3 main.cpp -o legal-move-generation
 ./legal-move-generation
 cd ../
 ```
