@@ -4,11 +4,13 @@ include(FetchContent)
 
 project(PuppetCubeV2)
 
-
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+# pthread
+set(THREADS_PREFER_PTHREAD_FLAG ON)
+find_package(Threads REQUIRED)
 
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 option(BUILD_SHARED_LIBS "Build shared libraries" OFF)
@@ -43,14 +45,16 @@ target_include_directories(glad PRIVATE src/)
 
 add_executable(PuppetCubeV2
     src/main.cpp
-    src/renderer.cpp
-    src/shader.cpp
-    src/settings.cpp
     src/error_handler.cpp
-    src/cube.cpp
-    src/mesh.cpp)
+    src/settings.cpp
+    src/rotation.cpp
+    src/window_manager.cpp
+    src/shader.cpp
+    src/renderer.cpp
+    src/mesh.cpp
+)
 
-target_link_libraries(PuppetCubeV2 PRIVATE glfw glad glm)
+target_link_libraries(PuppetCubeV2 PRIVATE glfw glad glm Threads::Threads)
 
 target_compile_features(PuppetCubeV2 PRIVATE cxx_std_20)
 

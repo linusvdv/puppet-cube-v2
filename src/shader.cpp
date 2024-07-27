@@ -10,10 +10,12 @@
 #include "shader.h"
 
 
+// get error of shader compilation
 void CheckCompileErrors(ErrorHandler error_handler, unsigned int shader, std::string type) {
     const int log_length = 1024;
     int success;
     char info_log[log_length];
+    // compile the program
     if (type != "PROGRAM") {
         glGetShaderiv(shader, GL_COMPILE_STATUS, &success);
         if (success == 0) {
@@ -21,6 +23,7 @@ void CheckCompileErrors(ErrorHandler error_handler, unsigned int shader, std::st
             error_handler.Handle(ErrorHandler::Level::kCriticalError, "shader.cpp", "shader compilation of type " + type + " failed: " + std::string(info_log));
         }
     }
+    // link the program
     else {
         glGetProgramiv(shader, GL_LINK_STATUS, &success);
         if (success == 0) {
@@ -37,7 +40,7 @@ Shader::Shader(ErrorHandler error_handler, const char* vertex_path, const char* 
     std::string fragment_code;
     std::ifstream vertex_shader_file;
     std::ifstream fragment_shader_file;
-    // ensure ifstream objects con throw exceptions:
+    // ensure ifstream objects can throw exceptions:
     vertex_shader_file.exceptions(std::ifstream::failbit | std::ifstream::badbit);
     fragment_shader_file.exceptions(std::ifstream::failbit | std::ifstream::badbit);
     try {
@@ -53,8 +56,8 @@ Shader::Shader(ErrorHandler error_handler, const char* vertex_path, const char* 
         vertex_code = vertex_shader_stream.str();
         fragment_code = fragment_shader_stream.str();
     }
-    catch (std::ifstream::failure &e) {
-        error_handler.Handle(ErrorHandler::Level::kCriticalError, "shader.cpp", "faild to load shader: " + std::string(e.what()));
+    catch (std::ifstream::failure &exception) {
+        error_handler.Handle(ErrorHandler::Level::kCriticalError, "shader.cpp", "faild to load shader: " + std::string(exception.what()));
     }
     const char* vertex_shader_code = vertex_code.c_str();
     const char* fragment_shader_code = fragment_code.c_str();
