@@ -221,9 +221,9 @@ const std::array<PieceRotationMatrix, kNumRotations> kPieceRotationMatrices = {{
     // E'
     {1, 0, {{{ 0, 0,-1}, { 0, 1, 0}, { 1,  0, 0}}}, { 0.F,-1.F, 0.F}},
 
-    // F
+    // S
     {2, 0, {{{ 0, 1, 0}, {-1, 0, 0}, { 0,  0, 1}}}, { 0.F, 0.F,-1.F}},
-    // F'
+    // S'
     {2, 0, {{{ 0,-1, 0}, { 1, 0, 0}, { 0,  0, 1}}}, { 0.F, 0.F, 1.F}},
 }};
 
@@ -278,15 +278,15 @@ void Renderer::Rotate (Setting settings, Actions& actions) {
             case Instructions::kReset:
                 // reset to solved position
                 pieces_ = kSolvedPieces;
-                break;
+                return;
             case Instructions::kIsScrambling:
                 // increases visual rotation speed
                 is_scrambling_ = true;
-                break;
+                return;
             case Instructions::kIsSolving:
                 // sets visual rotation speed back to normal
                 is_scrambling_ = false;
-                break;
+                return;
         }
     }
 
