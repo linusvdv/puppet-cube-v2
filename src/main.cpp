@@ -1,18 +1,23 @@
+#include <random>
 #include <thread>
 
-#include "rotation.h"
+#include "actions.h"
 #include "error_handler.h"
 #include "window_manager.h"
 #include "settings.h"
+#include "rotation.h"
 
 
 int main (int argc, char *argv[]) {
     // create an error handler
-    ErrorHandler error_handler(ErrorHandler::Level::kAll);
+    ErrorHandler error_handler(ErrorHandler::Level::kInfo);
 
     // settings
     // it is not thread safe only a copy is sent to the window manager
     Setting settings(error_handler, argc, argv);
+
+    // load legal moves from file
+    InitializeLegalMoves(error_handler, settings);
 
     // actions for communication with window manager
     Actions actions;
@@ -24,24 +29,24 @@ int main (int argc, char *argv[]) {
         window_manager = std::thread(WindowManager, error_handler, settings, std::ref(actions));
     }
 
-    // test rotations
-    actions.Push(Action(Instructions::kRotation, Rotations::kR));
-    actions.Push(Action(Instructions::kRotation, Rotations::kL));
-    actions.Push(Action(Instructions::kRotation, Rotations::kF));
-    actions.Push(Action(Instructions::kReset, Rotations()));
 
+    Cube cube;
+
+    // random number initialisation
+    std::random_device device;
+    std::mt19937 rng(device());
+    // get reproducible random numbers
+    rng.seed(0);
+
+    // random scramble
     actions.Push(Action(Instructions::kIsScrambling, Rotations()));
-    actions.Push(Action(Instructions::kRotation, Rotations::kR));
-    actions.Push(Action(Instructions::kRotation, Rotations::kL));
-    actions.Push(Action(Instructions::kRotation, Rotations::kF));
-
+    RandomRotations(error_handler, cube, actions, 100, rng);
     actions.Push(Action(Instructions::kIsSolving, Rotations()));
-    actions.Push(Action(Instructions::kRotation, Rotations::kFc));
-    actions.Push(Action(Instructions::kRotation, Rotations::kLc));
-    actions.Push(Action(Instructions::kRotation, Rotations::kRc));
 
 
     // wait until the window manager has finished
-    window_manager.join();
+    if (settings.gui) {
+        window_manager.join();
+    }
     return 0;
 }

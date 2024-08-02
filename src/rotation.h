@@ -1,13 +1,19 @@
 #pragma once
-#include <atomic>
-#include <mutex>
-#include <queue>
+#include <random>
+
+#include "actions.h"
+#include "error_handler.h"
+#include "settings.h"
+#include "cube.h"
+
+
+class Actions;
 
 
 // different rotations using standart notation
 // c means counterclockwise
 const int kNumRotations = 18;
-enum Rotations {
+enum Rotations : unsigned int {
     kR, kRc,
     kL, kLc,
 
@@ -23,35 +29,13 @@ enum Rotations {
 };
 
 
-enum Instructions {
-    kRotation,
-    kIsScrambling, // faster rotation speed
-    kIsSolving,    // slower rotation speed
-    kReset         // solved cube state
-};
+// read file of legal moves and huristic funciton
+void InitializeLegalMoves (ErrorHandler& error_handler, Setting& settings);
 
 
-// actions for the rendering thread
-struct Action {
-    Instructions instruction;
-    Rotations rotation;
-};
+// rotation of the cube (not visual)
+Cube Rotate (const Cube& cube, Rotations rotation);
 
 
-class Actions {
-public:
-    // returns true if queue is not empty
-    bool TryPop (Action& action);
-
-    // pushes next action
-    void Push (const Action& action);
-
-    // stop program
-    std::atomic<bool> stop = false;
-
-private:
-    // queue of next actions that the window manager
-    std::queue<Action> actions_;
-    // using mutexes to use multible threads
-    std::mutex actions_mutex_;
-};
+// get a random rotation
+void RandomRotations (ErrorHandler& error_handler, Cube& cube, Actions& actions, int num_rotations, std::mt19937& rng);

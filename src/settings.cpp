@@ -8,7 +8,7 @@
 #include "settings.h"
 
 
-Setting::Setting(ErrorHandler error_handler, int argc, char *argv[]) {
+Setting::Setting(ErrorHandler& error_handler, int argc, char *argv[]) {
     std::vector<std::string> arguments(argv, argv+argc);
 
     // get root path

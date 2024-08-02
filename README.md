@@ -11,8 +11,8 @@ cd ../
 
 ## Compilation:
 ```bash
-cmake -B build
-cmake --build build --config Release
+cmake -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build
 ```
 
 ## Run:

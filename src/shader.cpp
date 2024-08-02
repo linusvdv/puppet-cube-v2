@@ -22,6 +22,7 @@ void CheckCompileErrors(ErrorHandler error_handler, unsigned int shader, std::st
             glGetShaderInfoLog(shader, log_length, NULL, info_log);
             error_handler.Handle(ErrorHandler::Level::kCriticalError, "shader.cpp", "shader compilation of type " + type + " failed: " + std::string(info_log));
         }
+        error_handler.Handle(ErrorHandler::kInfo, "shader.cpp", type + " shader compiled");
     }
     // link the program
     else {
@@ -30,6 +31,7 @@ void CheckCompileErrors(ErrorHandler error_handler, unsigned int shader, std::st
             glGetShaderInfoLog(shader, log_length, NULL, info_log);
             error_handler.Handle(ErrorHandler::Level::kCriticalError, "shader.cpp", "shader linking of type " + type + " failed: " + std::string(info_log));
         }
+        error_handler.Handle(ErrorHandler::kInfo, "shader.cpp", type + " shader linked");
     }
 }
 

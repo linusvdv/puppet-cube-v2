@@ -9,7 +9,7 @@
 
 class Setting {
 public:
-    Setting(ErrorHandler error_handler, int argc, char *argv[]);
+    Setting(ErrorHandler& error_handler, int argc, char *argv[]);
 
     // path to files
     // this path should be equivelant to path/to/puppet-cube-v2/

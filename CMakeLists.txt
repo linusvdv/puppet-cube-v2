@@ -52,10 +52,16 @@ add_executable(PuppetCubeV2
     src/shader.cpp
     src/renderer.cpp
     src/mesh.cpp
+    src/actions.cpp
+    src/cube.cpp
 )
 
 target_link_libraries(PuppetCubeV2 PRIVATE glfw glad glm Threads::Threads)
 
-target_compile_features(PuppetCubeV2 PRIVATE cxx_std_20)
+set(Debug_Options -Wextra -g -O0 -fno-inline -fno-omit-frame-pointer)
+set(Release_Options -Wextra -O3)
 
-target_compile_options(PuppetCubeV2 PRIVATE -Wall -Wextra -g)
+target_compile_options(PuppetCubeV2 PRIVATE -Wall
+    $<$<CONFIG:Debug>:${Debug_Options}>
+    $<$<CONFIG:Release>:${Release_Options}>
+)

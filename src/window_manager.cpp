@@ -12,7 +12,7 @@
 #include "error_handler.h"
 #include "settings.h"
 #include "shader.h"
-#include "rotation.h"
+#include "actions.h"
 
 
 static void ErrorCallback (int error, const char* description) {
@@ -158,5 +158,7 @@ void WindowManager (ErrorHandler error_handler, Setting settings, Actions& actio
         glfwPollEvents();
     }
 
+    // stop the program
+    actions.stop = true;
     glfwTerminate();
 }
