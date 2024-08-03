@@ -1,12 +1,12 @@
 #include <algorithm>
 #include <cstddef>
-#include <math.h> // used for Pi
 
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
+#include <numbers>
 
 
 #include "renderer.h"
@@ -299,9 +299,9 @@ void Renderer::Rotate (Setting settings, Actions& actions) {
 
 
     // finished rotation
-    if (rotation_angle_ > M_PIf / 2) {
+    if (rotation_angle_ > float(std::numbers::pi) / 2) {
         // make visual rotation 
-        rotation_angle_ = M_PIf / 2;
+        rotation_angle_ = float(std::numbers::pi) / 2;
         glm::mat4 current_rotation = glm::mat4(1.0F);
         current_rotation = glm::rotate(current_rotation, rotation_angle_, current_rotation_vector_);
 

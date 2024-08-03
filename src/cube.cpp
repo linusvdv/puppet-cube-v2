@@ -1,5 +1,6 @@
 #include <sys/types.h>
 #include <bit>
+#include <cstdint>
 
 #include "cube.h"
 
@@ -36,7 +37,7 @@ unsigned int Cube::GetPositionHash () {
         hash *= kNumCorners - i;
         unsigned int corner_index = 0;
         for (int j = 0; j < corners[i].position; j++) {
-            corner_index += uint(!accessed[j]);
+            corner_index += uint32_t(!accessed[j]);
         }
         accessed[corners[i].position] = true;
         hash += corner_index;

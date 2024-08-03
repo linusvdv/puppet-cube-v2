@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <array>
 #include <cassert>
 #include <cmath>
@@ -5,6 +6,7 @@
 #include <map>
 #include <math.h>
 #include <strings.h>
+#include <numbers>
 #include <vector>
 
 
@@ -79,7 +81,7 @@ float GetMagnetude(const std::array<float, 3>& vec) {
 float GetSmallestAngle(const std::array<float, 3>& first,
                        const std::array<float, 3>& second) {
     float angle = std::acos(DotProduct(first, second) / (GetMagnetude(first) * GetMagnetude(second)));
-    return std::min({std::abs(angle), std::abs(M_PIf - angle), std::abs(angle - M_PIf)});
+    return std::min({std::abs(angle), std::abs(float(std::numbers::pi) - angle), std::abs(angle - float(std::numbers::pi))});
 }
 
 
@@ -163,7 +165,7 @@ void TransformPieceMeshToVertexPieceData(std::map<VertexPieceIndex, VertexPieceV
 void WeightedNormalAverage(VertexPieceValue& vertex_piece_value, 
         std::vector<std::array<float, 3>>& different_normals, std::vector<int>& different_normal_index, int index) {
     for (size_t j = 0; j < different_normals.size(); j++) {
-        if (GetSmallestAngle(different_normals[j], vertex_piece_value.normals[index]) < M_PIf / 8) {
+        if (GetSmallestAngle(different_normals[j], vertex_piece_value.normals[index]) < float(std::numbers::pi) / 8) {
             different_normals[j] = AddVecMaxMagnetude(different_normals[j], vertex_piece_value.normals[index]);
             different_normal_index.push_back(j);
             return;

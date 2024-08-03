@@ -137,7 +137,7 @@ unsigned int GetPositionHash (std::array<Corner, kNumCorners>& corners) {
         hash *= kNumCorners - i;
         unsigned int corner_index = 0;
         for (int j = 0; j < corners[i].position; j++) {
-            corner_index += (unsigned int)(!accessed[j]);
+            corner_index += uint32_t(!accessed[j]);
         }
         accessed[corners[i].position] = true;
         hash += corner_index;
@@ -301,7 +301,7 @@ int main () {
 
         // get some information
         if (num_positions % 100000 == 0) {
-            std::cout << (unsigned int)(depth) << " " << num_positions << " " << next_positions.size() << std::endl;
+            std::cout << uint32_t(depth) << " " << num_positions << " " << next_positions.size() << std::endl;
             std::cout << sizeof(uint16_t) * positions.size() / 1000000 << " MB "
                       << sizeof(NextPosition) * next_positions.size() / 1000000 << " MB" << std::endl;
         }
