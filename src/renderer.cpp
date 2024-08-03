@@ -1,6 +1,9 @@
+#include <algorithm>
+#include <cstddef>
+#include <math.h> // used for Pi
+
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
-#include <cstddef>
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>

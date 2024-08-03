@@ -3,11 +3,12 @@
 #include <cmath>
 #include <cstddef>
 #include <map>
+#include <math.h>
+#include <strings.h>
 #include <vector>
 
 
 #include "mesh.h"
-#include <strings.h>
 
 
 struct PieceMesh {
