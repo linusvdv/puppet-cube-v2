@@ -30,7 +30,7 @@ enum Rotations : unsigned int {
 
 
 // get all legal rotations
-std::vector<Rotations> GetLegalRotations (ErrorHandler& error_handler, Cube& cube);
+std::vector<Rotations> GetLegalRotations (Cube& cube);
 
 
 // rotation of the cube (not visual)
@@ -38,4 +38,4 @@ Cube Rotate (const Cube& cube, Rotations rotation);
 
 
 // get num_rotations random legal rotations
-void RandomRotations (ErrorHandler& error_handler, Cube& cube, Actions& actions, int num_rotations, std::mt19937& rng);
+void RandomRotations (Cube& cube, Actions& actions, int num_rotations, std::mt19937& rng);

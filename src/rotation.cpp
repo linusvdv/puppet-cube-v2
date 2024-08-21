@@ -1,6 +1,5 @@
 #include <cstdint>
 #include <random>
-#include <string>
 #include <vector>
 
 #include "actions.h"
@@ -10,7 +9,7 @@
 
 
 // get all legal rotations
-std::vector<Rotations> GetLegalRotations (ErrorHandler& error_handler, Cube& cube) {
+std::vector<Rotations> GetLegalRotations (Cube& cube) {
     std::vector<Rotations> legal_rotations;
 
     cube.GetPositionData();
@@ -31,8 +30,8 @@ std::vector<Rotations> GetLegalRotations (ErrorHandler& error_handler, Cube& cub
 
 
 // get a random legal rotation
-Rotations GetRandomRotation (ErrorHandler& error_handler, Cube& cube, std::mt19937& rng) {
-    std::vector<Rotations> legal_rotation = GetLegalRotations(error_handler, cube);
+Rotations GetRandomRotation (Cube& cube, std::mt19937& rng) {
+    std::vector<Rotations> legal_rotation = GetLegalRotations(cube);
 
     // get a uniform distribution
     std::uniform_int_distribution<std::mt19937::result_type> distribution(0, legal_rotation.size()-1);
@@ -41,9 +40,9 @@ Rotations GetRandomRotation (ErrorHandler& error_handler, Cube& cube, std::mt199
 
 
 // add num_rotations random legal rotations to actions
-void RandomRotations (ErrorHandler& error_handler, Cube& cube, Actions& actions, int num_rotations, std::mt19937& rng) {
+void RandomRotations (Cube& cube, Actions& actions, int num_rotations, std::mt19937& rng) {
     for (int i = 0; i < num_rotations; i++) {
-        Rotations random_rotation = GetRandomRotation(error_handler, cube, rng);
+        Rotations random_rotation = GetRandomRotation(cube, rng);
         actions.Push(Action(Instructions::kRotation, random_rotation));
         cube = Rotate(cube, random_rotation);
     }

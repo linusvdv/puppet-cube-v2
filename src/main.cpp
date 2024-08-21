@@ -1,6 +1,12 @@
+#include <algorithm>
+#include <chrono>
+#include <iomanip>
+#include <numeric>
 #include <random>
+#include <sstream>
 #include <string>
 #include <thread>
+#include <vector>
 
 #include "actions.h"
 #include "cube.h"
@@ -9,6 +15,43 @@
 #include "settings.h"
 #include "rotation.h"
 #include "search.h"
+
+
+std::string PrecisionStringDouble (double number) {
+    std::stringstream stream;
+    stream << std::fixed << std::setprecision(2) << number;
+    return stream.str();
+}
+
+
+void ShowSearchStatistic (ErrorHandler error_handler, int depth, int num_runs, std::vector<double>& time_durations, std::vector<int>& search_depths) {
+    if (num_runs <= 0) {
+        return;
+    }
+    if (time_durations.empty() || search_depths.empty()) {
+        return;
+    }
+    std::string statistic;
+    statistic += "\n\t";
+    statistic += "Statistic of depth: " + std::to_string(depth);
+    statistic += "\n\t";
+    statistic += "number of position: " + std::to_string(num_runs);
+    statistic += "\n\t";
+    statistic += "total time: " + PrecisionStringDouble(std::reduce(time_durations.begin(), time_durations.end())) + "s";
+    statistic += "\n\t";
+    statistic += "max time: " + PrecisionStringDouble(*std::max_element(time_durations.begin(), time_durations.end())) + "s";
+    statistic += "\n\t";
+    statistic += "avarage time: " + PrecisionStringDouble(std::reduce(time_durations.begin(), time_durations.end()) / num_runs) + "s";
+    statistic += "\n\t";
+    statistic += "min time: " + PrecisionStringDouble(*std::min_element(time_durations.begin(), time_durations.end())) + "s";
+    statistic += "\n\t";
+    statistic += "max depth: " + std::to_string(*std::max_element(search_depths.begin(), search_depths.end()));
+    statistic += "\n\t";
+    statistic += "avarage depth: " + PrecisionStringDouble(float(std::reduce(search_depths.begin(), search_depths.end())) / num_runs);
+    statistic += "\n\t";
+    statistic += "min depth: " + std::to_string(*std::min_element(search_depths.begin(), search_depths.end()));
+    error_handler.Handle(ErrorHandler::Level::kInfo, "main.cpp", statistic);
+}
 
 
 int main (int argc, char *argv[]) {
@@ -45,18 +88,27 @@ int main (int argc, char *argv[]) {
         if (actions.stop) {
             break;
         }
-        for (int run = 0; run < 20; run++) {
+
+        // get some informations
+        std::vector<double> time_durations;
+        std::vector<int> search_depths;
+
+        const int k_num_runs = 20;
+        for (int run = 0; run < k_num_runs; run++) {
             if (actions.stop) {
                 break;
             }
+            // get duration time
+            auto start_time = std::chrono::system_clock::now();
 
             // scramble
             actions.Push(Action(Instructions::kIsScrambling, Rotations()));
-            RandomRotations(error_handler, cube, actions, depth, rng);
+            RandomRotations(cube, actions, depth, rng);
             actions.Push(Action(Instructions::kIsSolving, Rotations()));
 
+            // solve
             error_handler.Handle(ErrorHandler::Level::kAll, "main.cpp",  "Starting search with scrambled position of depth " + std::to_string(depth));
-            for (int search_depth = 0; search_depth < 20; search_depth++) {
+            for (int search_depth = 0; search_depth <= depth; search_depth++) {
                 if (actions.stop) {
                     break;
                 }
@@ -64,6 +116,9 @@ int main (int argc, char *argv[]) {
                 error_handler.Handle(ErrorHandler::Level::kAll, "main.cpp",  "depth " + std::to_string(search_depth));
                 if (Search(error_handler, actions, cube, search_depth)) {
                     error_handler.Handle(ErrorHandler::Level::kAll, "main.cpp",  "Found solution of depth " + std::to_string(search_depth));
+
+                    // statistic
+                    search_depths.push_back(search_depth);
 
                     // show solution
                     while (!actions.sove.empty()) {
@@ -74,9 +129,16 @@ int main (int argc, char *argv[]) {
                 }
             }
 
+            auto end_time = std::chrono::system_clock::now();
+            std::chrono::duration<double> time_duration = end_time - start_time;
+            time_durations.push_back(time_duration.count());
+
             actions.Push(Action(Instructions::kReset, Rotations()));
             cube = Cube();
         }
+
+        // calculate some statistic
+        ShowSearchStatistic(error_handler, depth, search_depths.size(), time_durations, search_depths);
     }
 
 
