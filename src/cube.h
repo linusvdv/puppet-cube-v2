@@ -56,6 +56,9 @@ public:
     bool got_legal_move_data = false;
     uint16_t legal_move_data;
 
+    // check if this position is a solved position
+    bool IsSolved ();
+
 private:
     // buffer hash
     bool calculated_position_hash_ = false;

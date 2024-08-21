@@ -51,3 +51,19 @@ unsigned int Cube::GetPositionHash () {
     position_hash_ = hash;
     return hash;
 }
+
+
+bool Cube::IsSolved () {
+    if (GetPositionHash() != 0) {
+        return false;
+    }
+    for (unsigned int i = 0; i < kNumEdges; i++) {
+        if (edges[i].position != i) {
+            return false;
+        }
+        if (edges[i].orientation != 1) {
+            return false;
+        }
+    }
+    return true;
+}
