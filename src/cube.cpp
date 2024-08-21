@@ -1,8 +1,49 @@
 #include <sys/types.h>
 #include <bit>
 #include <cstdint>
+#include <iostream>
+#include <vector>
 
 #include "cube.h"
+#include "error_handler.h"
+#include "settings.h"
+
+
+std::vector<uint16_t> position_data_table;
+
+
+// initialize position data
+void InitializePositionData (ErrorHandler& error_handler, Setting& settings) {
+    position_data_table = std::vector<uint16_t>(kNumPositions, 0);
+
+    // get file location
+    std::string legal_move_path = "legal-move-generation/legal_moves.bin";
+    legal_move_path.insert(0, settings.rootPath);
+
+    // read file
+    if (std::FILE* file = std::fopen(legal_move_path.c_str(), "rb")) {
+        if (std::fread(position_data_table.data(), sizeof(position_data_table[0]), position_data_table.size(), file) != kNumPositions) {
+            error_handler.Handle(ErrorHandler::kError, "cube.cpp", "not all positions found in legal_moves.bin file");
+        }
+        std::fclose(file);
+    }
+    else {
+        error_handler.Handle(ErrorHandler::kCriticalError, "cube.cpp", "legal_moves.bin file not found");
+    }
+
+    error_handler.Handle(ErrorHandler::kInfo, "cube.cpp", "position data initialized");
+}
+
+
+uint16_t Cube::GetPositionData () {
+    // get position hash and legal_move_data
+    if (!got_position_data) {
+        unsigned int position_hash = GetPositionHash();
+        position_data = position_data_table[position_hash];
+        got_position_data= true;
+    }
+    return position_data;
+}
 
 
 Cube::Cube () {
@@ -13,6 +54,10 @@ Cube::Cube () {
     for (unsigned int i = 0; i < kNumEdges; i++) {
         edges[i].position = i;
         edges[i].orientation = 1;
+    }
+    for (unsigned int i = 0; i < kNumCenters; i++) {
+        centers[i].position = i;
+        centers[i].orientation = 1;
     }
 }
 
@@ -62,6 +107,11 @@ bool Cube::IsSolved () {
             return false;
         }
         if (edges[i].orientation != 1) {
+            return false;
+        }
+    }
+    for (unsigned int i = 0; i < kNumCenters; i++) {
+        if (centers[i].position != i) {
             return false;
         }
     }

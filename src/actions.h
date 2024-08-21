@@ -2,6 +2,7 @@
 #include <atomic>
 #include <mutex>
 #include <queue>
+#include <stack>
 
 #include "rotation.h"
 
@@ -35,6 +36,9 @@ public:
 
     // stop program
     std::atomic<bool> stop = false;
+
+    // solving the cube (back to front)
+    std::stack<Rotations> sove;
 
 private:
     // queue of next actions that the window manager

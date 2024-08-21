@@ -29,13 +29,13 @@ enum Rotations : unsigned int {
 };
 
 
-// read file of legal moves and huristic funciton
-void InitializeLegalMoves (ErrorHandler& error_handler, Setting& settings);
+// get all legal rotations
+std::vector<Rotations> GetLegalRotations (ErrorHandler& error_handler, Cube& cube);
 
 
 // rotation of the cube (not visual)
 Cube Rotate (const Cube& cube, Rotations rotation);
 
 
-// get a random rotation
+// get num_rotations random legal rotations
 void RandomRotations (ErrorHandler& error_handler, Cube& cube, Actions& actions, int num_rotations, std::mt19937& rng);

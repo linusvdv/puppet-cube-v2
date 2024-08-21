@@ -3,6 +3,14 @@
 #include <cstdint>
 
 
+#include "error_handler.h"
+#include "settings.h"
+
+
+// read file of legal moves and huristic funciton
+void InitializePositionData (ErrorHandler& error_handler, Setting& settings);
+
+
 constexpr int kNumPositions = 88179840; // 8! * 3^7
 constexpr int kEightFac = 40320; // 8!
 
@@ -44,20 +52,32 @@ public:
     static const unsigned int kNumEdges = 12;
     std::array<Piece, kNumEdges> edges;
 
+    // centers
+    static const unsigned int kNumCenters = 6;
+    std::array<Piece, kNumCenters> centers;
+
     unsigned int GetPositionHash ();
     
     // new position resets computed data
     void SetNewPosition () {
         calculated_position_hash_ = false;
-        got_legal_move_data = false;
+        got_position_data = false;
     }
 
     // buffer legal move data after lookup
-    bool got_legal_move_data = false;
-    uint16_t legal_move_data;
+    bool got_position_data = false;
+    uint16_t position_data;
+    uint16_t GetPositionData ();
 
     // check if this position is a solved position
     bool IsSolved ();
+
+    // get the heuristic function
+    static const int kHeuristicFunctionOffset = 6;
+    int GetHeuristicFunction () {
+        return GetPositionData() >> kHeuristicFunctionOffset;
+    }
+
 
 private:
     // buffer hash

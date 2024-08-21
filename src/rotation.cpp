@@ -7,58 +7,25 @@
 #include "rotation.h"
 #include "error_handler.h"
 #include "cube.h"
-#include "settings.h"
-
-
-std::vector<uint16_t> position_data;
-
-
-// initialize position data
-void InitializeLegalMoves (ErrorHandler& error_handler, Setting& settings) {
-    position_data = std::vector<uint16_t>(kNumPositions, 0);
-
-    // get file location
-    std::string legal_move_path = "legal-move-generation/legal_moves.bin";
-    legal_move_path.insert(0, settings.rootPath);
-
-    // read file
-    if (std::FILE* file = std::fopen(legal_move_path.c_str(), "rb")) {
-        if (std::fread(position_data.data(), sizeof(position_data[0]), position_data.size(), file) != kNumPositions) {
-            error_handler.Handle(ErrorHandler::kError, "rotation.cpp", "not all positions found in legal_moves.bin file");
-        }
-        std::fclose(file);
-    }
-    else {
-        error_handler.Handle(ErrorHandler::kCriticalError, "rotation.cpp", "legal_moves.bin file not found");
-    }
-
-    error_handler.Handle(ErrorHandler::kInfo, "rotation.cpp", "position data initialized");
-}
 
 
 // get all legal rotations
 std::vector<Rotations> GetLegalRotations (ErrorHandler& error_handler, Cube& cube) {
     std::vector<Rotations> legal_rotations;
 
-    // get position hash and legal_move_data
-    if (!cube.got_legal_move_data) {
-        unsigned int position_hash = cube.GetPositionHash();
-        cube.legal_move_data = position_data[position_hash];
-        cube.got_legal_move_data = true;
-    }
+    cube.GetPositionData();
 
     // make list of legal moves and checking if the moves are allowed
     for (int i = 0; i < kNumRotations; i++) {
         if (i <= int(Rotations::kBc)) {
-            if ((i%4 <= 1 && (cube.legal_move_data >> (i/2+i%4) & 1) == 0) ||
-                (i%4 > 1 && (cube.legal_move_data >> (i/2+i%4-3) & 1) == 0)) {
+            if ((i%4 <= 1 && (cube.position_data >> (i/2+i%4) & 1) == 0) ||
+                (i%4 > 1 && (cube.position_data >> (i/2+i%4-3) & 1) == 0)) {
                 continue;
             }
         }
         legal_rotations.push_back(Rotations(i));
     }
 
-    error_handler.Handle(ErrorHandler::kAll, "rotation.cpp", "Number legal Rotations: " + std::to_string(legal_rotations.size()));
     return legal_rotations;
 }
 
@@ -130,6 +97,18 @@ constexpr std::array<std::array<int8_t, Cube::kNumEdges>, kNumRotations> kEdgeRo
     {-1,  9,  1, -1, -1, -1, -1, -1, -1, 10,  2, -1}, // E'
     { 3, -1, -1, 11, -1, -1, -1, -1,  0, -1, -1,  8}, // S
     { 8, -1, -1,  0, -1, -1, -1, -1, 11, -1, -1,  3}  // S'
+}};
+
+// map the current position to next position
+// -1 marks no change in rotation direction
+constexpr std::array<std::array<int8_t, Cube::kNumEdges>, kNumRotations> kCenterRotation =
+{{
+    {-1,  2,  4,  1,  3, -1}, // M
+    {-1,  3,  1,  4,  2, -1}, // M'
+    { 3, -1,  0,  5, -1,  2}, // E
+    { 2, -1,  5,  0, -1,  3}, // E'
+    { 4,  0, -1, -1,  5,  1}, // S
+    { 1,  5, -1, -1,  0,  4}, // S'
 }};
 
 
@@ -212,6 +191,13 @@ Cube Rotate (const Cube& cube, Rotations rotation) {
                 rotated_cube.edges[i].orientation = SwapBits<0, 1>(cube.edges[i].orientation);
                 break;
         }
+    }
+    for (unsigned int i = 0; i < Cube::kNumCenters; i++) {
+        if (rotation < Rotations::kM || kCenterRotation[rotation-Rotations::kM][cube.centers[i].position] == -1) {
+            rotated_cube.centers[i] = cube.centers[i];
+            continue;
+        }
+        rotated_cube.centers[i].position = kCenterRotation[rotation-Rotations::kM][cube.centers[i].position];
     }
     return rotated_cube;
 }

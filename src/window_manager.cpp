@@ -26,7 +26,6 @@ static void KeyCallback (GLFWwindow* window, int key, int scancode [[maybe_unuse
     // close window
     if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS) {
         glfwSetWindowShouldClose(window, GLFW_TRUE);
-        // TODO: tell other thread
     }
     // pause / resume
     if (key == GLFW_KEY_SPACE && action == GLFW_PRESS) {
