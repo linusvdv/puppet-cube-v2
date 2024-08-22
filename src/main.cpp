@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <chrono>
+#include <cstdint>
 #include <iomanip>
 #include <numeric>
 #include <random>
@@ -24,7 +25,7 @@ std::string PrecisionStringDouble (double number) {
 }
 
 
-void ShowSearchStatistic (ErrorHandler error_handler, int depth, int num_runs, std::vector<double>& time_durations, std::vector<int>& search_depths) {
+void ShowSearchStatistic (ErrorHandler error_handler, int depth, int num_runs, std::vector<double>& time_durations, std::vector<int>& search_depths, std::vector<uint64_t>& all_num_positions) {
     if (num_runs <= 0) {
         return;
     }
@@ -50,6 +51,14 @@ void ShowSearchStatistic (ErrorHandler error_handler, int depth, int num_runs, s
     statistic += "avarage depth: " + PrecisionStringDouble(float(std::reduce(search_depths.begin(), search_depths.end())) / num_runs);
     statistic += "\n\t";
     statistic += "min depth: " + std::to_string(*std::min_element(search_depths.begin(), search_depths.end()));
+    statistic += "\n\t";
+    statistic += "max positions: " + std::to_string(*std::max_element(all_num_positions.begin(), all_num_positions.end()));
+    statistic += "\n\t";
+    statistic += "avarage positions: " + PrecisionStringDouble(float(std::reduce(all_num_positions.begin(), all_num_positions.end())) / num_runs);
+    statistic += "\n\t";
+    statistic += "min positions: " + std::to_string(*std::min_element(all_num_positions.begin(), all_num_positions.end()));
+    statistic += "\n\t";
+    statistic += "average nodes per second: " + PrecisionStringDouble(double(std::reduce(all_num_positions.begin(), all_num_positions.end()) / std::reduce(time_durations.begin(), time_durations.end())));
     error_handler.Handle(ErrorHandler::Level::kInfo, "main.cpp", statistic);
 }
 
@@ -92,6 +101,7 @@ int main (int argc, char *argv[]) {
         // get some informations
         std::vector<double> time_durations;
         std::vector<int> search_depths;
+        std::vector<uint64_t> all_num_positions;
 
         const int k_num_runs = 20;
         for (int run = 0; run < k_num_runs; run++) {
@@ -114,11 +124,13 @@ int main (int argc, char *argv[]) {
                 }
 
                 error_handler.Handle(ErrorHandler::Level::kAll, "main.cpp",  "depth " + std::to_string(search_depth));
-                if (Search(error_handler, actions, cube, search_depth)) {
-                    error_handler.Handle(ErrorHandler::Level::kAll, "main.cpp",  "Found solution of depth " + std::to_string(search_depth));
+                uint64_t num_positions = 0;
+                if (Search(error_handler, actions, cube, search_depth, num_positions)) {
+                    error_handler.Handle(ErrorHandler::Level::kAll, "main.cpp",  "Found solution of depth " + std::to_string(search_depth) + " visiting " + std::to_string(num_positions) + " positions");
 
                     // statistic
                     search_depths.push_back(search_depth);
+                    all_num_positions.push_back(num_positions);
 
                     // show solution
                     while (!actions.sove.empty()) {
@@ -138,7 +150,7 @@ int main (int argc, char *argv[]) {
         }
 
         // calculate some statistic
-        ShowSearchStatistic(error_handler, depth, search_depths.size(), time_durations, search_depths);
+        ShowSearchStatistic(error_handler, depth, search_depths.size(), time_durations, search_depths, all_num_positions);
     }
 
 
