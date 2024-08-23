@@ -27,7 +27,7 @@ bool Search (ErrorHandler error_handler, Actions& actions, Cube& cube, int depth
     for (Rotations rotation : legal_rotations) {
         Cube next_cube = Rotate(cube, rotation);
         if (Search(error_handler, actions, next_cube, depth-1, num_positions)) {
-            actions.sove.push(rotation);
+            actions.solve.push(rotation);
             return true;
         }
     }

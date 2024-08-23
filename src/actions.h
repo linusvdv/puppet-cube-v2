@@ -38,7 +38,7 @@ public:
     std::atomic<bool> stop = false;
 
     // solving the cube (back to front)
-    std::stack<Rotations> sove;
+    std::stack<Rotations> solve;
 
 private:
     // queue of next actions that the window manager
