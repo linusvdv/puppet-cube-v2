@@ -1,6 +1,5 @@
 #include <array>
 #include <bit>
-#include <bitset>
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
@@ -9,7 +8,7 @@
 #include <vector>
 
 
-constexpr int kNumRotations = 12;
+constexpr int kNumRotations = 18;
 constexpr int kNumCorners = 8;
 // number of positions on a normal 3x3
 constexpr int kNumPositions = 88179840; // 8! * 3^7
@@ -29,6 +28,12 @@ enum Rotations {
     kFc,
     kB,
     kBc,
+    kM,
+    kMc,
+    kE,
+    kEc,
+    kS,
+    kSc
 };
 
 
@@ -73,7 +78,13 @@ constexpr std::array<std::array<int8_t, kNumCorners>, kNumRotations> kCornerRota
     { 2,  0,  3,  1, -1, -1, -1, -1}, // F
     { 1,  3,  0,  2, -1, -1, -1, -1}, // F'
     {-1, -1, -1, -1,  5,  7,  4,  6}, // B
-    {-1, -1, -1, -1,  6,  4,  7,  5}  // B
+    {-1, -1, -1, -1,  6,  4,  7,  5}, // B'
+    { 4,  5,  0,  1,  6,  7,  2,  3}, // M  -  R  + L'
+    { 2,  3,  6,  7,  0,  1,  4,  5}, // M' -  R' + L 
+    { 1,  5,  3,  7,  0,  4,  2,  6}, // E  -  U  + D'
+    { 4,  0,  6,  2,  5,  1,  7,  3}, // E' -  U' + D
+    { 1,  3,  0,  2,  5,  7,  4,  6}, // S  -  F' + B
+    { 2,  0,  3,  1,  6,  4,  7,  5}, // S' -  F  + B'
 }};
 
 
@@ -99,6 +110,8 @@ std::array<Corner, kNumCorners> Rotate (std::array<Corner, kNumCorners> corners,
             case kRc:
             case kL:
             case kLc:
+            case kM:
+            case kMc:
                 corner.protruding = SwapBits<1, 2>(corner.protruding);
                 corner.orientation = SwapBits<1, 2>(corner.orientation);
                 break;
@@ -106,6 +119,8 @@ std::array<Corner, kNumCorners> Rotate (std::array<Corner, kNumCorners> corners,
             case kUc:
             case kD:
             case kDc:
+            case kE:
+            case kEc:
                 corner.protruding = SwapBits<0, 2>(corner.protruding);
                 corner.orientation = SwapBits<0, 2>(corner.orientation);
                 break;
@@ -113,6 +128,8 @@ std::array<Corner, kNumCorners> Rotate (std::array<Corner, kNumCorners> corners,
             case kFc:
             case kB:
             case kBc:
+            case kS:
+            case kSc:
                 corner.protruding = SwapBits<0, 1>(corner.protruding);
                 corner.orientation = SwapBits<0, 1>(corner.orientation);
                 break;
@@ -309,11 +326,11 @@ int main () {
         unsigned int legal_moves = 0;
 
         // go over all legal moves
-        for (int rotation = Rotations::kR; rotation <= Rotations::kBc; rotation++) {
+        for (int rotation = Rotations::kR; rotation <= Rotations::kSc; rotation++) {
             std::array<Corner, kNumCorners> next_position = Rotate(current_position, Rotations(rotation));
 
             // the opposite turn is always allowed "R == L"
-            if (rotation%4 <= 1) {
+            if (rotation%4 <= 1 && rotation <= Rotations::kBc) {
                 if (!IsLegal(next_position)) {
                     continue;
                 }
@@ -321,7 +338,7 @@ int main () {
                 // add this move to legal moves
                 legal_moves |= 1 << (rotation/2+rotation%4);
             }
-            else {
+            else if (rotation <= Rotations::kBc) {
                 // check the previous IsLegal L is the same as R
                 if ((legal_moves >> (rotation/2+rotation%4-3) & 1) == 0) {
                     continue;
@@ -341,7 +358,7 @@ int main () {
 
         // write position data to the list
         unsigned int position_index = GetPositionHash(current_position);
-        positions[position_index] = legal_moves | (depth << kNumRotations/2);
+        positions[position_index] = legal_moves | (depth << (12)/2);
         num_positions++;
     }
 
