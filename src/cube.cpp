@@ -1,7 +1,6 @@
 #include <sys/types.h>
 #include <bit>
 #include <cstdint>
-#include <iostream>
 #include <vector>
 
 #include "cube.h"
@@ -55,10 +54,6 @@ Cube::Cube () {
         edges[i].position = i;
         edges[i].orientation = 1;
     }
-    for (unsigned int i = 0; i < kNumCenters; i++) {
-        centers[i].position = i;
-        centers[i].orientation = 1;
-    }
 }
 
 
@@ -107,11 +102,6 @@ bool Cube::IsSolved () {
             return false;
         }
         if (edges[i].orientation != 1) {
-            return false;
-        }
-    }
-    for (unsigned int i = 0; i < kNumCenters; i++) {
-        if (centers[i].position != i) {
             return false;
         }
     }

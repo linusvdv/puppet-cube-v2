@@ -52,10 +52,6 @@ public:
     static const unsigned int kNumEdges = 12;
     std::array<Piece, kNumEdges> edges;
 
-    // centers
-    static const unsigned int kNumCenters = 6;
-    std::array<Piece, kNumCenters> centers;
-
     unsigned int GetPositionHash ();
     
     // new position resets computed data

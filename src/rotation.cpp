@@ -4,7 +4,6 @@
 
 #include "actions.h"
 #include "rotation.h"
-#include "error_handler.h"
 #include "cube.h"
 
 
@@ -65,12 +64,12 @@ constexpr std::array<std::array<int8_t, Cube::kNumCorners>, kNumRotations> kCorn
     { 1,  3,  0,  2, -1, -1, -1, -1}, // F'
     {-1, -1, -1, -1,  5,  7,  4,  6}, // B
     {-1, -1, -1, -1,  6,  4,  7,  5}, // B
-    {-1, -1, -1, -1, -1, -1, -1, -1}, // M
-    {-1, -1, -1, -1, -1, -1, -1, -1}, // M'
-    {-1, -1, -1, -1, -1, -1, -1, -1}, // E
-    {-1, -1, -1, -1, -1, -1, -1, -1}, // E'
-    {-1, -1, -1, -1, -1, -1, -1, -1}, // S
-    {-1, -1, -1, -1, -1, -1, -1, -1}  // S'
+    { 4,  5,  0,  1,  6,  7,  2,  3}, // M  -  R  + L'
+    { 2,  3,  6,  7,  0,  1,  4,  5}, // M' -  R' + L 
+    { 1,  5,  3,  7,  0,  4,  2,  6}, // E  -  U  + D'
+    { 4,  0,  6,  2,  5,  1,  7,  3}, // E' -  U' + D
+    { 1,  3,  0,  2,  5,  7,  4,  6}, // S  -  F' + B
+    { 2,  0,  3,  1,  6,  4,  7,  5}, // S' -  F  + B'
 }};
 
 
@@ -89,25 +88,13 @@ constexpr std::array<std::array<int8_t, Cube::kNumEdges>, kNumRotations> kEdgeRo
     {-1,  6, -1, -1,  1, -1,  9, -1, -1,  4, -1, -1}, // F
     {-1,  4, -1, -1,  9, -1,  1, -1, -1,  6, -1, -1}, // F'
     {-1, -1,  5, -1, -1, 10, -1,  2, -1, -1,  7, -1}, // B
-    {-1, -1,  7, -1, -1,  2, -1, 10, -1, -1,  5, -1}, // B
-    {-1, -1, -1, -1,  6,  4,  7,  5, -1, -1, -1, -1}, // M
-    {-1, -1, -1, -1,  5,  7,  4,  6, -1, -1, -1, -1}, // M'
-    {-1,  2, 10, -1, -1, -1, -1, -1, -1,  1,  9, -1}, // E
-    {-1,  9,  1, -1, -1, -1, -1, -1, -1, 10,  2, -1}, // E'
-    { 3, -1, -1, 11, -1, -1, -1, -1,  0, -1, -1,  8}, // S
-    { 8, -1, -1,  0, -1, -1, -1, -1, 11, -1, -1,  3}  // S'
-}};
-
-// map the current position to next position
-// -1 marks no change in rotation direction
-constexpr std::array<std::array<int8_t, Cube::kNumEdges>, kNumRotations> kCenterRotation =
-{{
-    {-1,  2,  4,  1,  3, -1}, // M
-    {-1,  3,  1,  4,  2, -1}, // M'
-    { 3, -1,  0,  5, -1,  2}, // E
-    { 2, -1,  5,  0, -1,  3}, // E'
-    { 4,  0, -1, -1,  5,  1}, // S
-    { 1,  5, -1, -1,  0,  4}, // S'
+    {-1, -1,  7, -1, -1,  2, -1, 10, -1, -1,  5, -1}, // B'
+    { 2,  0,  3,  1, -1, -1, -1, -1, 10,  8, 11,  9}, // M  -  R  + L'
+    { 1,  3,  0,  2, -1, -1, -1, -1,  9, 11,  8, 10}, // M' -  R' + L
+    { 4, -1, -1,  6,  8,  0, 11,  3,  5, -1, -1,  7}, // E  -  U  + D'
+    { 5, -1, -1,  7,  0,  8,  3, 11,  4, -1, -1,  6}, // E' -  U' + D
+    {-1,  4,  5, -1,  9, 10,  1,  2, -1,  6,  7, -1}, // S  -  F' + B
+    {-1,  6,  7, -1,  1,  2,  9, 10, -1,  4,  5, -1}, // S' -  F  + B'
 }};
 
 
@@ -136,21 +123,25 @@ Cube Rotate (const Cube& cube, Rotations rotation) {
             case kRc:
             case kL:
             case kLc:
+            case kM:
+            case kMc:
                 rotated_cube.corners[i].orientation = SwapBits<1, 2>(cube.corners[i].orientation);
                 break;
             case kU:
             case kUc:
             case kD:
             case kDc:
+            case kE:
+            case kEc:
                 rotated_cube.corners[i].orientation = SwapBits<0, 2>(cube.corners[i].orientation);
                 break;
             case kF:
             case kFc:
             case kB:
             case kBc:
+            case kS:
+            case kSc:
                 rotated_cube.corners[i].orientation = SwapBits<0, 1>(cube.corners[i].orientation);
-                break;
-            default:
                 break;
         }
     }
@@ -190,13 +181,6 @@ Cube Rotate (const Cube& cube, Rotations rotation) {
                 rotated_cube.edges[i].orientation = SwapBits<0, 1>(cube.edges[i].orientation);
                 break;
         }
-    }
-    for (unsigned int i = 0; i < Cube::kNumCenters; i++) {
-        if (rotation < Rotations::kM || kCenterRotation[rotation-Rotations::kM][cube.centers[i].position] == -1) {
-            rotated_cube.centers[i] = cube.centers[i];
-            continue;
-        }
-        rotated_cube.centers[i].position = kCenterRotation[rotation-Rotations::kM][cube.centers[i].position];
     }
     return rotated_cube;
 }
