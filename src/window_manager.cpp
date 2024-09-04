@@ -17,7 +17,12 @@
 
 static void ErrorCallback (int error, const char* description) {
     // error message
-    std::cout << "ERROR: in file rendere.cpp --- " << error << " " << description << std::endl;
+    std::cout << "\033[41m";
+    std::time_t time = std::time(nullptr);
+    std::cout << "[" << std::strtok(std::ctime(&time), "\n") << "] ";
+    std::cout << "CRITICAL ERROR: in file window_manager.cpp --- " << error << " " << description;
+    std::cout << "\033[0m" << std::endl;
+    exit(-1);
 }
 
 
@@ -93,16 +98,15 @@ void WindowManager (ErrorHandler error_handler, Setting settings, Actions& actio
 
     // initialising GLFW
     if (glfwInit() == 0) {
-        error_handler.Handle(ErrorHandler::Level::kCriticalError, "renderer.cpp", "glfw initialization failed");
+        error_handler.Handle(ErrorHandler::Level::kCriticalError, "window_manager.cpp", "glfw initialization failed");
     }
 
     // create window with OpenGL 3.x or higher
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
-    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
     GLFWwindow* window = glfwCreateWindow(640, 640, "Puppet Cube V2", NULL, NULL);
     if (window == nullptr) {
-        error_handler.Handle(ErrorHandler::Level::kCriticalError, "renderer.cpp", "glfw creation of window failed");
+        error_handler.Handle(ErrorHandler::Level::kCriticalError, "window_manager.cpp", "glfw creation of window failed");
     }
 
     // access settings in callbacks
@@ -118,7 +122,7 @@ void WindowManager (ErrorHandler error_handler, Setting settings, Actions& actio
 
     // initialising GLAD
     if (gladLoadGLLoader((GLADloadproc)glfwGetProcAddress) == 0) {
-        error_handler.Handle(ErrorHandler::Level::kCriticalError, "renderer.cpp", "glad initialization failed");
+        error_handler.Handle(ErrorHandler::Level::kCriticalError, "window_manager.cpp", "glad initialization failed");
     }
 
 

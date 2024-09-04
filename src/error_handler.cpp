@@ -59,7 +59,6 @@ void ErrorHandler::Handle(Level level, std::string file, std::string message) co
     std::cout << std::endl;
 
     if (level == Level::kCriticalError) {
-        glfwTerminate();
         exit(-1);
     }
 }

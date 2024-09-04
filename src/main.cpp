@@ -35,8 +35,10 @@ void ShowSearchStatistic (ErrorHandler error_handler, int depth, size_t num_runs
     }
 
     if (num_runs != time_durations.size() || num_runs != search_depths.size() || num_runs != all_num_positions.size()) {
-        std::cout << num_runs << " " << time_durations.size() << " " << search_depths.size() << " " << all_num_positions.size() << std::endl;
         error_handler.Handle(ErrorHandler::Level::kWarning, "main.cpp", "Show search statistic recieved vectors of wrong size");
+        std::stringstream infos;
+        infos << num_runs << " " << time_durations.size() << " " << search_depths.size() << " " << all_num_positions.size() << std::endl;
+        error_handler.Handle(ErrorHandler::Level::kAll, "main.cpp", infos.str());
         return;
     }
 
@@ -126,7 +128,7 @@ int main (int argc, char *argv[]) {
     // get reproducible random numbers
     rng.seed(0);
 
-    for (int depth = 0; depth < 20; depth++) {
+    for (int depth = 0; depth <= 11; depth++) {
         if (actions.stop) {
             break;
         }
