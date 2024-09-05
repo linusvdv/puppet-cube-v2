@@ -82,6 +82,9 @@ private:
     Rotations current_rotation_;
     glm::vec3 current_rotation_vector_;
 
+    // this ofset is used to convert from the computational representation to the visual representation
+    glm::mat4 rotation_offset_ = glm::mat4(1.0F);;
+
     // additional rotation information
     bool started_current_rotation_ = false;
     float rotation_angle_ = 0;

@@ -3,6 +3,8 @@
 
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
+#include <glm/ext/matrix_float4x4.hpp>
+#include <glm/ext/matrix_transform.hpp>
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
@@ -20,6 +22,7 @@ glm::mat4 GetRotationMatrix (float rotation_x, float rotation_y, float rotation_
     return glm::rotate(glm::rotate(glm::rotate(glm::mat4(1.0), glm::radians(rotation_x), {1, 0, 0}),
                 glm::radians(rotation_y), {0, 1, 0}), glm::radians(rotation_z), {0, 0, 1});
 }
+
 
 // solved visual state of the cube
 const std::array<Renderer::Piece, Renderer::kNumPieces> kSolvedPieces = {{
@@ -50,6 +53,7 @@ const std::array<Renderer::Piece, Renderer::kNumPieces> kSolvedPieces = {{
     {4, { 1, -1, -1}, GetRotationMatrix(-90.0F,   0.0F, -90.0F)},
     {5, {-1, -1, -1}, GetRotationMatrix(180.0F, -90.0F,   0.0F)}
 }};
+
 
 // translation of the pieces away from the center
 constexpr std::array<glm::vec4, kNumPieces> kPieceOffset = {
@@ -107,7 +111,7 @@ void Renderer::Draw (Setting settings) const {
     // current rotation
     glm::mat4 current_rotation = glm::mat4(1.0F);
     if (started_current_rotation_) {
-        current_rotation = glm::rotate(current_rotation, rotation_angle_, current_rotation_vector_);
+        current_rotation = glm::rotate(current_rotation, rotation_angle_, glm::mat3(rotation_offset_) * current_rotation_vector_);
     }
 
     // view
@@ -215,19 +219,19 @@ const std::array<PieceRotationMatrix, kNumRotations> kPieceRotationMatrices = {{
     {2, -1, {{{ 0, 1, 0}, {-1, 0, 0}, { 0,  0, 1}}}, { 0.F, 0.F,-1.F}},
 
     // M
-    {0, 0, {{{ 1, 0, 0}, { 0, 0,-1}, { 0,  1, 0}}}, { 1.F, 0.F, 0.F}},
+    {0, 0, {{{ 1, 0, 0}, { 0, 0, 1}, { 0, -1, 0}}}, { 1.F, 0.F, 0.F}},
     // M'
-    {0, 0, {{{ 1, 0, 0}, { 0, 0, 1}, { 0, -1, 0}}}, {-1.F, 0.F, 0.F}},
+    {0, 0, {{{ 1, 0, 0}, { 0, 0,-1}, { 0,  1, 0}}}, {-1.F, 0.F, 0.F}},
 
     // E
-    {1, 0, {{{ 0, 0, 1}, { 0, 1, 0}, {-1,  0, 0}}}, { 0.F, 1.F, 0.F}},
+    {1, 0, {{{ 0, 0,-1}, { 0, 1, 0}, { 1,  0, 0}}}, { 0.F, 1.F, 0.F}},
     // E'
-    {1, 0, {{{ 0, 0,-1}, { 0, 1, 0}, { 1,  0, 0}}}, { 0.F,-1.F, 0.F}},
+    {1, 0, {{{ 0, 0, 1}, { 0, 1, 0}, {-1,  0, 0}}}, { 0.F,-1.F, 0.F}},
 
     // S
-    {2, 0, {{{ 0, 1, 0}, {-1, 0, 0}, { 0,  0, 1}}}, { 0.F, 0.F,-1.F}},
+    {2, 0, {{{ 0,-1, 0}, { 1, 0, 0}, { 0,  0, 1}}}, { 0.F, 0.F,-1.F}},
     // S'
-    {2, 0, {{{ 0,-1, 0}, { 1, 0, 0}, { 0,  0, 1}}}, { 0.F, 0.F, 1.F}},
+    {2, 0, {{{ 0, 1, 0}, {-1, 0, 0}, { 0,  0, 1}}}, { 0.F, 0.F, 1.F}},
 }};
 
 
@@ -281,6 +285,7 @@ void Renderer::Rotate (Setting settings, Actions& actions) {
             case Instructions::kReset:
                 // reset to solved position
                 pieces_ = kSolvedPieces;
+                rotation_offset_ = glm::mat4(1.0F);
                 return;
             case Instructions::kIsScrambling:
                 // increases visual rotation speed
@@ -303,7 +308,11 @@ void Renderer::Rotate (Setting settings, Actions& actions) {
         // make visual rotation 
         rotation_angle_ = float(std::numbers::pi) / 2;
         glm::mat4 current_rotation = glm::mat4(1.0F);
-        current_rotation = glm::rotate(current_rotation, rotation_angle_, current_rotation_vector_);
+        current_rotation = glm::rotate(current_rotation, rotation_angle_, glm::mat3(rotation_offset_) * current_rotation_vector_);
+        if (current_rotation_ > Rotations::kBc) {
+            rotation_offset_ = current_rotation * rotation_offset_;
+        }
+
 
         // reset current rotation data
         started_current_rotation_ = false;
@@ -312,13 +321,18 @@ void Renderer::Rotate (Setting settings, Actions& actions) {
 
         for (size_t i = 0; i < kNumPieces; i++) {
             if (!pieces_[i].current_rotation) {
+                // slice moves rotate the outer pieces
+                if (current_rotation_ > Rotations::kBc) {
+                    pieces_[i].orientation = IntMat3MultWithVec3(kPieceRotationMatrices[current_rotation_].full_rotation, pieces_[i].orientation);
+                }
                 continue;
             }
             pieces_[i].current_rotation = false;
             pieces_[i].rotation = current_rotation * pieces_[i].rotation;
-            // rotation orientation
-            pieces_[i].orientation = IntMat3MultWithVec3(kPieceRotationMatrices[current_rotation_].full_rotation, pieces_[i].orientation);
+            // rotation orientation (non visual)
+            if (current_rotation_ <= Rotations::kBc) {
+                pieces_[i].orientation = IntMat3MultWithVec3(kPieceRotationMatrices[current_rotation_].full_rotation, pieces_[i].orientation);
+            }
         }
-        return;
     }
 }
