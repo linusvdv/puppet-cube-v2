@@ -153,34 +153,7 @@ Cube Rotate (const Cube& cube, Rotations rotation) {
             continue;
         }
         rotated_cube.edges[i].position = kEdgeRotation[rotation][cube.edges[i].position];
-
-        // rotate the protruding pieces and their orientation
-        switch (rotation) {
-            case kR:
-            case kRc:
-            case kL:
-            case kLc:
-            case kM:
-            case kMc:
-                rotated_cube.edges[i].orientation = SwapBits<1, 2>(cube.edges[i].orientation);
-                break;
-            case kU:
-            case kUc:
-            case kD:
-            case kDc:
-            case kE:
-            case kEc:
-                rotated_cube.edges[i].orientation = SwapBits<0, 2>(cube.edges[i].orientation);
-                break;
-            case kF:
-            case kFc:
-            case kB:
-            case kBc:
-            case kS:
-            case kSc:
-                rotated_cube.edges[i].orientation = SwapBits<0, 1>(cube.edges[i].orientation);
-                break;
-        }
+        rotated_cube.edges[i].orientation = uint8_t(!bool(cube.edges[i].orientation));
     }
     return rotated_cube;
 }

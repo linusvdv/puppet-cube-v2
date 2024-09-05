@@ -52,7 +52,7 @@ Cube::Cube () {
     }
     for (unsigned int i = 0; i < kNumEdges; i++) {
         edges[i].position = i;
-        edges[i].orientation = 1;
+        edges[i].orientation = 0;
     }
 }
 
@@ -101,7 +101,7 @@ bool Cube::IsSolved () {
         if (edges[i].position != i) {
             return false;
         }
-        if (edges[i].orientation != 1) {
+        if (edges[i].orientation == 1) {
             return false;
         }
     }
