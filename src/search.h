@@ -1,4 +1,7 @@
+#include <cstddef>
 #include <cstdint>
+#include <unordered_map>
+#include <utility>
 
 
 #include "actions.h"
@@ -6,4 +9,13 @@
 #include "error_handler.h"
 
 
-bool Search(ErrorHandler error_handler, Actions& actions, Cube& cube, int depth, uint64_t& num_positions);
+struct PositionHash {
+    std::size_t operator() (const std::pair<unsigned int, uint64_t>& hashes) const {
+        uint64_t seed = hashes.first;
+        seed ^= hashes.second + 0x9e3779b9 + (seed<<6) + (seed>>2);
+        return seed;
+    }
+};
+
+
+bool Search(ErrorHandler error_handler, Actions& actions, Cube& cube, int depth, uint64_t& num_positions, std::unordered_map<std::pair<unsigned int, uint64_t>, int, PositionHash>& visited);

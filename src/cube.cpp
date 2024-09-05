@@ -125,6 +125,7 @@ uint64_t Cube::GetEdgeHash () {
         hash |= edges[i].orientation & 1;
     }
 
+    edge_hash_ = hash;
     return hash;
 }
 

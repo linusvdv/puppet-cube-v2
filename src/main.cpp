@@ -10,6 +10,7 @@
 #include <sstream>
 #include <string>
 #include <thread>
+#include <unordered_map>
 #include <vector>
 
 #include "actions.h"
@@ -152,6 +153,7 @@ int main (int argc, char *argv[]) {
 
             // solve
             error_handler.Handle(ErrorHandler::Level::kAll, "main.cpp",  "Starting search with scrambled position of depth " + std::to_string(depth));
+            std::unordered_map<std::pair<unsigned int, uint64_t>, int, PositionHash> visited;
             for (int search_depth = 0; search_depth <= depth; search_depth++) {
                 if (actions.stop) {
                     break;
@@ -159,7 +161,7 @@ int main (int argc, char *argv[]) {
 
                 error_handler.Handle(ErrorHandler::Level::kAll, "main.cpp",  "depth " + std::to_string(search_depth));
                 uint64_t num_positions = 0;
-                if (Search(error_handler, actions, cube, search_depth, num_positions)) {
+                if (Search(error_handler, actions, cube, search_depth, num_positions, visited)) {
                     error_handler.Handle(ErrorHandler::Level::kAll, "main.cpp",  "Found solution of depth " + std::to_string(search_depth) + " visiting " + std::to_string(num_positions) + " positions");
 
                     // statistic
