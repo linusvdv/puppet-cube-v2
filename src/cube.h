@@ -52,12 +52,15 @@ public:
     static const unsigned int kNumEdges = 12;
     std::array<Piece, kNumEdges> edges;
 
+    // get hash of position
     unsigned int GetPositionHash ();
+    uint64_t GetEdgeHash ();
     
     // new position resets computed data
     void SetNewPosition () {
         calculated_position_hash_ = false;
         got_position_data = false;
+        calculated_edge_hash_ = false;
     }
 
     // buffer legal move data after lookup
@@ -79,4 +82,6 @@ private:
     // buffer hash
     bool calculated_position_hash_ = false;
     unsigned int position_hash_;
+    bool calculated_edge_hash_ = false;
+    uint64_t edge_hash_;
 };

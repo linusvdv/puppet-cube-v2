@@ -93,17 +93,42 @@ unsigned int Cube::GetPositionHash () {
 }
 
 
+// unique hash for every edge combination
+uint64_t Cube::GetEdgeHash () {
+    // if you already calculated edge hash use the calculated hash
+    if (calculated_edge_hash_) {
+        return edge_hash_;
+    }
+    calculated_edge_hash_ = true;
+
+    uint64_t hash = 0;
+
+    // convert edges to 12!/2
+    // this is possible because all indices only appear once
+    std::array<bool, kNumEdges> accessed;
+    accessed.fill(false);
+
+    // position
+    for (unsigned int i = 0; i < kNumEdges - 2; i++) {
+        hash *= kNumEdges - i;
+        unsigned int edge_index = 0;
+        for (int j = 0; j < edges[i].position; j++) {
+            edge_index += uint32_t(!accessed[j]);
+        }
+        accessed[edges[i].position] = true;
+        hash += edge_index;
+    }
+
+    // orientation has only one bit
+    for (unsigned int i = 0; i < kNumEdges - 1; i++) {
+        hash <<= 1;
+        hash |= edges[i].orientation & 1;
+    }
+
+    return hash;
+}
+
+
 bool Cube::IsSolved () {
-    if (GetPositionHash() != 0) {
-        return false;
-    }
-    for (unsigned int i = 0; i < kNumEdges; i++) {
-        if (edges[i].position != i) {
-            return false;
-        }
-        if (edges[i].orientation == 1) {
-            return false;
-        }
-    }
-    return true;
+    return GetPositionHash() == 0 && GetEdgeHash() == 0;
 }
