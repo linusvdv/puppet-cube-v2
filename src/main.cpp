@@ -12,6 +12,7 @@
 #include <thread>
 #include <unordered_map>
 #include <vector>
+#include <parallel_hashmap/phmap.h>
 
 #include "actions.h"
 #include "cube.h"
@@ -153,7 +154,7 @@ int main (int argc, char *argv[]) {
 
             // solve
             error_handler.Handle(ErrorHandler::Level::kAll, "main.cpp",  "Starting search with scrambled position of depth " + std::to_string(depth));
-            std::unordered_map<std::pair<unsigned int, uint64_t>, int, PositionHash> visited;
+            phmap::flat_hash_map<std::pair<unsigned int, uint64_t>, int, PositionHash> visited;
             for (int search_depth = 0; search_depth <= depth; search_depth++) {
                 if (actions.stop) {
                     break;

@@ -2,6 +2,7 @@
 #include <cstdint>
 #include <unordered_map>
 #include <utility>
+#include <parallel_hashmap/phmap.h>
 
 
 #include "actions.h"
@@ -18,4 +19,4 @@ struct PositionHash {
 };
 
 
-bool Search(ErrorHandler error_handler, Actions& actions, Cube& cube, int depth, uint64_t& num_positions, std::unordered_map<std::pair<unsigned int, uint64_t>, int, PositionHash>& visited);
+bool Search(ErrorHandler error_handler, Actions& actions, Cube& cube, int depth, uint64_t& num_positions, phmap::flat_hash_map<std::pair<unsigned int, uint64_t>, int, PositionHash>& visited);

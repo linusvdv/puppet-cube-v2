@@ -1,6 +1,7 @@
 #include <cstdint>
 #include <unordered_map>
 #include <vector>
+#include <parallel_hashmap/phmap.h>
 
 
 #include "actions.h"
@@ -12,7 +13,7 @@
 
 // iterative deepening depth first search with heuristic function
 bool Search (ErrorHandler error_handler, Actions& actions, Cube& cube, int depth,
-        uint64_t& num_positions, std::unordered_map<std::pair<unsigned int, uint64_t>, int, PositionHash>& visited) {
+        uint64_t& num_positions, phmap::flat_hash_map<std::pair<unsigned int, uint64_t>, int, PositionHash>& visited) {
     // check if this position has been already visited
     auto saved_depth = visited.find({cube.GetPositionHash(), cube.GetEdgeHash()});
     if (saved_depth != visited.end() && saved_depth->second >= depth) {

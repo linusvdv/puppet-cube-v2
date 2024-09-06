@@ -18,6 +18,16 @@ option(BUILD_SHARED_LIBS "Build shared libraries" OFF)
 find_package(OpenGL REQUIRED)
 include_directories(${OPENGL_INCLUDE_DIRS})
 
+# parallel hashmap by Gregory Popovitch
+include(FetchContent)
+FetchContent_Declare(
+    parallel-hashmap
+    GIT_REPOSITORY https://github.com/greg7mdp/parallel-hashmap.git
+    GIT_TAG        v1.3.12
+)
+FetchContent_MakeAvailable(parallel-hashmap)
+include_directories(${parallel-hashmap_SOURCE_DIR})
+
 # glfw
 FetchContent_Declare(glfw
     GIT_REPOSITORY "https://github.com/glfw/glfw"
