@@ -1,5 +1,4 @@
 #include <cstdint>
-#include <unordered_map>
 #include <vector>
 #include <parallel_hashmap/phmap.h>
 

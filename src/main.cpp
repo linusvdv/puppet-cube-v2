@@ -10,7 +10,6 @@
 #include <sstream>
 #include <string>
 #include <thread>
-#include <unordered_map>
 #include <vector>
 #include <parallel_hashmap/phmap.h>
 
