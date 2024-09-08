@@ -16,6 +16,10 @@ struct PositionHash {
         return seed;
     }
 };
+using CubeHashMap = phmap::flat_hash_map<std::pair<unsigned int, uint64_t>, int, PositionHash>;
 
 
-bool Search(ErrorHandler error_handler, Actions& actions, Cube& cube, int depth, uint64_t& num_positions, phmap::flat_hash_map<std::pair<unsigned int, uint64_t>, int, PositionHash>& visited);
+bool Search(ErrorHandler error_handler, Actions& actions, Cube& cube, int depth, uint64_t& num_positions, CubeHashMap& visited);
+
+
+void TablebaseInitialisation (ErrorHandler error_handler, int depth);

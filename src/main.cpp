@@ -108,6 +108,8 @@ int main (int argc, char *argv[]) {
 
     // load legal moves from file
     InitializePositionData(error_handler, settings);
+    // calculate all start positions
+    TablebaseInitialisation(error_handler, 5);
 
     // actions for communication with window manager
     Actions actions;
@@ -153,7 +155,7 @@ int main (int argc, char *argv[]) {
 
             // solve
             error_handler.Handle(ErrorHandler::Level::kAll, "main.cpp",  "Starting search with scrambled position of depth " + std::to_string(depth));
-            phmap::flat_hash_map<std::pair<unsigned int, uint64_t>, int, PositionHash> visited;
+            CubeHashMap visited;
             for (int search_depth = 0; search_depth <= depth; search_depth++) {
                 if (actions.stop) {
                     break;
