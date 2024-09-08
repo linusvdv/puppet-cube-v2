@@ -53,12 +53,12 @@ public:
     std::array<Piece, kNumEdges> edges;
 
     // get hash of position
-    unsigned int GetPositionHash ();
+    unsigned int GetCornerHash ();
     uint64_t GetEdgeHash ();
     
     // new position resets computed data
     void SetNewPosition () {
-        calculated_position_hash_ = false;
+        calculated_corner_hash_ = false;
         got_position_data = false;
         calculated_edge_hash_ = false;
     }
@@ -77,11 +77,14 @@ public:
         return GetPositionData() >> kHeuristicFunctionOffset;
     }
 
-
 private:
     // buffer hash
-    bool calculated_position_hash_ = false;
-    unsigned int position_hash_;
+    bool calculated_corner_hash_ = false;
+    unsigned int corner_hash_;
     bool calculated_edge_hash_ = false;
     uint64_t edge_hash_;
 };
+
+
+// get cube from hash
+Cube DecodeHash (unsigned int corner_hash, uint64_t edge_hash);

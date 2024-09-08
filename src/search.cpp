@@ -14,7 +14,7 @@
 bool Search (ErrorHandler error_handler, Actions& actions, Cube& cube, int depth,
         uint64_t& num_positions, phmap::flat_hash_map<std::pair<unsigned int, uint64_t>, int, PositionHash>& visited) {
     // check if this position has been already visited
-    auto saved_depth = visited.find({cube.GetPositionHash(), cube.GetEdgeHash()});
+    auto saved_depth = visited.find({cube.GetCornerHash(), cube.GetEdgeHash()});
     if (saved_depth != visited.end() && saved_depth->second >= depth) {
         return false;
     }
@@ -31,7 +31,7 @@ bool Search (ErrorHandler error_handler, Actions& actions, Cube& cube, int depth
         return true;
     }
 
-    visited[{cube.GetPositionHash(), cube.GetEdgeHash()}] = depth;
+    visited[{cube.GetCornerHash(), cube.GetEdgeHash()}] = depth;
 
     // dfs
     std::vector<Rotations> legal_rotations = GetLegalRotations(cube);

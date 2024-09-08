@@ -1,5 +1,6 @@
 #include <sys/types.h>
 #include <bit>
+#include <cassert>
 #include <cstdint>
 #include <vector>
 
@@ -37,7 +38,7 @@ void InitializePositionData (ErrorHandler& error_handler, Setting& settings) {
 uint16_t Cube::GetPositionData () {
     // get position hash and legal_move_data
     if (!got_position_data) {
-        unsigned int position_hash = GetPositionHash();
+        unsigned int position_hash = GetCornerHash();
         position_data = position_data_table[position_hash];
         got_position_data= true;
     }
@@ -57,12 +58,12 @@ Cube::Cube () {
 }
 
 
-unsigned int Cube::GetPositionHash () {
+unsigned int Cube::GetCornerHash () {
     // if you already calculated position hash use the calculated position
-    if (calculated_position_hash_) {
-        return position_hash_;
+    if (calculated_corner_hash_) {
+        return corner_hash_;
     }
-    calculated_position_hash_ = true;
+    calculated_corner_hash_ = true;
 
     unsigned int hash = 0;
     unsigned int orientation_hash = 0;
@@ -88,8 +89,42 @@ unsigned int Cube::GetPositionHash () {
     }
 
     hash += orientation_hash * kEightFac;
-    position_hash_ = hash;
+    corner_hash_ = hash;
     return hash;
+}
+
+
+// decode corners
+void DecodeCornerHash (Cube& cube, unsigned int hash) {
+    // decode orientation
+    unsigned int orientation_hash = hash / kEightFac;
+    for (int i = Cube::kNumCorners - 2; i >= 0; i--) {
+        cube.corners[i].orientation = 1 << (orientation_hash % 3);
+        orientation_hash /= 3;
+    }
+
+    // decode position
+    unsigned int position_hash = hash % kEightFac;
+    std::array<bool, Cube::kNumCorners> accessed;
+    accessed.fill(false);
+    int shift = kEightFac;
+    for (unsigned int i = 0; i < Cube::kNumCorners; i++) {
+        shift /= Cube::kNumCorners - i;
+
+        int corner_index = position_hash / shift;
+        position_hash %= shift;
+
+        for (unsigned int j = 0; j < Cube::kNumCorners; j++) {
+            if (!accessed[j]) {
+                corner_index--;
+            }
+            if (corner_index == -1) {
+                cube.corners[i].position = j;
+                accessed[j] = true;
+                break;
+            }
+        }
+    }
 }
 
 
@@ -109,7 +144,9 @@ uint64_t Cube::GetEdgeHash () {
     accessed.fill(false);
 
     // position
-    for (unsigned int i = 0; i < kNumEdges - 2; i++) {
+    // this conversion could ignore the two last edges 
+    // for decoding from the position the last two edges are easily stored
+    for (unsigned int i = 0; i < kNumEdges - 1; i++) {
         hash *= kNumEdges - i;
         unsigned int edge_index = 0;
         for (int j = 0; j < edges[i].position; j++) {
@@ -130,6 +167,51 @@ uint64_t Cube::GetEdgeHash () {
 }
 
 
+// decode edges
+void DecodeEdgesHash (Cube& cube, uint64_t hash) {
+    // decode orientation
+    for (int i = Cube::kNumEdges-2; i >= 0; i--) {
+        cube.edges[i].orientation = hash & 1;
+        hash >>= 1;
+    }
+
+    // decode position
+    std::array<bool, Cube::kNumEdges> accessed;
+    accessed.fill(false);
+
+
+    const int k_twelve_fac = 479001600;
+    assert(hash < k_twelve_fac);
+    int shift = k_twelve_fac;
+    for (unsigned int i = 0; i < Cube::kNumEdges; i++) {
+        shift /= Cube::kNumEdges - i;
+
+        int edge_index = hash / shift;
+        hash %= shift;
+
+        for (unsigned int j = 0; j < Cube::kNumEdges; j++) {
+            if (!accessed[j]) {
+                edge_index--;
+            }
+            if (edge_index == -1) {
+                cube.edges[i].position = j;
+                accessed[j] = true;
+                break;
+            }
+        }
+    }
+}
+
+
+// get from the hash to the cube
+Cube DecodeHash (unsigned int corner_hash, uint64_t edge_hash) {
+    Cube new_cube;
+    DecodeCornerHash(new_cube, corner_hash);
+    DecodeEdgesHash(new_cube, edge_hash);
+    return new_cube;
+}
+
+
 bool Cube::IsSolved () {
-    return GetPositionHash() == 0 && GetEdgeHash() == 0;
+    return GetCornerHash() == 0 && GetEdgeHash() == 0;
 }
