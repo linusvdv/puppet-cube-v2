@@ -67,6 +67,7 @@ add_executable(PuppetCubeV2
     src/actions.cpp
     src/cube.cpp
     src/search.cpp
+    src/search_manager.cpp
 )
 
 target_link_libraries(PuppetCubeV2 PRIVATE glfw glad glm Threads::Threads)

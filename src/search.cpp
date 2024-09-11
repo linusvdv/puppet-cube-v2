@@ -1,5 +1,6 @@
 #include <cstdint>
 #include <queue>
+#include <string>
 #include <vector>
 #include <X11/extensions/randr.h>
 #include <parallel_hashmap/phmap.h>
@@ -36,7 +37,7 @@ bool Search (ErrorHandler error_handler, Actions& actions, Cube& cube, int depth
 
     // stop if the solved position cannot be reached in the time
     // TODO: heuristic function
-    if (depth <= 0 || actions.stop) {
+    if (depth - std::max(cube.GetHeuristicFunction() - int(tablebase.size()-1), 0) <= 0 || actions.stop) {
         return false;
     }
 
@@ -57,22 +58,29 @@ bool Search (ErrorHandler error_handler, Actions& actions, Cube& cube, int depth
 
 
 // this function will use a BFS to find all positions of specific depth
-void TablebaseInitialisation (ErrorHandler error_handler, int depth) {
+void TablebaseSearch (ErrorHandler error_handler, int depth) {
     std::queue<std::pair<unsigned int, uint64_t>> current;
+    if (int(tablebase.size()-1) >= depth) {
+        return;
+    }
+
+    // get duration time
+    auto start_time = std::chrono::system_clock::now();
+    error_handler.Handle(ErrorHandler::Level::kInfo, "search.cpp", "resize tablebase from depth " + std::to_string(tablebase.size()-1) + " to " + std::to_string(depth));
 
     // solved position
-    current.push({0, 0});
-    tablebase.push_back(phmap::flat_hash_set<std::pair<unsigned int, uint64_t>, PositionHash>());
-    tablebase[0].insert({0, 0});
-
-    for (int i = 0; i < depth; i++) {
+    if (tablebase.empty()) {
         tablebase.push_back(phmap::flat_hash_set<std::pair<unsigned int, uint64_t>, PositionHash>());
-        std::queue<std::pair<unsigned int, uint64_t>> next;
+        tablebase[0].insert({0, 0});
+    }
+
+    // search from the next depth
+    for (int i = tablebase.size()-1; i < depth; i++) {
+        tablebase.push_back(phmap::flat_hash_set<std::pair<unsigned int, uint64_t>, PositionHash>());
 
         // go over all positions of this depth
-        while (!current.empty()) {
-            Cube cube = DecodeHash(current.front().first, current.front().second);
-            current.pop();
+        for (const std::pair<unsigned int, uint64_t>& current : tablebase[i]) {
+            Cube cube = DecodeHash(current.first, current.second);
 
             // do all moves
             std::vector<Rotations> legal_rotations = GetLegalRotations(cube);
@@ -86,14 +94,47 @@ void TablebaseInitialisation (ErrorHandler error_handler, int depth) {
                 }
 
                 tablebase[i+1].insert(next_hash);
-
-                if (i != depth-1) {
-                    next.push(next_hash);
-                }
             }
         }
-
-        current = next;
     }
-    error_handler.Handle(ErrorHandler::Level::kInfo, "search.cpp", "table base initialized");
+
+    // get duration time
+    auto end_time = std::chrono::system_clock::now();
+    std::chrono::duration<double> time_duration = end_time - start_time;
+
+    error_handler.Handle(ErrorHandler::Level::kInfo, "search.cpp", "set tablebase size to: " + std::to_string(tablebase.size()-1));
+}
+
+
+bool Solve (ErrorHandler error_handler, Actions& actions, Cube& cube, std::vector<int>& search_depths, std::vector<uint64_t>& all_num_positions, int max_depth = 1000) {
+    // calculate all start positions until specific depth
+    TablebaseInitialisation(error_handler, 1);
+
+
+    for (int search_depth = 0; search_depth <= max_depth; search_depth++) {
+        if (actions.stop) {
+            break;
+        }
+
+        error_handler.Handle(ErrorHandler::Level::kAll, "search_manager.cpp",  "depth " + std::to_string(search_depth));
+        uint64_t num_positions = 0;
+        CubeHashMap visited;
+
+        if (Search(error_handler, actions, cube, search_depth, num_positions, visited)) {
+            error_handler.Handle(ErrorHandler::Level::kAll, "search_manager.cpp",  "Found solution of depth " + std::to_string(search_depth) + " visiting " + std::to_string(num_positions) + " positions");
+
+            // statistic
+            search_depths.push_back(search_depth);
+            all_num_positions.push_back(num_positions);
+
+            // show solution
+            while (!actions.solve.empty()) {
+                actions.Push(Action(Instructions::kRotation, actions.solve.top()));
+                actions.solve.pop();
+            }
+            break;
+        }
+    }
+
+    error_handler.Handle(ErrorHandler::Level::kWarning, "search.cpp", "did not find a solution of current position within depth " + std::to_string(max_depth));
 }
