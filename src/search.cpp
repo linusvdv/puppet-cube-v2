@@ -66,7 +66,7 @@ void TablebaseSearch (ErrorHandler error_handler, int depth) {
 
     // get duration time
     auto start_time = std::chrono::system_clock::now();
-    error_handler.Handle(ErrorHandler::Level::kInfo, "search.cpp", "resize tablebase from depth " + std::to_string(tablebase.size()-1) + " to " + std::to_string(depth));
+    error_handler.Handle(ErrorHandler::Level::kInfo, "search.cpp", "resize tablebase from depth " + std::to_string((tablebase.empty() ? 0 : tablebase.size()-1)) + " to " + std::to_string(depth));
 
     // solved position
     if (tablebase.empty()) {
@@ -102,26 +102,26 @@ void TablebaseSearch (ErrorHandler error_handler, int depth) {
     auto end_time = std::chrono::system_clock::now();
     std::chrono::duration<double> time_duration = end_time - start_time;
 
-    error_handler.Handle(ErrorHandler::Level::kInfo, "search.cpp", "set tablebase size to: " + std::to_string(tablebase.size()-1));
+    error_handler.Handle(ErrorHandler::Level::kInfo, "search.cpp", "set tablebase size to: " + std::to_string(tablebase.size()-1) + " in " + std::to_string(time_duration.count()) + " seconds");
 }
 
 
 bool Solve (ErrorHandler error_handler, Actions& actions, Cube& cube, std::vector<int>& search_depths, std::vector<uint64_t>& all_num_positions, int max_depth = 1000) {
     // calculate all start positions until specific depth
-    TablebaseInitialisation(error_handler, 1);
+    TablebaseSearch(error_handler, 6);
 
 
     for (int search_depth = 0; search_depth <= max_depth; search_depth++) {
         if (actions.stop) {
-            break;
+            return false;
         }
 
-        error_handler.Handle(ErrorHandler::Level::kAll, "search_manager.cpp",  "depth " + std::to_string(search_depth));
+        error_handler.Handle(ErrorHandler::Level::kAll, "search.cpp",  "depth " + std::to_string(search_depth));
         uint64_t num_positions = 0;
         CubeHashMap visited;
 
         if (Search(error_handler, actions, cube, search_depth, num_positions, visited)) {
-            error_handler.Handle(ErrorHandler::Level::kAll, "search_manager.cpp",  "Found solution of depth " + std::to_string(search_depth) + " visiting " + std::to_string(num_positions) + " positions");
+            error_handler.Handle(ErrorHandler::Level::kAll, "search.cpp",  "Found solution of depth " + std::to_string(search_depth) + " visiting " + std::to_string(num_positions) + " positions");
 
             // statistic
             search_depths.push_back(search_depth);
@@ -132,9 +132,10 @@ bool Solve (ErrorHandler error_handler, Actions& actions, Cube& cube, std::vecto
                 actions.Push(Action(Instructions::kRotation, actions.solve.top()));
                 actions.solve.pop();
             }
-            break;
+            return true;
         }
     }
 
     error_handler.Handle(ErrorHandler::Level::kWarning, "search.cpp", "did not find a solution of current position within depth " + std::to_string(max_depth));
+    return false;
 }

@@ -1,3 +1,4 @@
+#include <cstdint>
 #include <iomanip>
 #include <numeric>
 #include <string>
@@ -45,7 +46,7 @@ void ShowSearchStatistic (ErrorHandler error_handler, int depth, size_t num_runs
     statistic << std::setw(indent) << "" << std::left << std::setw(indent) << "total" << std::right
         << std::setw(table_space) << PrecisionDouble(std::reduce(time_durations.begin(), time_durations.end()))
         << std::setw(table_space) << std::reduce(all_num_positions.begin(), all_num_positions.end())
-        << std::setw(table_space) << std::reduce(search_depths.begin(), search_depths.end());
+        << std::setw(table_space) << std::reduce(search_depths.begin(), search_depths.end()) << std::endl;
 
     statistic << std::setw(indent) << "" << std::left << std::setw(indent) << "max" << std::right
         << std::setw(table_space) << PrecisionDouble(*std::max_element(time_durations.begin(), time_durations.end()))
@@ -114,6 +115,8 @@ void SearchManager (ErrorHandler error_handler, Actions& actions, std::mt19937& 
 
             // solve
             error_handler.Handle(ErrorHandler::Level::kAll, "search_manager.cpp",  "Starting search with scrambled position of depth " + std::to_string(depth));
+
+            Solve(error_handler, actions, cube, search_depths, all_num_positions, depth);
 
             auto end_time = std::chrono::system_clock::now();
             std::chrono::duration<double> time_duration = end_time - start_time;

@@ -22,7 +22,4 @@ using CubeHashMap = phmap::flat_hash_map<std::pair<unsigned int, uint64_t>, int,
 bool Search (ErrorHandler error_handler, Actions& actions, Cube& cube, int depth, uint64_t& num_positions, CubeHashMap& visited);
 
 
-void TablebaseInitialisation (ErrorHandler error_handler, int depth);
-
-
-bool Solve (ErrorHandler error_handler, Actions& actions, Cube& cube, uint64_t& num_positions, int max_depth);
+bool Solve (ErrorHandler error_handler, Actions& actions, Cube& cube, std::vector<int>& search_depths, std::vector<uint64_t>& all_num_positions, int max_depth);
