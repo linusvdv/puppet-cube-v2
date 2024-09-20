@@ -89,7 +89,7 @@ void ShowSearchStatistic (ErrorHandler error_handler, int depth, size_t num_runs
 void SearchManager (ErrorHandler error_handler, Actions& actions, std::mt19937& rng) {
     Cube cube;
 
-    const int max_depth = 11;
+    const int max_depth = 22;
     for (int depth = 0; depth <= max_depth; depth++) {
         if (actions.stop) {
             break;
@@ -100,7 +100,7 @@ void SearchManager (ErrorHandler error_handler, Actions& actions, std::mt19937& 
         std::vector<int> search_depths;
         std::vector<uint64_t> all_num_positions;
 
-        const int k_num_runs = 100;
+        const int k_num_runs = 1000;
         for (int run = 0; run < k_num_runs; run++) {
             if (actions.stop) {
                 break;

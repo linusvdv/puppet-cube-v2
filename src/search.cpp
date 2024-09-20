@@ -1,4 +1,7 @@
+#include <algorithm>
+#include <cstddef>
 #include <cstdint>
+#include <iostream>
 #include <queue>
 #include <string>
 #include <vector>
@@ -17,37 +20,71 @@
 std::vector<phmap::flat_hash_set<std::pair<unsigned int, uint64_t>, PositionHash>> tablebase;
 
 
+// check if the position is in the tablebase and return its depth
+int TablebaseDepth (Cube& cube) {
+    for (size_t i = 0; i < tablebase.size(); i++) {
+        if (tablebase[i].contains({cube.GetCornerHash(), cube.GetEdgeHash()})) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+
+// fastest solve
+bool TablebaseSolve (Cube& cube, Actions& actions, int depth, uint64_t& num_positions) {
+    num_positions++;
+    int tb_depth = TablebaseDepth(cube);
+    if (tb_depth >= depth || tb_depth == -1) {
+        return false;
+    }
+    if (tb_depth == 0) {
+        return true;
+    }
+
+    // dfs
+    std::vector<Rotations> legal_rotations = GetLegalRotations(cube);
+    for (Rotations rotation : legal_rotations) {
+        Cube next_cube = Rotate(cube, rotation);
+        if (TablebaseSolve(next_cube, actions, depth-1, num_positions)) {
+            actions.solve.push(rotation);
+            return true;
+        }
+    }
+    return false;
+}
+
+
 // iterative deepening depth first search with heuristic function
-bool Search (ErrorHandler error_handler, Actions& actions, Cube& cube, int depth,
+bool Search (ErrorHandler error_handler, Actions& actions, Cube& cube, int depth, int real_depth,
         uint64_t& num_positions, CubeHashMap& visited) {
     // check if this position has been already visited
     auto saved_depth = visited.find({cube.GetCornerHash(), cube.GetEdgeHash()});
-    if (saved_depth != visited.end() && saved_depth->second >= depth) {
+    if (saved_depth != visited.end() && saved_depth->second >= real_depth) {
         return false;
     }
 
     num_positions++;
 
     // solved positions
-    for (auto& tb : tablebase) {
-        if (tb.contains({cube.GetCornerHash(), cube.GetEdgeHash()})){
-            return true;
-        }
+    if (tablebase.back().contains({cube.GetCornerHash(), cube.GetEdgeHash()})){
+        TablebaseSolve(cube, actions, tablebase.size(), num_positions);
+        return true;
     }
 
     // stop if the solved position cannot be reached in the time
     // TODO: heuristic function
-    if (depth - std::max(cube.GetHeuristicFunction() - int(tablebase.size()-1), 0) <= 0 || actions.stop) {
+    if (real_depth - std::max(cube.GetHeuristicFunction() - int(tablebase.size()-1), 0) < 0 || actions.stop || depth <= 0) {
         return false;
     }
 
-    visited[{cube.GetCornerHash(), cube.GetEdgeHash()}] = depth;
+    visited[{cube.GetCornerHash(), cube.GetEdgeHash()}] = real_depth;
 
     // dfs
     std::vector<Rotations> legal_rotations = GetLegalRotations(cube);
     for (Rotations rotation : legal_rotations) {
         Cube next_cube = Rotate(cube, rotation);
-        if (Search(error_handler, actions, next_cube, depth-1, num_positions, visited)) {
+        if (Search(error_handler, actions, next_cube, depth-1, real_depth-1, num_positions, visited)) {
             actions.solve.push(rotation);
             return true;
         }
@@ -106,12 +143,12 @@ void TablebaseSearch (ErrorHandler error_handler, int depth) {
 }
 
 
-bool Solve (ErrorHandler error_handler, Actions& actions, Cube& cube, std::vector<int>& search_depths, std::vector<uint64_t>& all_num_positions, int max_depth = 1000) {
-    // calculate all start positions until specific depth
-    TablebaseSearch(error_handler, 6);
-
-
+bool Solve (ErrorHandler error_handler, Actions& actions, Cube& cube, std::vector<int>& search_depths, std::vector<uint64_t>& all_num_positions, int max_depth) {
     for (int search_depth = 0; search_depth <= max_depth; search_depth++) {
+        int tablebase_depth = std::min((search_depth+1)/2, 9);
+        // calculate all start positions until specific depth
+        TablebaseSearch(error_handler, tablebase_depth);
+
         if (actions.stop) {
             return false;
         }
@@ -120,11 +157,28 @@ bool Solve (ErrorHandler error_handler, Actions& actions, Cube& cube, std::vecto
         uint64_t num_positions = 0;
         CubeHashMap visited;
 
-        if (Search(error_handler, actions, cube, search_depth, num_positions, visited)) {
+        // already exists in tablebase
+        int tb_depth = TablebaseDepth(cube);
+        if (tb_depth != -1) {
+            TablebaseSolve(cube, actions, tb_depth+1, num_positions);
+
+            // statistic
+            search_depths.push_back(actions.solve.size());
+            all_num_positions.push_back(num_positions);
+
+            // show solution
+            while (!actions.solve.empty()) {
+                actions.Push(Action(Instructions::kRotation, actions.solve.top()));
+                actions.solve.pop();
+            }
+            return true;
+        }
+
+        if (Search(error_handler, actions, cube, search_depth - tablebase_depth, search_depth, num_positions, visited)) {
             error_handler.Handle(ErrorHandler::Level::kAll, "search.cpp",  "Found solution of depth " + std::to_string(search_depth) + " visiting " + std::to_string(num_positions) + " positions");
 
             // statistic
-            search_depths.push_back(search_depth);
+            search_depths.push_back(actions.solve.size());
             all_num_positions.push_back(num_positions);
 
             // show solution
