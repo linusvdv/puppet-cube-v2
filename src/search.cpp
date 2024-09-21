@@ -143,8 +143,26 @@ void TablebaseSearch (ErrorHandler error_handler, int depth) {
 }
 
 
+void SolveCorners (Actions& actions, Cube& cube) {
+    int heuristic = cube.GetHeuristicFunction();
+    for (int i = heuristic-1; i >= 0; i--) {
+        std::vector<Rotations> legal_rotations = GetLegalRotations(cube);
+        for (Rotations rotation : legal_rotations) {
+            Cube next_cube = Rotate(cube, rotation);
+            if (next_cube.GetHeuristicFunction() == i) {
+                cube = next_cube;
+                actions.solve.push(rotation);
+                break;
+            }
+        }
+    }
+}
+
+
 bool Solve (ErrorHandler error_handler, Actions& actions, Cube& cube, uint64_t& num_positions, int max_depth) {
     CubeHashMap visited;
+
+    SolveCorners(actions, cube);
 
     for (int search_depth = tablebase.size()-1; search_depth <= max_depth; search_depth++) {
         if (actions.stop) {
@@ -168,5 +186,6 @@ bool Solve (ErrorHandler error_handler, Actions& actions, Cube& cube, uint64_t& 
     }
 
     error_handler.Handle(ErrorHandler::Level::kWarning, "search.cpp", "did not find a solution of current position within depth " + std::to_string(max_depth));
+    actions.solve = std::stack<Rotations>();
     return false;
 }

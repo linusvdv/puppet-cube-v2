@@ -88,9 +88,9 @@ void ShowSearchStatistic (ErrorHandler error_handler, int depth, size_t num_runs
 
 void SearchManager (ErrorHandler error_handler, Actions& actions, std::mt19937& rng) {
     Cube cube;
-    TablebaseSearch(error_handler, 6);
+    TablebaseSearch(error_handler, 8);
 
-    const int max_depth = 10;
+    const int max_depth = 14;
     for (int depth = max_depth; depth <= max_depth; depth++) {
         if (actions.stop) {
             break;
@@ -101,7 +101,7 @@ void SearchManager (ErrorHandler error_handler, Actions& actions, std::mt19937& 
         std::vector<int> search_depths;
         std::vector<uint64_t> all_num_positions;
 
-        const int k_num_runs = 100000;
+        const int k_num_runs = 1000;
         for (int run = 0; run < k_num_runs; run++) {
             if (actions.stop) {
                 break;
@@ -111,7 +111,7 @@ void SearchManager (ErrorHandler error_handler, Actions& actions, std::mt19937& 
 
             // scramble
             actions.Push(Action(Instructions::kIsScrambling, Rotations()));
-            RandomRotations(cube, actions, depth, rng);
+            RandomRotations(cube, actions, 1000, rng);
             actions.Push(Action(Instructions::kIsSolving, Rotations()));
 
             // solve cube
