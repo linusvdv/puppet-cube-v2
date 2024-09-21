@@ -88,9 +88,10 @@ void ShowSearchStatistic (ErrorHandler error_handler, int depth, size_t num_runs
 
 void SearchManager (ErrorHandler error_handler, Actions& actions, std::mt19937& rng) {
     Cube cube;
+    TablebaseSearch(error_handler, 6);
 
-    const int max_depth = 22;
-    for (int depth = 0; depth <= max_depth; depth++) {
+    const int max_depth = 10;
+    for (int depth = max_depth; depth <= max_depth; depth++) {
         if (actions.stop) {
             break;
         }
@@ -100,7 +101,7 @@ void SearchManager (ErrorHandler error_handler, Actions& actions, std::mt19937& 
         std::vector<int> search_depths;
         std::vector<uint64_t> all_num_positions;
 
-        const int k_num_runs = 1000;
+        const int k_num_runs = 100000;
         for (int run = 0; run < k_num_runs; run++) {
             if (actions.stop) {
                 break;
@@ -113,10 +114,21 @@ void SearchManager (ErrorHandler error_handler, Actions& actions, std::mt19937& 
             RandomRotations(cube, actions, depth, rng);
             actions.Push(Action(Instructions::kIsSolving, Rotations()));
 
-            // solve
-            error_handler.Handle(ErrorHandler::Level::kAll, "search_manager.cpp",  "Starting search with scrambled position of depth " + std::to_string(depth));
+            // solve cube
+            uint64_t num_positions = 0;
+            if (Solve(error_handler, actions, cube, num_positions, depth)){
+                error_handler.Handle(ErrorHandler::Level::kAll, "search.cpp",  "Found solution of depth " + std::to_string(actions.solve.size()) + " visiting " + std::to_string(num_positions) + " positions");
 
-            Solve(error_handler, actions, cube, search_depths, all_num_positions, depth);
+                // statistic
+                search_depths.push_back(actions.solve.size());
+                all_num_positions.push_back(num_positions);
+
+                // show solution
+                while (!actions.solve.empty()) {
+                    actions.Push(Action(Instructions::kRotation, actions.solve.top()));
+                    actions.solve.pop();
+                }
+            }
 
             auto end_time = std::chrono::system_clock::now();
             std::chrono::duration<double> time_duration = end_time - start_time;

@@ -143,49 +143,26 @@ void TablebaseSearch (ErrorHandler error_handler, int depth) {
 }
 
 
-bool Solve (ErrorHandler error_handler, Actions& actions, Cube& cube, std::vector<int>& search_depths, std::vector<uint64_t>& all_num_positions, int max_depth) {
-    for (int search_depth = 0; search_depth <= max_depth; search_depth++) {
-        int tablebase_depth = std::min((search_depth+1)/2, 9);
-        // calculate all start positions until specific depth
-        TablebaseSearch(error_handler, tablebase_depth);
+bool Solve (ErrorHandler error_handler, Actions& actions, Cube& cube, uint64_t& num_positions, int max_depth) {
+    CubeHashMap visited;
 
+    for (int search_depth = tablebase.size()-1; search_depth <= max_depth; search_depth++) {
         if (actions.stop) {
             return false;
         }
 
-        error_handler.Handle(ErrorHandler::Level::kAll, "search.cpp",  "depth " + std::to_string(search_depth));
-        uint64_t num_positions = 0;
-        CubeHashMap visited;
+        // calculate all start positions until specific depth
+        int tablebase_depth = std::min((search_depth+1)/2, 9);
+        TablebaseSearch(error_handler, tablebase_depth);
 
         // already exists in tablebase
         int tb_depth = TablebaseDepth(cube);
         if (tb_depth != -1) {
             TablebaseSolve(cube, actions, tb_depth+1, num_positions);
-
-            // statistic
-            search_depths.push_back(actions.solve.size());
-            all_num_positions.push_back(num_positions);
-
-            // show solution
-            while (!actions.solve.empty()) {
-                actions.Push(Action(Instructions::kRotation, actions.solve.top()));
-                actions.solve.pop();
-            }
             return true;
         }
 
-        if (Search(error_handler, actions, cube, search_depth - tablebase_depth, search_depth, num_positions, visited)) {
-            error_handler.Handle(ErrorHandler::Level::kAll, "search.cpp",  "Found solution of depth " + std::to_string(search_depth) + " visiting " + std::to_string(num_positions) + " positions");
-
-            // statistic
-            search_depths.push_back(actions.solve.size());
-            all_num_positions.push_back(num_positions);
-
-            // show solution
-            while (!actions.solve.empty()) {
-                actions.Push(Action(Instructions::kRotation, actions.solve.top()));
-                actions.solve.pop();
-            }
+        if (Search(error_handler, actions, cube, search_depth - (tablebase.size()-1), search_depth, num_positions, visited)) {
             return true;
         }
     }
