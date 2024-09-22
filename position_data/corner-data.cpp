@@ -365,7 +365,7 @@ int main () {
     std::cout << num_positions << std::endl;
 
     // write to file
-    if (std::FILE* file = std::fopen("legal_moves.bin", "wb")) {
+    if (std::FILE* file = std::fopen("corner-data.bin", "wb")) {
         std::fwrite(positions.data(), sizeof(positions[0]), positions.size(), file);
         std::fclose(file);
     }

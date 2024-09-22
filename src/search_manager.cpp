@@ -88,9 +88,9 @@ void ShowSearchStatistic (ErrorHandler error_handler, int depth, size_t num_runs
 
 void SearchManager (ErrorHandler error_handler, Actions& actions, std::mt19937& rng) {
     Cube cube;
-    TablebaseSearch(error_handler, 8);
+    TablebaseSearch(error_handler, 7);
 
-    const int max_depth = 14;
+    const int max_depth = 13;
     for (int depth = max_depth; depth <= max_depth; depth++) {
         if (actions.stop) {
             break;

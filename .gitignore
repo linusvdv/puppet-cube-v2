@@ -34,3 +34,5 @@
 build
 run
 Makefile
+position_data/corner-data
+position_data/corner-data.bin

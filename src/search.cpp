@@ -170,7 +170,7 @@ bool Solve (ErrorHandler error_handler, Actions& actions, Cube& cube, uint64_t& 
         }
 
         // calculate all start positions until specific depth
-        int tablebase_depth = std::min((search_depth+1)/2, 9);
+        int tablebase_depth = std::min((search_depth+1)/2, 7);
         TablebaseSearch(error_handler, tablebase_depth);
 
         // already exists in tablebase

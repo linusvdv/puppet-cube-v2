@@ -3,9 +3,9 @@
 ## Pre compilation of legal-move-generation
 time: ca. 20 sec.
 ```bash
-cd legal-move-generation/
-g++ -Wall -Wextra -g3 -std=c++20 -O3 main.cpp -o legal-move-generation
-./legal-move-generation
+cd position_data/
+g++ -Wall -Wextra -g3 -std=c++20 -O3 corner-data.cpp -o corner-data
+./corner-data
 cd ../
 ```
 

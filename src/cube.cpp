@@ -17,7 +17,7 @@ void InitializePositionData (ErrorHandler& error_handler, Setting& settings) {
     position_data_table = std::vector<uint16_t>(kNumPositions, 0);
 
     // get file location
-    std::string legal_move_path = "legal-move-generation/legal_moves.bin";
+    std::string legal_move_path = "position_data/corner-data.bin";
     legal_move_path.insert(0, settings.rootPath);
 
     // read file
