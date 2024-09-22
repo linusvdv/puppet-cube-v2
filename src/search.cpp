@@ -80,11 +80,17 @@ bool Search (ErrorHandler error_handler, Actions& actions, Cube& cube, int depth
 
     visited[{cube.GetCornerHash(), cube.GetEdgeHash()}] = real_depth;
 
+    int heuristic = cube.GetHeuristicFunction();
     // dfs
     std::vector<Rotations> legal_rotations = GetLegalRotations(cube);
     for (Rotations rotation : legal_rotations) {
         Cube next_cube = Rotate(cube, rotation);
-        if (Search(error_handler, actions, next_cube, depth-1, real_depth-1, num_positions, visited)) {
+        int new_heuristic = next_cube.GetHeuristicFunction();
+        int decrease = 1;
+        if (new_heuristic > heuristic) {
+            decrease++;
+        }
+        if (Search(error_handler, actions, next_cube, depth-decrease, real_depth-1, num_positions, visited)) {
             actions.solve.push(rotation);
             return true;
         }

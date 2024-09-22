@@ -90,7 +90,7 @@ void SearchManager (ErrorHandler error_handler, Actions& actions, std::mt19937& 
     Cube cube;
     TablebaseSearch(error_handler, 7);
 
-    const int max_depth = 13;
+    const int max_depth = 15;
     for (int depth = max_depth; depth <= max_depth; depth++) {
         if (actions.stop) {
             break;
