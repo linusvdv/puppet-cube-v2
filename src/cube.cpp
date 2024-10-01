@@ -2,6 +2,7 @@
 #include <bit>
 #include <cassert>
 #include <cstdint>
+#include <iostream>
 #include <vector>
 
 #include "cube.h"
@@ -10,6 +11,7 @@
 
 
 std::vector<uint16_t> position_data_table;
+std::vector<uint8_t> edge_data_table;
 
 
 // initialize position data
@@ -17,21 +19,44 @@ void InitializePositionData (ErrorHandler& error_handler, Setting& settings) {
     position_data_table = std::vector<uint16_t>(kNumPositions, 0);
 
     // get file location
-    std::string legal_move_path = "position_data/corner-data.bin";
-    legal_move_path.insert(0, settings.rootPath);
+    std::string corner_data_path = "position_data/corner-data.bin";
+    corner_data_path.insert(0, settings.rootPath);
 
     // read file
-    if (std::FILE* file = std::fopen(legal_move_path.c_str(), "rb")) {
+    if (std::FILE* file = std::fopen(corner_data_path.c_str(), "rb")) {
         if (std::fread(position_data_table.data(), sizeof(position_data_table[0]), position_data_table.size(), file) != kNumPositions) {
-            error_handler.Handle(ErrorHandler::kError, "cube.cpp", "not all positions found in legal_moves.bin file");
+            error_handler.Handle(ErrorHandler::kError, "cube.cpp", "not all positions found in corner-data.bin file");
         }
         std::fclose(file);
     }
     else {
-        error_handler.Handle(ErrorHandler::kCriticalError, "cube.cpp", "legal_moves.bin file not found");
+        error_handler.Handle(ErrorHandler::kCriticalError, "cube.cpp", "corner-data.bin file not found");
     }
 
-    error_handler.Handle(ErrorHandler::kInfo, "cube.cpp", "position data initialized");
+    error_handler.Handle(ErrorHandler::kInfo, "cube.cpp", "corner data initialized");
+}
+
+
+// initialize position data
+void InitializeEdgeData (ErrorHandler& error_handler, Setting& settings) {
+    edge_data_table = std::vector<uint8_t>(kNumEdgePositions, 0);
+
+    // get file location
+    std::string edge_data_path = "position_data/edge-data.bin";
+    edge_data_path.insert(0, settings.rootPath);
+
+    // read file
+    if (std::FILE* file = std::fopen(edge_data_path.c_str(), "rb")) {
+        if (std::fread(edge_data_table.data(), sizeof(edge_data_table[0]), edge_data_table.size(), file) != kNumEdgePositions) {
+            error_handler.Handle(ErrorHandler::kError, "cube.cpp", "not all positions found in edge-data.bin file");
+        }
+        std::fclose(file);
+    }
+    else {
+        error_handler.Handle(ErrorHandler::kCriticalError, "cube.cpp", "edge-data.bin file not found");
+    }
+
+    error_handler.Handle(ErrorHandler::kInfo, "cube.cpp", "edge data initialized");
 }
 
 
@@ -200,6 +225,42 @@ void DecodeEdgesHash (Cube& cube, uint64_t hash) {
             }
         }
     }
+}
+
+
+uint8_t Cube::GetEdgeHeuristic () {
+    if (calculated_edge_heuristic_) {
+        return edge_heuristic_;
+    }
+    calculated_edge_heuristic_ = true;
+
+    uint64_t hash = 0;
+    static const int kNumPieces = 6; // only half of the pieces are important
+
+    // convert edges to 12!/6!*2^6
+    // this is possible because all indices only appear once
+    std::array<bool, kNumEdges> accessed;
+    accessed.fill(false);
+
+    // position
+    for (unsigned int i = 0; i < kNumPieces; i++) {
+        hash *= kNumEdges - i;
+        unsigned int edge_index = 0;
+        for (int j = 0; j < edges[i].position; j++) {
+            edge_index += uint32_t(!accessed[j]);
+        }
+        accessed[edges[i].position] = true;
+        hash += edge_index;
+    }
+
+    // orientation has only one bit
+    for (unsigned int i = 0; i < kNumPieces; i++) {
+        hash <<= 1;
+        hash |= uint64_t(edges[i].orientation);
+    }
+
+    edge_heuristic_ = edge_data_table[hash];
+    return edge_heuristic_;
 }
 
 

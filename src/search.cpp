@@ -80,16 +80,18 @@ bool Search (ErrorHandler error_handler, Actions& actions, Cube& cube, int depth
 
     visited[{cube.GetCornerHash(), cube.GetEdgeHash()}] = real_depth;
 
-    int heuristic = cube.GetHeuristicFunction();
+    int heuristic = cube.GetEdgeHeuristic();
     // dfs
     std::vector<Rotations> legal_rotations = GetLegalRotations(cube);
     for (Rotations rotation : legal_rotations) {
         Cube next_cube = Rotate(cube, rotation);
-        int new_heuristic = next_cube.GetHeuristicFunction();
+
+        int new_heuristic = next_cube.GetEdgeHeuristic();
         int decrease = 1;
         if (new_heuristic > heuristic) {
             decrease++;
         }
+
         if (Search(error_handler, actions, next_cube, depth-decrease, real_depth-1, num_positions, visited)) {
             actions.solve.push(rotation);
             return true;
@@ -191,7 +193,7 @@ bool Solve (ErrorHandler error_handler, Actions& actions, Cube& cube, uint64_t& 
         }
     }
 
-    error_handler.Handle(ErrorHandler::Level::kWarning, "search.cpp", "did not find a solution of current position within depth " + std::to_string(max_depth));
+    error_handler.Handle(ErrorHandler::Level::kWarning, "search.cpp", "did not find a solution of current position within depth " + std::to_string(max_depth) + " searching " + std::to_string(num_positions) + " positions");
     actions.solve = std::stack<Rotations>();
     return false;
 }

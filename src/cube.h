@@ -10,8 +10,11 @@
 // read file of legal moves and huristic funciton
 void InitializePositionData (ErrorHandler& error_handler, Setting& settings);
 
+void InitializeEdgeData (ErrorHandler& error_handler, Setting& settings);
+
 
 constexpr int kNumPositions = 88179840; // 8! * 3^7
+constexpr int kNumEdgePositions = 42577920; // fac(12) / fac(6) * 2^6
 constexpr int kEightFac = 40320; // 8!
 
 
@@ -61,6 +64,7 @@ public:
         calculated_corner_hash_ = false;
         got_position_data = false;
         calculated_edge_hash_ = false;
+        calculated_edge_heuristic_ = false;
     }
 
     // buffer legal move data after lookup
@@ -77,12 +81,17 @@ public:
         return GetPositionData() >> kHeuristicFunctionOffset;
     }
 
+    uint8_t GetEdgeHeuristic ();
+
+
 private:
     // buffer hash
     bool calculated_corner_hash_ = false;
     unsigned int corner_hash_;
     bool calculated_edge_hash_ = false;
     uint64_t edge_hash_;
+    bool calculated_edge_heuristic_ = false;
+    uint8_t edge_heuristic_;
 };
 
 

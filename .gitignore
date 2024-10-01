@@ -34,5 +34,7 @@
 build
 run
 Makefile
-position_data/corner-data
-position_data/corner-data.bin
+
+# ignore all files in position_data not ending in .cpp
+position_data
+!position_data/*.cpp

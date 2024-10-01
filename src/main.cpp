@@ -38,6 +38,7 @@ int main (int argc, char *argv[]) {
 
     // load legal moves from file
     InitializePositionData(error_handler, settings);
+    InitializeEdgeData(error_handler, settings);
 
     // start the search manager
     SearchManager(error_handler, actions, rng);
