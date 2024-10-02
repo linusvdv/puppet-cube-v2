@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <cstdint>
 #include <iomanip>
 #include <numeric>
@@ -88,7 +89,6 @@ void ShowSearchStatistic (ErrorHandler error_handler, int depth, size_t num_runs
 
 void SearchManager (ErrorHandler error_handler, Actions& actions, std::mt19937& rng) {
     Cube cube;
-    TablebaseSearch(error_handler, 7);
 
     const int max_depth = 15;
     for (int depth = max_depth; depth <= max_depth; depth++) {
@@ -116,18 +116,17 @@ void SearchManager (ErrorHandler error_handler, Actions& actions, std::mt19937& 
 
             // solve cube
             uint64_t num_positions = 0;
-            if (Solve(error_handler, actions, cube, num_positions, depth)){
-                error_handler.Handle(ErrorHandler::Level::kAll, "search.cpp",  "Found solution of depth " + std::to_string(actions.solve.size()) + " visiting " + std::to_string(num_positions) + " positions");
+            Search(actions, cube, num_positions);
+            error_handler.Handle(ErrorHandler::Level::kAll, "search.cpp",  "Found solution of depth " + std::to_string(actions.solve.size()) + " visiting " + std::to_string(num_positions) + " positions");
 
-                // statistic
-                search_depths.push_back(actions.solve.size());
-                all_num_positions.push_back(num_positions);
+            // statistic
+            search_depths.push_back(actions.solve.size());
+            all_num_positions.push_back(num_positions);
 
-                // show solution
-                while (!actions.solve.empty()) {
-                    actions.Push(Action(Instructions::kRotation, actions.solve.top()));
-                    actions.solve.pop();
-                }
+            // show solution
+            while (!actions.solve.empty()) {
+                actions.Push(Action(Instructions::kRotation, actions.solve.top()));
+                actions.solve.pop();
             }
 
             auto end_time = std::chrono::system_clock::now();
