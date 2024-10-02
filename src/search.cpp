@@ -28,10 +28,13 @@ struct CubeSearch {
     unsigned int corner_hash;
     uint64_t edge_hash;
 
+    int depth;
+
+    static constexpr int kDepthWeight = 1;
     bool operator<(const CubeSearch& cube_search) const {
         // sort priority_queue smaller to larger
-        if (heuristic != cube_search.heuristic) {
-            return heuristic > cube_search.heuristic;
+        if (kDepthWeight*heuristic+depth != kDepthWeight*cube_search.heuristic+cube_search.depth) {
+            return kDepthWeight*heuristic+depth > kDepthWeight*cube_search.heuristic+cube_search.depth;
         }
         if (corner_hash != cube_search.corner_hash) {
             return corner_hash > cube_search.corner_hash;
@@ -41,11 +44,12 @@ struct CubeSearch {
 };
 
 
-CubeSearch GetCubeSearch (Cube& cube) {
+CubeSearch GetCubeSearch (Cube& cube, int depth) {
     CubeSearch cube_search;
     cube_search.corner_hash = cube.GetCornerHash();
     cube_search.edge_hash = cube.GetEdgeHash();
     cube_search.heuristic = cube.GetHeuristicFunction() + cube.GetEdgeHeuristic();
+    cube_search.depth = depth;
     return cube_search;
 }
 
@@ -54,7 +58,7 @@ void Search (Actions& actions, Cube start_cube, uint64_t& num_positions) {
     phmap::flat_hash_map<CubeMapVisited, Rotations> visited;
 
     std::priority_queue<CubeSearch> search_queue;
-    search_queue.push(GetCubeSearch(start_cube));
+    search_queue.push(GetCubeSearch(start_cube, 0));
     visited.insert({{start_cube.GetCornerHash(), start_cube.GetEdgeHash()}, Rotations(-1)});
 
     while (!search_queue.empty()) {
@@ -75,7 +79,7 @@ void Search (Actions& actions, Cube start_cube, uint64_t& num_positions) {
                 continue;
             }
 
-            search_queue.push(GetCubeSearch(next_cube));
+            search_queue.push(GetCubeSearch(next_cube, cube_search.depth+1));
             visited.insert({{next_cube.GetCornerHash(), next_cube.GetEdgeHash()}, rotation});
         }
     }
