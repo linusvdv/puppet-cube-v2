@@ -234,6 +234,7 @@ uint8_t Cube::GetEdgeHeuristic () {
     }
     calculated_edge_heuristic_ = true;
 
+    // this is for the first half - 6 pieces
     uint64_t hash = 0;
     static const int kNumPieces = 6; // only half of the pieces are important
 
@@ -260,6 +261,32 @@ uint8_t Cube::GetEdgeHeuristic () {
     }
 
     edge_heuristic_ = edge_data_table[hash];
+
+
+    // second half
+    hash = 0;
+    accessed.fill(false);
+
+    // position
+    for (unsigned int i = kNumEdges-1; i >= kNumPieces; i--) {
+        hash *= i;
+        unsigned int edge_index = 0;
+        for (int j = 0; j < edges[i].position; j++) {
+            edge_index += uint32_t(!accessed[j]);
+        }
+        accessed[edges[i].position] = true;
+        hash += edge_index;
+    }
+
+    // orientation has only one bit
+    for (unsigned int i = kNumEdges-1; i >= kNumPieces; i--) {
+        hash <<= 1;
+        hash |= uint64_t(edges[i].orientation);
+    }
+
+    // NOTE: this adds the two functions together
+    edge_heuristic_ += edge_data_table[hash];
+
     return edge_heuristic_;
 }
 
