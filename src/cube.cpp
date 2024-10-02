@@ -163,15 +163,14 @@ uint64_t Cube::GetEdgeHash () {
 
     uint64_t hash = 0;
 
-    // convert edges to 12!/2
-    // this is possible because all indices only appear once
+    // convert edges to 12!
     std::array<bool, kNumEdges> accessed;
     accessed.fill(false);
 
     // position
     // this conversion could ignore the two last edges 
     // for decoding from the position the last two edges are easily stored
-    for (unsigned int i = 0; i < kNumEdges - 1; i++) {
+    for (unsigned int i = 0; i < kNumEdges; i++) {
         hash *= kNumEdges - i;
         unsigned int edge_index = 0;
         for (int j = 0; j < edges[i].position; j++) {
@@ -182,7 +181,7 @@ uint64_t Cube::GetEdgeHash () {
     }
 
     // orientation has only one bit
-    for (unsigned int i = 0; i < kNumEdges - 1; i++) {
+    for (unsigned int i = 0; i < kNumEdges; i++) {
         hash <<= 1;
         hash |= edges[i].orientation & 1;
     }
@@ -195,7 +194,7 @@ uint64_t Cube::GetEdgeHash () {
 // decode edges
 void DecodeEdgesHash (Cube& cube, uint64_t hash) {
     // decode orientation
-    for (int i = Cube::kNumEdges-2; i >= 0; i--) {
+    for (int i = Cube::kNumEdges-1; i >= 0; i--) {
         cube.edges[i].orientation = hash & 1;
         hash >>= 1;
     }
@@ -269,13 +268,13 @@ uint8_t Cube::GetEdgeHeuristic () {
 
     // position
     for (unsigned int i = kNumEdges-1; i >= kNumPieces; i--) {
-        hash *= i;
+        hash *= i + 1;
         unsigned int edge_index = 0;
         for (int j = 0; j < edges[i].position; j++) {
             edge_index += uint32_t(!accessed[j]);
         }
         accessed[edges[i].position] = true;
-        hash += edge_index;
+        hash += i - edge_index;
     }
 
     // orientation has only one bit
