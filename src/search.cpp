@@ -55,11 +55,11 @@ CubeSearch GetCubeSearch (Cube& cube, int depth) {
 
 
 void Search (Actions& actions, Cube start_cube, uint64_t& num_positions) {
-    phmap::flat_hash_map<CubeMapVisited, Rotations> visited;
+    phmap::flat_hash_map<CubeMapVisited, std::pair<int, Rotations>> visited;
 
     std::priority_queue<CubeSearch> search_queue;
     search_queue.push(GetCubeSearch(start_cube, 0));
-    visited.insert({{start_cube.GetCornerHash(), start_cube.GetEdgeHash()}, Rotations(-1)});
+    visited.insert({{start_cube.GetCornerHash(), start_cube.GetEdgeHash()}, {0, Rotations(-1)}});
 
     while (!search_queue.empty()) {
         CubeSearch cube_search = search_queue.top();
@@ -67,7 +67,7 @@ void Search (Actions& actions, Cube start_cube, uint64_t& num_positions) {
         num_positions++;
 
         // solved cube
-        if (cube_search.heuristic == 0) {
+        if (num_positions >= 4000000) {
             break;
         }
 
@@ -76,17 +76,19 @@ void Search (Actions& actions, Cube start_cube, uint64_t& num_positions) {
         for (Rotations rotation : GetLegalRotations(cube)) {
             Cube next_cube = Rotate(cube, rotation);
             if (visited.contains({next_cube.GetCornerHash(), next_cube.GetEdgeHash()})) {
-                continue;
+                if (visited[{next_cube.GetCornerHash(), next_cube.GetEdgeHash()}].first <= cube_search.depth+1) {
+                    continue;
+                }
             }
 
             search_queue.push(GetCubeSearch(next_cube, cube_search.depth+1));
-            visited.insert({{next_cube.GetCornerHash(), next_cube.GetEdgeHash()}, rotation});
+            visited[{next_cube.GetCornerHash(), next_cube.GetEdgeHash()}] = {cube_search.depth+1, rotation};
         }
     }
 
     Cube cube = Cube();
     while (true) {
-        Rotations rotation = visited[{cube.GetCornerHash(), cube.GetEdgeHash()}];
+        Rotations rotation = visited[{cube.GetCornerHash(), cube.GetEdgeHash()}].second;
         if (rotation == Rotations(-1)) {
             return;
         }
