@@ -116,7 +116,7 @@ void SearchManager (ErrorHandler error_handler, Actions& actions, std::mt19937& 
 
             // solve cube
             uint64_t num_positions = 0;
-            Search(actions, cube, num_positions);
+            Search(error_handler, actions, cube, num_positions);
             error_handler.Handle(ErrorHandler::Level::kAll, "search.cpp",  "Found solution of depth " + std::to_string(actions.solve.size()) + " visiting " + std::to_string(num_positions) + " positions");
 
             // statistic

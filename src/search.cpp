@@ -1,11 +1,13 @@
 #include <cstdint>
 #include <iostream>
 #include <queue>
+#include <string>
 #include <parallel_hashmap/phmap.h>
 
 
 #include "actions.h"
 #include "cube.h"
+#include "error_handler.h"
 #include "rotation.h"
 
 
@@ -54,7 +56,7 @@ CubeSearch GetCubeSearch (Cube& cube, int depth) {
 }
 
 
-void Search (Actions& actions, Cube start_cube, uint64_t& num_positions) {
+void Search (ErrorHandler error_handler, Actions& actions, Cube start_cube, uint64_t& num_positions) {
     phmap::flat_hash_map<CubeMapVisited, std::pair<int, Rotations>> visited;
 
     std::priority_queue<CubeSearch> search_queue;
@@ -84,6 +86,10 @@ void Search (Actions& actions, Cube start_cube, uint64_t& num_positions) {
             search_queue.push(GetCubeSearch(next_cube, cube_search.depth+1));
             visited[{next_cube.GetCornerHash(), next_cube.GetEdgeHash()}] = {cube_search.depth+1, rotation};
         }
+    }
+    if (!visited.contains({0, 0})) {
+        error_handler.Handle(ErrorHandler::Level::kWarning, "search.cpp", "Did not find a solution within " + std::to_string(num_positions) + " positions");
+        return;
     }
 
     Cube cube = Cube();
