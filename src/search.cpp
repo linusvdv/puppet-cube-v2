@@ -9,6 +9,7 @@
 #include "cube.h"
 #include "error_handler.h"
 #include "rotation.h"
+#include "tablebase.h"
 
 
 struct CubeMapVisited {
@@ -56,21 +57,30 @@ CubeSearch GetCubeSearch (Cube& cube, int depth) {
 }
 
 
-void Search (ErrorHandler error_handler, Actions& actions, Cube start_cube, uint64_t& num_positions) {
-    phmap::flat_hash_map<CubeMapVisited, std::pair<int, Rotations>> visited;
-
+bool Search (phmap::flat_hash_map<CubeMapVisited, std::pair<int, Rotations>>& visited, Cube start_cube, CubeSearch& tablebase_cube, uint64_t& num_positions) {
     std::priority_queue<CubeSearch> search_queue;
     search_queue.push(GetCubeSearch(start_cube, 0));
     visited.insert({{start_cube.GetCornerHash(), start_cube.GetEdgeHash()}, {0, Rotations(-1)}});
 
+    const int not_found_sol = 1e9;
+    int max_depth = not_found_sol;
     while (!search_queue.empty()) {
         CubeSearch cube_search = search_queue.top();
         search_queue.pop();
         num_positions++;
 
-        // solved cube
-        if (num_positions >= 4000000) {
-            break;
+        if (cube_search.depth >= max_depth) {
+            continue;
+        }
+
+        // cube in tablebase
+        if (TablebaseContainsOuter(cube_search.corner_hash, cube_search.edge_hash)) {
+            max_depth = cube_search.depth;
+            tablebase_cube = cube_search;
+        }
+
+        if (num_positions >= 1000000 && max_depth != not_found_sol) {
+            return true;
         }
 
         // search next cubes
@@ -87,16 +97,34 @@ void Search (ErrorHandler error_handler, Actions& actions, Cube start_cube, uint
             visited[{next_cube.GetCornerHash(), next_cube.GetEdgeHash()}] = {cube_search.depth+1, rotation};
         }
     }
-    if (!visited.contains({0, 0})) {
-        error_handler.Handle(ErrorHandler::Level::kWarning, "search.cpp", "Did not find a solution within " + std::to_string(num_positions) + " positions");
-        return;
+
+    // this does at the moment not happen
+    return false;
+}
+
+
+bool Solve (ErrorHandler error_handler, Actions& actions, Cube start_cube, uint64_t& num_positions) {
+    phmap::flat_hash_map<CubeMapVisited, std::pair<int, Rotations>> visited;
+
+    int tb_depth = TablebaseDepth(start_cube);
+    if (tb_depth != -1) {
+        TablebaseSolve(start_cube, actions, tb_depth+1, num_positions);
+        return true;
     }
 
-    Cube cube = Cube();
+    CubeSearch tablebase_cube;
+    if (!Search(visited, start_cube, tablebase_cube, num_positions)) {
+        error_handler.Handle(ErrorHandler::Level::kWarning, "search.cpp", "Did not find a solution within " + std::to_string(num_positions) + " positions");
+        return false;
+    }
+
+    Cube cube = DecodeHash(tablebase_cube.corner_hash, tablebase_cube.edge_hash);
+    TablebaseSolve(cube, actions, TablebaseDepth(cube)+1, num_positions);
+
     while (true) {
         Rotations rotation = visited[{cube.GetCornerHash(), cube.GetEdgeHash()}].second;
         if (rotation == Rotations(-1)) {
-            return;
+            return true;
         }
         actions.solve.push(rotation);
 
