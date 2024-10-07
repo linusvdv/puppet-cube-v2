@@ -1,6 +1,4 @@
 #include <cstdint>
-#include <fstream>
-#include <iostream>
 #include <queue>
 #include <string>
 #include <parallel_hashmap/phmap.h>
@@ -52,7 +50,7 @@ CubeSearch GetCubeSearch (Cube& cube, int depth) {
     CubeSearch cube_search;
     cube_search.corner_hash = cube.GetCornerHash();
     cube_search.edge_hash = cube.GetEdgeHash();
-    cube_search.heuristic = cube.GetHeuristicFunction() + cube.GetEdgeHeuristic();
+    cube_search.heuristic = cube.GetHeuristicFunction() + cube.GetEdgeHeuristic1() + cube.GetEdgeHeuristic2();
     cube_search.depth = depth;
     return cube_search;
 }
@@ -70,7 +68,9 @@ bool Search (ErrorHandler error_handler, phmap::flat_hash_map<CubeMapVisited, st
         search_queue.pop();
         num_positions++;
 
-        if (cube_search.depth >= max_depth) {
+        // search next cubes
+        Cube cube = DecodeHash(cube_search.corner_hash, cube_search.edge_hash);
+        if (cube_search.depth + (std::max(std::max({int(cube.GetHeuristicFunction()), int(cube.GetEdgeHeuristic1()), int(cube.GetEdgeHeuristic2())}) - GetTablebaseDepth(), 0)) >= max_depth) {
             continue;
         }
 
@@ -90,8 +90,6 @@ bool Search (ErrorHandler error_handler, phmap::flat_hash_map<CubeMapVisited, st
             continue;
         }
 
-        // search next cubes
-        Cube cube = DecodeHash(cube_search.corner_hash, cube_search.edge_hash);
         for (Rotations rotation : GetLegalRotations(cube)) {
             Cube next_cube = Rotate(cube, rotation);
             auto visited_it = visited.find({next_cube.GetCornerHash(), next_cube.GetEdgeHash()});

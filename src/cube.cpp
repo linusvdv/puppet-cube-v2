@@ -227,11 +227,11 @@ void DecodeEdgesHash (Cube& cube, uint64_t hash) {
 }
 
 
-uint8_t Cube::GetEdgeHeuristic () {
-    if (calculated_edge_heuristic_) {
-        return edge_heuristic_;
+uint8_t Cube::GetEdgeHeuristic1 () {
+    if (calculated_edge_heuristic1_) {
+        return edge_heuristic1_;
     }
-    calculated_edge_heuristic_ = true;
+    calculated_edge_heuristic1_ = true;
 
     // this is for the first half - 6 pieces
     uint64_t hash = 0;
@@ -259,11 +259,22 @@ uint8_t Cube::GetEdgeHeuristic () {
         hash |= uint64_t(edges[i].orientation);
     }
 
-    edge_heuristic_ = edge_data_table[hash];
+    edge_heuristic1_ = edge_data_table[hash];
+    return edge_heuristic1_;
+}
 
 
+uint8_t Cube::GetEdgeHeuristic2 () {
+    if (calculated_edge_heuristic2_) {
+        return edge_heuristic2_;
+    }
+    calculated_edge_heuristic2_ = true;
+
+    static const int kNumPieces = 6; // only half of the pieces are important
+    //
     // second half
-    hash = 0;
+    uint64_t hash = 0;
+    std::array<bool, kNumEdges> accessed;
     accessed.fill(false);
 
     // position
@@ -284,9 +295,8 @@ uint8_t Cube::GetEdgeHeuristic () {
     }
 
     // NOTE: this adds the two functions together
-    edge_heuristic_ += edge_data_table[hash];
-
-    return edge_heuristic_;
+    edge_heuristic2_ = edge_data_table[hash];
+    return edge_heuristic2_;
 }
 
 

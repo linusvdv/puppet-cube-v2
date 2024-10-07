@@ -64,7 +64,8 @@ public:
         calculated_corner_hash_ = false;
         got_position_data = false;
         calculated_edge_hash_ = false;
-        calculated_edge_heuristic_ = false;
+        calculated_edge_heuristic1_ = false;
+        calculated_edge_heuristic2_ = false;
     }
 
     // buffer legal move data after lookup
@@ -81,7 +82,8 @@ public:
         return GetPositionData() >> kHeuristicFunctionOffset;
     }
 
-    uint8_t GetEdgeHeuristic ();
+    uint8_t GetEdgeHeuristic1 ();
+    uint8_t GetEdgeHeuristic2 ();
 
 
 private:
@@ -90,8 +92,10 @@ private:
     unsigned int corner_hash_;
     bool calculated_edge_hash_ = false;
     uint64_t edge_hash_;
-    bool calculated_edge_heuristic_ = false;
-    uint8_t edge_heuristic_;
+    bool calculated_edge_heuristic1_ = false;
+    uint8_t edge_heuristic1_;
+    bool calculated_edge_heuristic2_ = false;
+    uint8_t edge_heuristic2_;
 };
 
 
