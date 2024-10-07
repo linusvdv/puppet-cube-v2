@@ -1,5 +1,4 @@
 #include <cstdint>
-#include <iostream>
 #include <queue>
 #include <string>
 #include <parallel_hashmap/phmap.h>
@@ -83,14 +82,18 @@ bool Search (phmap::flat_hash_map<CubeMapVisited, std::pair<int, Rotations>>& vi
             return true;
         }
 
+        auto visited_it = visited.find({cube_search.corner_hash, cube_search.edge_hash});
+        if (visited_it != visited.end() && visited_it->second.first < cube_search.depth) {
+            continue;
+        }
+
         // search next cubes
         Cube cube = DecodeHash(cube_search.corner_hash, cube_search.edge_hash);
         for (Rotations rotation : GetLegalRotations(cube)) {
             Cube next_cube = Rotate(cube, rotation);
-            if (visited.contains({next_cube.GetCornerHash(), next_cube.GetEdgeHash()})) {
-                if (visited[{next_cube.GetCornerHash(), next_cube.GetEdgeHash()}].first <= cube_search.depth+1) {
-                    continue;
-                }
+            auto visited_it = visited.find({next_cube.GetCornerHash(), next_cube.GetEdgeHash()});
+            if (visited_it != visited.end() && visited_it->second.first <= cube_search.depth+1) {
+                continue;
             }
 
             search_queue.push(GetCubeSearch(next_cube, cube_search.depth+1));
