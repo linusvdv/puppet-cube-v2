@@ -10,7 +10,8 @@ public:
         kError,
         kWarning,
         kInfo,
-        kAll
+        kAll,
+        kExtra
     };
 
     Level error_level;

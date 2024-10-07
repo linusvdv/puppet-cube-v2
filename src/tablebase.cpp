@@ -109,3 +109,8 @@ void TablebaseSearch (ErrorHandler error_handler, int depth) {
 
     error_handler.Handle(ErrorHandler::Level::kInfo, "search.cpp", "set tablebase size to: " + std::to_string(tablebase.size()-1) + " in " + std::to_string(time_duration.count()) + " seconds");
 }
+
+
+int GetTablebaseDepth () {
+    return tablebase.size()-1;
+}

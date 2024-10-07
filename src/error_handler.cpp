@@ -11,11 +11,12 @@
 #include "error_handler.h"
 
 
-const std::array<int, 5> kColor = {
+const std::array<int, 6> kColor = {
     41,
     31,
     33,
     32,
+    0,
     0
 };
 
@@ -45,6 +46,9 @@ void ErrorHandler::Handle(Level level, std::string file, std::string message) co
             std::cout << "INFO: ";
             break;
         case Level::kAll:
+            break;
+        case Level::kExtra:
+            std::cout << "Extra: ";
             break;
     }
 

@@ -44,6 +44,9 @@ Setting::Setting(ErrorHandler& error_handler, int argc, char *argv[]) {
             else if (error_level == "all") {
                 error_handler.SetErrorLevel(ErrorHandler::Level::kAll);
             }
+            else if (error_level == "extra") {
+                error_handler.SetErrorLevel(ErrorHandler::Level::kExtra);
+            }
             else {
                 error_handler.Handle(ErrorHandler::Level::kWarning, "settings.cpp", "error level type " + error_level + " not found");
             }

@@ -13,3 +13,6 @@ bool TablebaseSolve (Cube& cube, Actions& actions, int depth, uint64_t& num_posi
 
 
 void TablebaseSearch (ErrorHandler error_handler, int depth);
+
+
+int GetTablebaseDepth ();

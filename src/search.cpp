@@ -1,4 +1,6 @@
 #include <cstdint>
+#include <fstream>
+#include <iostream>
 #include <queue>
 #include <string>
 #include <parallel_hashmap/phmap.h>
@@ -56,7 +58,7 @@ CubeSearch GetCubeSearch (Cube& cube, int depth) {
 }
 
 
-bool Search (phmap::flat_hash_map<CubeMapVisited, std::pair<int, Rotations>>& visited, Cube start_cube, CubeSearch& tablebase_cube, uint64_t& num_positions) {
+bool Search (ErrorHandler error_handler, phmap::flat_hash_map<CubeMapVisited, std::pair<int, Rotations>>& visited, Cube start_cube, CubeSearch& tablebase_cube, uint64_t& num_positions) {
     std::priority_queue<CubeSearch> search_queue;
     search_queue.push(GetCubeSearch(start_cube, 0));
     visited.insert({{start_cube.GetCornerHash(), start_cube.GetEdgeHash()}, {0, Rotations(-1)}});
@@ -76,9 +78,10 @@ bool Search (phmap::flat_hash_map<CubeMapVisited, std::pair<int, Rotations>>& vi
         if (TablebaseContainsOuter(cube_search.corner_hash, cube_search.edge_hash)) {
             max_depth = cube_search.depth;
             tablebase_cube = cube_search;
+            error_handler.Handle(ErrorHandler::Level::kExtra, "search.cpp", "Found solution of depth " + std::to_string(cube_search.depth + GetTablebaseDepth()) + " visiting " + std::to_string(num_positions) + " positions");
         }
 
-        if (num_positions >= 1000000 && max_depth != not_found_sol) {
+        if (num_positions >= 7000000 && max_depth != not_found_sol) {
             return true;
         }
 
@@ -116,7 +119,7 @@ bool Solve (ErrorHandler error_handler, Actions& actions, Cube start_cube, uint6
     }
 
     CubeSearch tablebase_cube;
-    if (!Search(visited, start_cube, tablebase_cube, num_positions)) {
+    if (!Search(error_handler, visited, start_cube, tablebase_cube, num_positions)) {
         error_handler.Handle(ErrorHandler::Level::kWarning, "search.cpp", "Did not find a solution within " + std::to_string(num_positions) + " positions");
         return false;
     }
