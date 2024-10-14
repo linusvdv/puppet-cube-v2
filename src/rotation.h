@@ -1,9 +1,8 @@
 #pragma once
 #include <random>
+#include <cstdint>
 
 #include "actions.h"
-#include "error_handler.h"
-#include "settings.h"
 #include "cube.h"
 
 
@@ -13,7 +12,7 @@ class Actions;
 // different rotations using standart notation
 // c means counterclockwise
 const int kNumRotations = 18;
-enum Rotations : unsigned int {
+enum Rotations : uint8_t {
     kR, kRc,
     kL, kLc,
 

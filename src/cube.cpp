@@ -2,7 +2,6 @@
 #include <bit>
 #include <cassert>
 #include <cstdint>
-#include <iostream>
 #include <vector>
 
 #include "cube.h"
@@ -150,6 +149,21 @@ void DecodeCornerHash (Cube& cube, unsigned int hash) {
             }
         }
     }
+}
+
+
+Cube::Hash Cube::GetHash () {
+    if (calculated_hash_) {
+        return hash_;
+    }
+    calculated_hash_ = true;
+
+    unsigned int corner_hash = GetCornerHash();
+    uint64_t edge_hash = GetEdgeHash();
+    hash_.hash_1 = corner_hash;
+    hash_.hash_2 = uint8_t(edge_hash);
+    hash_.hash_1 |= (edge_hash >> 8) << 28; // NOLINT
+    return hash_;
 }
 
 

@@ -47,6 +47,12 @@ public:
         uint8_t orientation = 0;
     };
 
+    // 9 byte representation of the cube
+    struct Hash {
+        uint64_t hash_1;
+        uint8_t hash_2;
+    };
+
     // corners
     static const unsigned int kNumCorners = 8;
     std::array<Piece, kNumCorners> corners;
@@ -58,12 +64,16 @@ public:
     // get hash of position
     unsigned int GetCornerHash ();
     uint64_t GetEdgeHash ();
+    Hash GetHash ();
     
     // new position resets computed data
     void SetNewPosition () {
         calculated_corner_hash_ = false;
-        got_position_data = false;
         calculated_edge_hash_ = false;
+        calculated_hash_ = false;
+
+        got_position_data = false;
+
         calculated_edge_heuristic1_ = false;
         calculated_edge_heuristic2_ = false;
     }
@@ -77,9 +87,9 @@ public:
     bool IsSolved ();
 
     // get the heuristic function
-    static const int kHeuristicFunctionOffset = 6;
-    int GetHeuristicFunction () {
-        return GetPositionData() >> kHeuristicFunctionOffset;
+    static const int kCornerHeuristicOffset = 6;
+    int GetCornerHeuristic () {
+        return GetPositionData() >> kCornerHeuristicOffset;
     }
 
     uint8_t GetEdgeHeuristic1 ();
@@ -92,6 +102,10 @@ private:
     unsigned int corner_hash_;
     bool calculated_edge_hash_ = false;
     uint64_t edge_hash_;
+    bool calculated_hash_ = false;
+    Hash hash_;
+
+    // buffer heuristic
     bool calculated_edge_heuristic1_ = false;
     uint8_t edge_heuristic1_;
     bool calculated_edge_heuristic2_ = false;

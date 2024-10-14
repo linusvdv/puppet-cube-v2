@@ -8,7 +8,7 @@
 
 
 // is in file rotation.h
-enum Rotations : unsigned int;
+enum Rotations : uint8_t;
 
 
 enum Instructions {

@@ -1,4 +1,5 @@
 #include <cstdint>
+#include <iostream>
 #include <queue>
 #include <string>
 #include <parallel_hashmap/phmap.h>
@@ -12,15 +13,15 @@
 
 
 struct CubeMapVisited {
-    unsigned int corner_hash;
-    uint64_t edge_hash;
+    // memory optimized representation of the cube
+    Cube::Hash hash;
 
     bool operator==(const CubeMapVisited& position) const {
-        return corner_hash == position.corner_hash && edge_hash == position.edge_hash;
+        return hash.hash_1 == position.hash.hash_1 && hash.hash_2 == position.hash.hash_2;
     }
 
     friend size_t hash_value(const CubeMapVisited& position) { // NOLINT
-        return phmap::HashState::combine(0, position.corner_hash, position.edge_hash);
+        return phmap::HashState::combine(0, position.hash.hash_1, position.hash.hash_2);
     }
 };
 
@@ -50,16 +51,16 @@ CubeSearch GetCubeSearch (Cube& cube, int depth) {
     CubeSearch cube_search;
     cube_search.corner_hash = cube.GetCornerHash();
     cube_search.edge_hash = cube.GetEdgeHash();
-    cube_search.heuristic = cube.GetHeuristicFunction() + cube.GetEdgeHeuristic1() + cube.GetEdgeHeuristic2();
+    cube_search.heuristic = cube.GetCornerHeuristic() + cube.GetEdgeHeuristic1() + cube.GetEdgeHeuristic2();
     cube_search.depth = depth;
     return cube_search;
 }
 
 
-bool Search (ErrorHandler error_handler, phmap::flat_hash_map<CubeMapVisited, std::pair<int, Rotations>>& visited, Cube start_cube, CubeSearch& tablebase_cube, uint64_t& num_positions) {
+bool Search (ErrorHandler error_handler, phmap::parallel_flat_hash_map<CubeMapVisited, std::pair<uint8_t, Rotations>>& visited, Cube start_cube, CubeSearch& tablebase_cube, uint64_t& num_positions) {
     std::priority_queue<CubeSearch> search_queue;
     search_queue.push(GetCubeSearch(start_cube, 0));
-    visited.insert({{start_cube.GetCornerHash(), start_cube.GetEdgeHash()}, {0, Rotations(-1)}});
+    visited.insert({{start_cube.GetHash()}, {0, Rotations(-1)}});
 
     const int not_found_sol = 1e9;
     int max_depth = not_found_sol;
@@ -70,7 +71,7 @@ bool Search (ErrorHandler error_handler, phmap::flat_hash_map<CubeMapVisited, st
 
         // search next cubes
         Cube cube = DecodeHash(cube_search.corner_hash, cube_search.edge_hash);
-        if (cube_search.depth + (std::max(std::max({int(cube.GetHeuristicFunction()), int(cube.GetEdgeHeuristic1()), int(cube.GetEdgeHeuristic2())}) - GetTablebaseDepth(), 0)) >= max_depth) {
+        if (cube_search.depth + (std::max(std::max({int(cube.GetCornerHeuristic()), int(cube.GetEdgeHeuristic1()), int(cube.GetEdgeHeuristic2())}) - GetTablebaseDepth(), 0)) >= max_depth) {
             continue;
         }
 
@@ -79,26 +80,28 @@ bool Search (ErrorHandler error_handler, phmap::flat_hash_map<CubeMapVisited, st
             max_depth = cube_search.depth;
             tablebase_cube = cube_search;
             error_handler.Handle(ErrorHandler::Level::kExtra, "search.cpp", "Found solution of depth " + std::to_string(cube_search.depth + GetTablebaseDepth()) + " visiting " + std::to_string(num_positions) + " positions");
+            std::cout << "PQ:  " << sizeof(CubeSearch) * search_queue.size() << std::endl;
+            std::cout << "Map: " << (sizeof(CubeMapVisited) + sizeof(std::pair<uint8_t, Rotations>)) * visited.size() << std::endl;
         }
 
         if (num_positions >= 7000000 && max_depth != not_found_sol) {
             return true;
         }
 
-        auto visited_it = visited.find({cube_search.corner_hash, cube_search.edge_hash});
+        auto visited_it = visited.find({cube.GetHash()});
         if (visited_it != visited.end() && visited_it->second.first < cube_search.depth) {
             continue;
         }
 
         for (Rotations rotation : GetLegalRotations(cube)) {
             Cube next_cube = Rotate(cube, rotation);
-            auto visited_it = visited.find({next_cube.GetCornerHash(), next_cube.GetEdgeHash()});
+            auto visited_it = visited.find({next_cube.GetHash()});
             if (visited_it != visited.end() && visited_it->second.first <= cube_search.depth+1) {
                 continue;
             }
 
             search_queue.push(GetCubeSearch(next_cube, cube_search.depth+1));
-            visited[{next_cube.GetCornerHash(), next_cube.GetEdgeHash()}] = {cube_search.depth+1, rotation};
+            visited[{next_cube.GetHash()}] = {cube_search.depth+1, rotation};
         }
     }
 
@@ -108,7 +111,7 @@ bool Search (ErrorHandler error_handler, phmap::flat_hash_map<CubeMapVisited, st
 
 
 bool Solve (ErrorHandler error_handler, Actions& actions, Cube start_cube, uint64_t& num_positions) {
-    phmap::flat_hash_map<CubeMapVisited, std::pair<int, Rotations>> visited;
+    phmap::parallel_flat_hash_map<CubeMapVisited, std::pair<uint8_t, Rotations>> visited;
 
     int tb_depth = TablebaseDepth(start_cube);
     if (tb_depth != -1) {
@@ -126,7 +129,7 @@ bool Solve (ErrorHandler error_handler, Actions& actions, Cube start_cube, uint6
     TablebaseSolve(cube, actions, TablebaseDepth(cube)+1, num_positions);
 
     while (true) {
-        Rotations rotation = visited[{cube.GetCornerHash(), cube.GetEdgeHash()}].second;
+        Rotations rotation = visited[{cube.GetHash()}].second;
         if (rotation == Rotations(-1)) {
             return true;
         }
