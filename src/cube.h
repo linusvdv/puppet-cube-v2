@@ -114,4 +114,4 @@ private:
 
 
 // get cube from hash
-Cube DecodeHash (unsigned int corner_hash, uint64_t edge_hash);
+Cube DecodeHash (Cube::Hash hash);

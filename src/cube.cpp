@@ -315,10 +315,10 @@ uint8_t Cube::GetEdgeHeuristic2 () {
 
 
 // get from the hash to the cube
-Cube DecodeHash (unsigned int corner_hash, uint64_t edge_hash) {
+Cube DecodeHash (Cube::Hash hash) {
     Cube new_cube;
-    DecodeCornerHash(new_cube, corner_hash);
-    DecodeEdgesHash(new_cube, edge_hash);
+    DecodeCornerHash(new_cube, (hash.hash_1 << 36) >> 36); // NOLINT
+    DecodeEdgesHash(new_cube, ((hash.hash_1 >> 28) << 8) | uint64_t(hash.hash_2)); // NOLINT
     return new_cube;
 }
 

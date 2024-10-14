@@ -6,7 +6,7 @@
 int TablebaseDepth (Cube& cube);
 
 
-bool TablebaseContainsOuter (unsigned int corner_hash, uint64_t edge_hash);
+bool TablebaseContainsOuter (Cube::Hash hash);
 
 
 bool TablebaseSolve (Cube& cube, Actions& actions, int depth, uint64_t& num_positions);

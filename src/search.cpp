@@ -27,31 +27,29 @@ struct CubeMapVisited {
 
 
 struct CubeSearch {
-    int heuristic;
-    unsigned int corner_hash;
-    uint64_t edge_hash;
+    // memory optimized representation of the cube
+    Cube::Hash hash;
 
-    int depth;
+    uint8_t heuristic;
+    int8_t depth;
 
-    static constexpr int kDepthWeight = 1;
+    // sort priority_queue smaller to larger
     bool operator<(const CubeSearch& cube_search) const {
-        // sort priority_queue smaller to larger
-        if (kDepthWeight*heuristic+depth != kDepthWeight*cube_search.heuristic+cube_search.depth) {
-            return kDepthWeight*heuristic+depth > kDepthWeight*cube_search.heuristic+cube_search.depth;
+        if (heuristic != cube_search.heuristic) {
+            return heuristic > cube_search.heuristic;
         }
-        if (corner_hash != cube_search.corner_hash) {
-            return corner_hash > cube_search.corner_hash;
+        if (hash.hash_1 != cube_search.hash.hash_1) {
+            return hash.hash_1 > cube_search.hash.hash_1;
         }
-        return edge_hash > cube_search.edge_hash;
+        return hash.hash_2 > cube_search.hash.hash_2;
     }
 };
 
 
-CubeSearch GetCubeSearch (Cube& cube, int depth) {
+CubeSearch GetCubeSearch (Cube& cube, int8_t depth) {
     CubeSearch cube_search;
-    cube_search.corner_hash = cube.GetCornerHash();
-    cube_search.edge_hash = cube.GetEdgeHash();
-    cube_search.heuristic = cube.GetCornerHeuristic() + cube.GetEdgeHeuristic1() + cube.GetEdgeHeuristic2();
+    cube_search.hash = cube.GetHash();
+    cube_search.heuristic = cube.GetCornerHeuristic() + cube.GetEdgeHeuristic1() + cube.GetEdgeHeuristic2() + depth;
     cube_search.depth = depth;
     return cube_search;
 }
@@ -70,13 +68,13 @@ bool Search (ErrorHandler error_handler, phmap::parallel_flat_hash_map<CubeMapVi
         num_positions++;
 
         // search next cubes
-        Cube cube = DecodeHash(cube_search.corner_hash, cube_search.edge_hash);
+        Cube cube = DecodeHash(cube_search.hash);
         if (cube_search.depth + (std::max(std::max({int(cube.GetCornerHeuristic()), int(cube.GetEdgeHeuristic1()), int(cube.GetEdgeHeuristic2())}) - GetTablebaseDepth(), 0)) >= max_depth) {
             continue;
         }
 
         // cube in tablebase
-        if (TablebaseContainsOuter(cube_search.corner_hash, cube_search.edge_hash)) {
+        if (TablebaseContainsOuter(cube.GetHash())) {
             max_depth = cube_search.depth;
             tablebase_cube = cube_search;
             error_handler.Handle(ErrorHandler::Level::kExtra, "search.cpp", "Found solution of depth " + std::to_string(cube_search.depth + GetTablebaseDepth()) + " visiting " + std::to_string(num_positions) + " positions");
@@ -125,7 +123,7 @@ bool Solve (ErrorHandler error_handler, Actions& actions, Cube start_cube, uint6
         return false;
     }
 
-    Cube cube = DecodeHash(tablebase_cube.corner_hash, tablebase_cube.edge_hash);
+    Cube cube = DecodeHash(tablebase_cube.hash);
     TablebaseSolve(cube, actions, TablebaseDepth(cube)+1, num_positions);
 
     while (true) {
