@@ -1,8 +1,10 @@
 #include <cstdint>
+#include <deque>
 #include <iostream>
 #include <queue>
 #include <string>
 #include <parallel_hashmap/phmap.h>
+#include <../include/nadeau.h>
 
 
 #include "actions.h"
@@ -64,7 +66,7 @@ CubeSearch GetCubeSearch (Cube& cube, int8_t depth, bool first_time) {
 
 bool Search (ErrorHandler error_handler, phmap::parallel_flat_hash_map<CubeMapVisited, std::pair<uint8_t, Rotations>>& visited, Cube start_cube, CubeSearch& tablebase_cube, uint64_t& num_positions) {
     // initialize starting position
-    std::priority_queue<CubeSearch> search_queue;
+    std::priority_queue<CubeSearch, std::deque<CubeSearch>> search_queue;
     search_queue.push(GetCubeSearch(start_cube, 0, true));
     visited.insert({{start_cube.GetHash()}, {0, Rotations(-1)}});
 
@@ -97,9 +99,11 @@ bool Search (ErrorHandler error_handler, phmap::parallel_flat_hash_map<CubeMapVi
         }
 
         // finish search
-        if (num_positions >= 7000000 && max_depth != not_found_sol) {
+        if (num_positions >= 10000000 && max_depth != not_found_sol) {
             std::cout << "PQ:  " << 11 * search_queue.size() << " = 11 * " << search_queue.size() << " = " << 11 * search_queue.size() / 1000000 << " MB" << std::endl;
             std::cout << "Map: " << 11 * visited.size() << " = 11 * " << visited.size() << " = " << 11 * visited.size() / 1000000 << " MB" << std::endl;
+            std::cout << "current: " << getCurrentRSS() << " = " << getCurrentRSS() / 1000000 << " MB" << std::endl;
+            std::cout << "peak: " << getPeakRSS() << " = " << getPeakRSS() / 1000000 << " MB" << std::endl;
             return true;
         }
 
