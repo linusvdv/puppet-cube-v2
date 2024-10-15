@@ -48,10 +48,12 @@ public:
     };
 
     // 9 byte representation of the cube
+    #pragma pack(push, 1)
     struct Hash {
         uint64_t hash_1;
         uint8_t hash_2;
     };
+    #pragma pack(pop)
 
     // corners
     static const unsigned int kNumCorners = 8;

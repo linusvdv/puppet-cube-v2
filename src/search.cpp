@@ -12,6 +12,7 @@
 #include "tablebase.h"
 
 
+#pragma pack(push, 1)
 struct CubeMapVisited {
     // memory optimized representation of the cube
     Cube::Hash hash;
@@ -24,14 +25,16 @@ struct CubeMapVisited {
         return phmap::HashState::combine(0, position.hash.hash_1, position.hash.hash_2);
     }
 };
+#pragma pack(pop)
 
 
+#pragma pack(push, 1)
 struct CubeSearch {
     // memory optimized representation of the cube
     Cube::Hash hash;
 
     uint8_t heuristic;
-    int8_t depth;
+    uint8_t depth;
 
     // sort priority_queue smaller to larger
     bool operator<(const CubeSearch& cube_search) const {
@@ -44,62 +47,99 @@ struct CubeSearch {
         return hash.hash_2 > cube_search.hash.hash_2;
     }
 };
+#pragma pack(pop)
 
 
-CubeSearch GetCubeSearch (Cube& cube, int8_t depth) {
+CubeSearch GetCubeSearch (Cube& cube, int8_t depth, bool first_time) {
     CubeSearch cube_search;
     cube_search.hash = cube.GetHash();
-    cube_search.heuristic = cube.GetCornerHeuristic() + cube.GetEdgeHeuristic1() + cube.GetEdgeHeuristic2() + depth;
+    cube_search.heuristic = cube.GetCornerHeuristic() + cube.GetEdgeHeuristic1() + cube.GetEdgeHeuristic2() + depth + int(!first_time);
     cube_search.depth = depth;
+    if (first_time) {
+        cube_search.depth |= 1<<7; // NOLINT
+    }
     return cube_search;
 }
 
 
 bool Search (ErrorHandler error_handler, phmap::parallel_flat_hash_map<CubeMapVisited, std::pair<uint8_t, Rotations>>& visited, Cube start_cube, CubeSearch& tablebase_cube, uint64_t& num_positions) {
+    // initialize starting position
     std::priority_queue<CubeSearch> search_queue;
-    search_queue.push(GetCubeSearch(start_cube, 0));
+    search_queue.push(GetCubeSearch(start_cube, 0, true));
     visited.insert({{start_cube.GetHash()}, {0, Rotations(-1)}});
 
+    // best found depth
     const int not_found_sol = 1e9;
     int max_depth = not_found_sol;
+
     while (!search_queue.empty()) {
+        // get new position from priority_queue
         CubeSearch cube_search = search_queue.top();
         search_queue.pop();
         num_positions++;
-
-        // search next cubes
         Cube cube = DecodeHash(cube_search.hash);
-        if (cube_search.depth + (std::max(std::max({int(cube.GetCornerHeuristic()), int(cube.GetEdgeHeuristic1()), int(cube.GetEdgeHeuristic2())}) - GetTablebaseDepth(), 0)) >= max_depth) {
+
+        // depth
+        bool first_time = bool(cube_search.depth>>7); // NOLINT
+        cube_search.depth = uint8_t(cube_search.depth<<1)>>1;
+
+        // check if it is posible to solve the current cube im this amount of moves
+        if (cube_search.depth + (std::max(std::max({cube.GetCornerHeuristic(), int(cube.GetEdgeHeuristic1()), int(cube.GetEdgeHeuristic2())}) - GetTablebaseDepth(), 0)) >= max_depth) {
             continue;
         }
 
         // cube in tablebase
+        // if it exists a new shortest path exists
         if (TablebaseContainsOuter(cube.GetHash())) {
             max_depth = cube_search.depth;
             tablebase_cube = cube_search;
             error_handler.Handle(ErrorHandler::Level::kExtra, "search.cpp", "Found solution of depth " + std::to_string(cube_search.depth + GetTablebaseDepth()) + " visiting " + std::to_string(num_positions) + " positions");
-            std::cout << "PQ:  " << sizeof(CubeSearch) * search_queue.size() << std::endl;
-            std::cout << "Map: " << (sizeof(CubeMapVisited) + sizeof(std::pair<uint8_t, Rotations>)) * visited.size() << std::endl;
         }
 
+        // finish search
         if (num_positions >= 7000000 && max_depth != not_found_sol) {
+            std::cout << "PQ:  " << 11 * search_queue.size() << " = 11 * " << search_queue.size() << " = " << 11 * search_queue.size() / 1000000 << " MB" << std::endl;
+            std::cout << "Map: " << 11 * visited.size() << " = 11 * " << visited.size() << " = " << 11 * visited.size() / 1000000 << " MB" << std::endl;
             return true;
         }
 
+        // searched a branch to depth 100
+        if (cube_search.depth >= 100) {
+            continue;
+        }
+
+        // check ig position has already been searched
         auto visited_it = visited.find({cube.GetHash()});
         if (visited_it != visited.end() && visited_it->second.first < cube_search.depth) {
             continue;
         }
 
+        // go over next moves
         for (Rotations rotation : GetLegalRotations(cube)) {
             Cube next_cube = Rotate(cube, rotation);
+
+            // check if next position is not already in the tablebase
             auto visited_it = visited.find({next_cube.GetHash()});
             if (visited_it != visited.end() && visited_it->second.first <= cube_search.depth+1) {
                 continue;
             }
 
-            search_queue.push(GetCubeSearch(next_cube, cube_search.depth+1));
-            visited[{next_cube.GetHash()}] = {cube_search.depth+1, rotation};
+            // add to search
+            CubeSearch next = GetCubeSearch(next_cube, cube_search.depth+1, true);
+            // only smaller or equal first time
+            if (first_time && next.heuristic <= cube_search.heuristic) {
+                search_queue.push(next);
+                visited[{next_cube.GetHash()}] = {cube_search.depth+1, rotation};
+            }
+            // bigger second one
+            else if (!first_time && next.heuristic >= cube_search.heuristic) {
+                search_queue.push(next);
+                visited[{next_cube.GetHash()}] = {cube_search.depth+1, rotation};
+            }
+        }
+
+        if (first_time) {
+            search_queue.push(GetCubeSearch(cube, cube_search.depth, false));
         }
     }
 
