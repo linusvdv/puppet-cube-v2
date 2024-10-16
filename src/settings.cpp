@@ -19,16 +19,25 @@ Setting::Setting(ErrorHandler& error_handler, int argc, char *argv[]) {
     rootPath = temp_root_path;
 
     for (std::string argument : arguments | std::views::drop(1)) {
-        if (argument == "nogui") {
-            gui = false;
+        if (argument.find("--gui=") == 0) {
+            argument = argument.erase(0, std::string("--gui=").size());
+            if (argument == "true") {
+                gui = false;
+            }
+            else if (argument == "false") {
+                gui = false;
+            }
+            else {
+                error_handler.Handle(ErrorHandler::Level::kWarning, "settings.cpp", "gui argument not found. Should be true/false");
+            }
         }
 
-        else if (argument.find("rootPath=") == 0) {
-            rootPath = argument.erase(0, std::string("rootPath=").size());
+        else if (argument.find("--rootPath=") == 0) {
+            rootPath = argument.erase(0, std::string("--rootPath=").size());
         }
 
-        else if (argument.find("errorLevel=") == 0) {
-            std::string error_level = argument.erase(0, std::string("errorLevel=").size());
+        else if (argument.find("--errorLevel=") == 0) {
+            std::string error_level = argument.erase(0, std::string("--errorLevel=").size());
             if (error_level == "criticalError") {
                 error_handler.SetErrorLevel(ErrorHandler::Level::kCriticalError);
             }
@@ -46,6 +55,9 @@ Setting::Setting(ErrorHandler& error_handler, int argc, char *argv[]) {
             }
             else if (error_level == "extra") {
                 error_handler.SetErrorLevel(ErrorHandler::Level::kExtra);
+            }
+            else if (error_level == "memory") {
+                error_handler.SetErrorLevel(ErrorHandler::Level::kMemory);
             }
             else {
                 error_handler.Handle(ErrorHandler::Level::kWarning, "settings.cpp", "error level type " + error_level + " not found");

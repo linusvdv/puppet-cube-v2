@@ -16,7 +16,7 @@ public:
     std::string rootPath;
 
     // graphical user interface
-    bool gui = true;
+    bool gui = false;
 
     // mouse rotation
     std::pair<float, float> rotation = {-40, 30};

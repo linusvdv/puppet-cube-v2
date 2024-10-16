@@ -11,7 +11,8 @@ public:
         kWarning,
         kInfo,
         kAll,
-        kExtra
+        kExtra,
+        kMemory
     };
 
     Level error_level;

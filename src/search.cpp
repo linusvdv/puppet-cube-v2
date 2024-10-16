@@ -1,10 +1,12 @@
 #include <cstdint>
 #include <deque>
+#include <iomanip>
 #include <iostream>
 #include <queue>
+#include <sstream>
 #include <string>
 #include <parallel_hashmap/phmap.h>
-#include <../include/nadeau.h>
+#include <nadeau.h>
 
 
 #include "actions.h"
@@ -64,6 +66,19 @@ CubeSearch GetCubeSearch (Cube& cube, int8_t depth, bool first_time) {
 }
 
 
+void ShowMemory (ErrorHandler error_handler, phmap::parallel_flat_hash_map<CubeMapVisited, std::pair<uint8_t, Rotations>>& visited, std::priority_queue<CubeSearch, std::deque<CubeSearch>>& search_queue) {
+    const int indent = 8;
+    std::stringstream out;
+    out << "\n";
+    out << std::setw(indent) << "" << "PQ:  " << 11 * search_queue.size() << " = 11 * " << search_queue.size() << " = " << 11 * search_queue.size() / 1000000 << " MB" << std::endl;
+    out << std::setw(indent) << "" << "Map: " << 11 * visited.size() << " = 11 * " << visited.size() << " = " << 11 * visited.size() / 1000000 << " MB" << std::endl;
+    out << std::setw(indent) << "" << "Map capacity: " << 11 * visited.capacity() << " = 11 * " << visited.capacity() << " = " << 11 * visited.capacity() / 1000000 << " MB" << std::endl;
+    out << std::setw(indent) << "" << "current: " << getCurrentRSS() << " = " << getCurrentRSS() / 1000000 << " MB" << std::endl;
+    out << std::setw(indent) << "" << "peak: " << getPeakRSS() << " = " << getPeakRSS() / 1000000 << " MB";
+    error_handler.Handle(ErrorHandler::Level::kMemory, "search.cpp", out.str());
+}
+
+
 bool Search (ErrorHandler error_handler, phmap::parallel_flat_hash_map<CubeMapVisited, std::pair<uint8_t, Rotations>>& visited, Cube start_cube, CubeSearch& tablebase_cube, uint64_t& num_positions) {
     // initialize starting position
     std::priority_queue<CubeSearch, std::deque<CubeSearch>> search_queue;
@@ -95,15 +110,13 @@ bool Search (ErrorHandler error_handler, phmap::parallel_flat_hash_map<CubeMapVi
         if (TablebaseContainsOuter(cube.GetHash())) {
             max_depth = cube_search.depth;
             tablebase_cube = cube_search;
+            ShowMemory(error_handler, visited, search_queue);
             error_handler.Handle(ErrorHandler::Level::kExtra, "search.cpp", "Found solution of depth " + std::to_string(cube_search.depth + GetTablebaseDepth()) + " visiting " + std::to_string(num_positions) + " positions");
         }
 
         // finish search
-        if (num_positions >= 10000000 && max_depth != not_found_sol) {
-            std::cout << "PQ:  " << 11 * search_queue.size() << " = 11 * " << search_queue.size() << " = " << 11 * search_queue.size() / 1000000 << " MB" << std::endl;
-            std::cout << "Map: " << 11 * visited.size() << " = 11 * " << visited.size() << " = " << 11 * visited.size() / 1000000 << " MB" << std::endl;
-            std::cout << "current: " << getCurrentRSS() << " = " << getCurrentRSS() / 1000000 << " MB" << std::endl;
-            std::cout << "peak: " << getPeakRSS() << " = " << getPeakRSS() / 1000000 << " MB" << std::endl;
+        if (num_positions >= 100000000 && max_depth != not_found_sol) {
+            ShowMemory(error_handler, visited, search_queue);
             return true;
         }
 

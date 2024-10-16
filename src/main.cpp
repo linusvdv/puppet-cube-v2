@@ -1,6 +1,8 @@
 #include <random>
+#include <string>
 #include <thread>
 #include <parallel_hashmap/phmap.h>
+#include <nadeau.h>
 
 #include "actions.h"
 #include "cube.h"
@@ -14,7 +16,7 @@
 
 int main (int argc, char *argv[]) {
     // create an error handler
-    ErrorHandler error_handler(ErrorHandler::Level::kInfo);
+    ErrorHandler error_handler(ErrorHandler::Level::kMemory);
 
     // settings
     // it is not thread safe only a copy is sent to the window manager
@@ -40,6 +42,7 @@ int main (int argc, char *argv[]) {
     InitializePositionData(error_handler, settings);
     InitializeEdgeData(error_handler, settings);
 
+    error_handler.Handle(ErrorHandler::Level::kMemory, "main.cpp", "currently using " + std::to_string(getCurrentRSS()/1000000) + " MB"); // NOLINT
     // start the search manager
     SearchManager(error_handler, actions, rng);
 

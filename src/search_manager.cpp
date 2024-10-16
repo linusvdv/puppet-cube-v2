@@ -4,6 +4,8 @@
 #include <numeric>
 #include <string>
 #include <sstream>
+#include <iostream>
+#include <nadeau.h>
 
 
 #include "actions.h"
@@ -93,6 +95,7 @@ void SearchManager (ErrorHandler error_handler, Actions& actions, std::mt19937& 
     // TODO: this depth is temporary
     TablebaseSearch(error_handler, 7);
 
+    error_handler.Handle(ErrorHandler::Level::kMemory, "search_manager.cpp", "currently using " + std::to_string(getCurrentRSS()/1000000) + " MB"); // NOLINT
     Cube cube;
 
     const int max_depth = 15;
