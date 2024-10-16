@@ -40,6 +40,9 @@ struct CubeSearch {
     uint8_t heuristic;
     uint8_t depth;
 
+    // this is a value between 0 and 7 describing how often this position is been visited
+    uint8_t visited_time;
+
     // sort priority_queue smaller to larger
     bool operator<(const CubeSearch& cube_search) const {
         if (heuristic != cube_search.heuristic) {
@@ -54,14 +57,12 @@ struct CubeSearch {
 #pragma pack(pop)
 
 
-CubeSearch GetCubeSearch (Cube& cube, int8_t depth, bool first_time) {
+CubeSearch GetCubeSearch (Cube& cube, uint8_t depth, uint8_t visited_time) {
     CubeSearch cube_search;
     cube_search.hash = cube.GetHash();
-    cube_search.heuristic = cube.GetCornerHeuristic() + cube.GetEdgeHeuristic1() + cube.GetEdgeHeuristic2() + depth + int(!first_time);
+    cube_search.heuristic = cube.GetCornerHeuristic() + cube.GetEdgeHeuristic1() + cube.GetEdgeHeuristic2() + depth + visited_time;
     cube_search.depth = depth;
-    if (first_time) {
-        cube_search.depth |= 1<<7; // NOLINT
-    }
+    cube_search.visited_time = visited_time;
     return cube_search;
 }
 
@@ -70,7 +71,7 @@ void ShowMemory (ErrorHandler error_handler, phmap::parallel_flat_hash_map<CubeM
     const int indent = 8;
     std::stringstream out;
     out << "\n";
-    out << std::setw(indent) << "" << "PQ:  " << 11 * search_queue.size() << " = 11 * " << search_queue.size() << " = " << 11 * search_queue.size() / 1000000 << " MB" << std::endl;
+    out << std::setw(indent) << "" << "PQ:  " << 12 * search_queue.size() << " = 12 * " << search_queue.size() << " = " << 12 * search_queue.size() / 1000000 << " MB" << std::endl;
     out << std::setw(indent) << "" << "Map: " << 11 * visited.size() << " = 11 * " << visited.size() << " = " << 11 * visited.size() / 1000000 << " MB" << std::endl;
     out << std::setw(indent) << "" << "Map capacity: " << 11 * visited.capacity() << " = 11 * " << visited.capacity() << " = " << 11 * visited.capacity() / 1000000 << " MB" << std::endl;
     out << std::setw(indent) << "" << "current: " << getCurrentRSS() << " = " << getCurrentRSS() / 1000000 << " MB" << std::endl;
@@ -82,7 +83,7 @@ void ShowMemory (ErrorHandler error_handler, phmap::parallel_flat_hash_map<CubeM
 bool Search (ErrorHandler error_handler, phmap::parallel_flat_hash_map<CubeMapVisited, std::pair<uint8_t, Rotations>>& visited, Cube start_cube, CubeSearch& tablebase_cube, uint64_t& num_positions) {
     // initialize starting position
     std::priority_queue<CubeSearch, std::deque<CubeSearch>> search_queue;
-    search_queue.push(GetCubeSearch(start_cube, 0, true));
+    search_queue.push(GetCubeSearch(start_cube, 0, 0));
     visited.insert({{start_cube.GetHash()}, {0, Rotations(-1)}});
 
     // best found depth
@@ -95,10 +96,6 @@ bool Search (ErrorHandler error_handler, phmap::parallel_flat_hash_map<CubeMapVi
         search_queue.pop();
         num_positions++;
         Cube cube = DecodeHash(cube_search.hash);
-
-        // depth
-        bool first_time = bool(cube_search.depth>>7); // NOLINT
-        cube_search.depth = uint8_t(cube_search.depth<<1)>>1;
 
         // check if it is posible to solve the current cube im this amount of moves
         if (cube_search.depth + (std::max(std::max({cube.GetCornerHeuristic(), int(cube.GetEdgeHeuristic1()), int(cube.GetEdgeHeuristic2())}) - GetTablebaseDepth(), 0)) >= max_depth) {
@@ -141,22 +138,17 @@ bool Search (ErrorHandler error_handler, phmap::parallel_flat_hash_map<CubeMapVi
                 continue;
             }
 
-            // add to search
-            CubeSearch next = GetCubeSearch(next_cube, cube_search.depth+1, true);
-            // only smaller or equal first time
-            if (first_time && next.heuristic <= cube_search.heuristic) {
-                search_queue.push(next);
-                visited[{next_cube.GetHash()}] = {cube_search.depth+1, rotation};
-            }
-            // bigger second one
-            else if (!first_time && next.heuristic >= cube_search.heuristic) {
+            // add to search if the next cube is visited_times-2 better than current cube
+            // -2 comes form best improvement possible in a position
+            CubeSearch next = GetCubeSearch(next_cube, cube_search.depth+1, 0);
+            if (next.heuristic <= cube_search.heuristic-2) {
                 search_queue.push(next);
                 visited[{next_cube.GetHash()}] = {cube_search.depth+1, rotation};
             }
         }
 
-        if (first_time) {
-            search_queue.push(GetCubeSearch(cube, cube_search.depth, false));
+        if (cube_search.visited_time < 7) {
+            search_queue.push(GetCubeSearch(cube, cube_search.depth, cube_search.visited_time+1));
         }
     }
 
