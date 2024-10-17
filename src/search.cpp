@@ -2,9 +2,12 @@
 #include <deque>
 #include <iomanip>
 #include <iostream>
+#include <mutex>
 #include <queue>
 #include <sstream>
 #include <string>
+#include <thread>
+#include <vector>
 #include <parallel_hashmap/phmap.h>
 #include <nadeau.h>
 
@@ -80,21 +83,31 @@ void ShowMemory (ErrorHandler error_handler, phmap::parallel_flat_hash_map<CubeM
 }
 
 
-bool Search (ErrorHandler error_handler, phmap::parallel_flat_hash_map<CubeMapVisited, std::pair<uint8_t, Rotations>>& visited, Cube start_cube, CubeSearch& tablebase_cube, uint64_t& num_positions) {
-    // initialize starting position
-    std::priority_queue<CubeSearch, std::deque<CubeSearch>> search_queue;
-    search_queue.push(GetCubeSearch(start_cube, 0, 0));
-    visited.insert({{start_cube.GetHash()}, {0, Rotations(-1)}});
+constexpr int kNotFoundSol = 1e9;
+constexpr int kMaxPositions = 10000000;
 
-    // best found depth
-    const int not_found_sol = 1e9;
-    int max_depth = not_found_sol;
+void Search (ErrorHandler error_handler, phmap::parallel_flat_hash_map<CubeMapVisited, std::pair<uint8_t, Rotations>>& visited,
+             std::priority_queue<CubeSearch, std::deque<CubeSearch>>& search_queue, std::atomic<int>& max_depth,
+             CubeSearch& tablebase_cube, std::atomic<uint64_t>& num_positions, std::mutex& search_mutex, std::mutex& visited_mutex, std::mutex& max_depth_mutex, int thread_id) {
 
-    while (!search_queue.empty()) {
+    while (num_positions < kMaxPositions) {
         // get new position from priority_queue
-        CubeSearch cube_search = search_queue.top();
-        search_queue.pop();
-        num_positions++;
+        CubeSearch cube_search;
+        {
+            std::lock_guard<std::mutex> guard(search_mutex);
+            if (search_queue.empty()) {
+                // INFO: already visited all positions should break
+                std::cout << "break" << std::endl;
+                continue;
+            }
+            cube_search = search_queue.top();
+            search_queue.pop();
+        }
+
+        ++num_positions;
+        if (num_positions % 100000 == 0) {
+            std::cout << thread_id << ": " << num_positions << " " << int(cube_search.heuristic) << std::endl;
+        }
         Cube cube = DecodeHash(cube_search.hash);
 
         // check if it is posible to solve the current cube im this amount of moves
@@ -111,21 +124,19 @@ bool Search (ErrorHandler error_handler, phmap::parallel_flat_hash_map<CubeMapVi
             error_handler.Handle(ErrorHandler::Level::kExtra, "search.cpp", "Found solution of depth " + std::to_string(cube_search.depth + GetTablebaseDepth()) + " visiting " + std::to_string(num_positions) + " positions");
         }
 
-        // finish search
-        if (num_positions >= 100000000 && max_depth != not_found_sol) {
-            ShowMemory(error_handler, visited, search_queue);
-            return true;
-        }
-
         // searched a branch to depth 100
         if (cube_search.depth >= 100) {
             continue;
         }
 
+        Cube::Hash cube_hash = cube.GetHash();
         // check ig position has already been searched
-        auto visited_it = visited.find({cube.GetHash()});
-        if (visited_it != visited.end() && visited_it->second.first < cube_search.depth) {
-            continue;
+        {
+            std::lock_guard<std::mutex> guard(visited_mutex);
+            auto visited_it = visited.find({cube_hash});
+            if (visited_it != visited.end() && visited_it->second.first < cube_search.depth) {
+                continue;
+            }
         }
 
         // go over next moves
@@ -133,47 +144,83 @@ bool Search (ErrorHandler error_handler, phmap::parallel_flat_hash_map<CubeMapVi
             Cube next_cube = Rotate(cube, rotation);
 
             // check if next position is not already in the tablebase
-            auto visited_it = visited.find({next_cube.GetHash()});
-            if (visited_it != visited.end() && visited_it->second.first <= cube_search.depth+1) {
-                continue;
+            Cube::Hash next_cube_hash = next_cube.GetHash();
+            {
+                std::lock_guard<std::mutex> guard(visited_mutex);
+                auto visited_it = visited.find({next_cube_hash});
+                if (visited_it != visited.end() && visited_it->second.first <= cube_search.depth+1) {
+                    continue;
+                }
             }
 
             // add to search if the next cube is visited_times-2 better than current cube
             // -2 comes form best improvement possible in a position
             CubeSearch next = GetCubeSearch(next_cube, cube_search.depth+1, 0);
             if (cube_search.visited_time==0 ? (next.heuristic <= cube_search.heuristic) : (next.heuristic == cube_search.heuristic)) {
-                search_queue.push(next);
-                visited[{next_cube.GetHash()}] = {cube_search.depth+1, rotation};
+                {
+                    std::lock_guard<std::mutex> guard(search_mutex);
+                    search_queue.push(next);
+                }
+                {
+                    std::lock_guard<std::mutex> guard(visited_mutex);
+                    visited[{next_cube_hash}] = {cube_search.depth+1, rotation};
+                }
             }
         }
 
         if (cube_search.visited_time < 4) {
-            search_queue.push(GetCubeSearch(cube, cube_search.depth, cube_search.visited_time+1));
+            CubeSearch temp_cube_search = GetCubeSearch(cube, cube_search.depth, cube_search.visited_time+1);
+            {
+                std::lock_guard<std::mutex> guard(search_mutex);
+                search_queue.push(temp_cube_search);
+            }
         }
     }
-
-    if (max_depth != not_found_sol) {
-        error_handler.Handle(ErrorHandler::Level::kInfo, "search.cpp", "found optimal solution");
-        return true;
-    }
-    return false;
 }
 
 
 bool Solve (ErrorHandler error_handler, Actions& actions, Cube start_cube, uint64_t& num_positions) {
-    phmap::parallel_flat_hash_map<CubeMapVisited, std::pair<uint8_t, Rotations>> visited;
-
     int tb_depth = TablebaseDepth(start_cube);
     if (tb_depth != -1) {
         TablebaseSolve(start_cube, actions, tb_depth+1, num_positions);
         return true;
     }
 
+
+    // initialize starting position
     CubeSearch tablebase_cube;
-    if (!Search(error_handler, visited, start_cube, tablebase_cube, num_positions)) {
-        error_handler.Handle(ErrorHandler::Level::kWarning, "search.cpp", "Did not find a solution within " + std::to_string(num_positions) + " positions");
-        return false;
+    std::priority_queue<CubeSearch, std::deque<CubeSearch>> search_queue;
+    search_queue.push(GetCubeSearch(start_cube, 0, 0));
+    std::mutex search_mutex;
+
+    phmap::parallel_flat_hash_map<CubeMapVisited, std::pair<uint8_t, Rotations>> visited;
+    visited.insert({{start_cube.GetHash()}, {0, Rotations(-1)}});
+    std::mutex visited_mutex;
+
+    // best found depth
+    std::atomic<int> max_depth = kNotFoundSol;
+    std::mutex max_depth_mutex;
+    std::atomic<uint64_t> num_positions_atomic = num_positions;
+    
+    // start multiple threads
+    const int num_threads = 20;
+    {
+        std::vector<std::jthread> threads;
+        for (int i = 0; i < num_threads; i++) {
+            threads.push_back(std::jthread(Search, error_handler, std::ref(visited), std::ref(search_queue), std::ref(max_depth),
+                    std::ref(tablebase_cube), std::ref(num_positions_atomic), std::ref(search_mutex), std::ref(visited_mutex), std::ref(max_depth_mutex), i));
+        }
     }
+    num_positions = num_positions_atomic;
+
+    ShowMemory(error_handler, visited, search_queue);
+    if (max_depth != kNotFoundSol && num_positions < kMaxPositions) {
+        error_handler.Handle(ErrorHandler::Level::kInfo, "search.cpp", "found optimal solution");
+    }
+    if (max_depth == kNotFoundSol) {
+        error_handler.Handle(ErrorHandler::Level::kWarning, "search.cpp", "Did not find a solution within " + std::to_string(num_positions) + " positions");
+    }
+
 
     Cube cube = DecodeHash(tablebase_cube.hash);
     TablebaseSolve(cube, actions, TablebaseDepth(cube)+1, num_positions);

@@ -109,7 +109,7 @@ void SearchManager (ErrorHandler error_handler, Actions& actions, std::mt19937& 
         std::vector<int> search_depths;
         std::vector<uint64_t> all_num_positions;
 
-        const int k_num_runs = 1000;
+        const int k_num_runs = 1;
         for (int run = 0; run < k_num_runs; run++) {
             if (actions.stop) {
                 break;
