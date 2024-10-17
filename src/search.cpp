@@ -152,7 +152,10 @@ bool Search (ErrorHandler error_handler, phmap::parallel_flat_hash_map<CubeMapVi
         }
     }
 
-    // this does at the moment not happen
+    if (max_depth != not_found_sol) {
+        error_handler.Handle(ErrorHandler::Level::kInfo, "search.cpp", "found optimal solution");
+        return true;
+    }
     return false;
 }
 
