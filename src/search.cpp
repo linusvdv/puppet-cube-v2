@@ -7,6 +7,7 @@
 #include <sstream>
 #include <string>
 #include <thread>
+#include <utility>
 #include <vector>
 #include <parallel_hashmap/phmap.h>
 #include <nadeau.h>
@@ -15,6 +16,7 @@
 #include "actions.h"
 #include "cube.h"
 #include "error_handler.h"
+#include "parallel_hashmap/phmap_fwd_decl.h"
 #include "rotation.h"
 #include "tablebase.h"
 
@@ -70,7 +72,13 @@ CubeSearch GetCubeSearch (Cube& cube, uint8_t depth, uint8_t visited_time) {
 }
 
 
-void ShowMemory (ErrorHandler error_handler, phmap::parallel_flat_hash_map<CubeMapVisited, std::pair<uint8_t, Rotations>>& visited, std::priority_queue<CubeSearch, std::deque<CubeSearch>>& search_queue) {
+using VisitedMap = phmap::parallel_flat_hash_map<CubeMapVisited, std::pair<uint8_t, Rotations>,
+            phmap::priv::hash_default_hash<CubeMapVisited>, phmap::priv::hash_default_eq<CubeMapVisited>,
+            phmap::priv::Allocator<std::pair<CubeMapVisited, std::pair<uint8_t, Rotations>>>,
+            8, std::mutex>;
+
+
+void ShowMemory (ErrorHandler error_handler, VisitedMap& visited, std::priority_queue<CubeSearch, std::deque<CubeSearch>>& search_queue) {
     const int indent = 8;
     std::stringstream out;
     out << "\n";
@@ -86,7 +94,7 @@ void ShowMemory (ErrorHandler error_handler, phmap::parallel_flat_hash_map<CubeM
 constexpr int kNotFoundSol = 1e9;
 constexpr int kMaxPositions = 10000000;
 
-void Search (ErrorHandler error_handler, phmap::parallel_flat_hash_map<CubeMapVisited, std::pair<uint8_t, Rotations>>& visited,
+void Search (ErrorHandler error_handler, VisitedMap& visited,
              std::priority_queue<CubeSearch, std::deque<CubeSearch>>& search_queue, std::atomic<int>& max_depth,
              CubeSearch& tablebase_cube, std::atomic<uint64_t>& num_positions, std::mutex& search_mutex, std::mutex& visited_mutex, std::mutex& max_depth_mutex, int thread_id) {
 
@@ -130,13 +138,12 @@ void Search (ErrorHandler error_handler, phmap::parallel_flat_hash_map<CubeMapVi
         }
 
         Cube::Hash cube_hash = cube.GetHash();
-        // check ig position has already been searched
-        {
-            std::lock_guard<std::mutex> guard(visited_mutex);
-            auto visited_it = visited.find({cube_hash});
-            if (visited_it != visited.end() && visited_it->second.first < cube_search.depth) {
-                continue;
-            }
+        // check if position has already been searched
+        bool already_visited = false;
+        auto already_visited_lamda = [&already_visited, cube_search](const VisitedMap::value_type& value) {already_visited = value.second.first < cube_search.depth;};
+        visited.if_contains({cube_hash}, already_visited_lamda);
+        if (already_visited) {
+            continue;
         }
 
         // go over next moves
@@ -145,12 +152,11 @@ void Search (ErrorHandler error_handler, phmap::parallel_flat_hash_map<CubeMapVi
 
             // check if next position is not already in the tablebase
             Cube::Hash next_cube_hash = next_cube.GetHash();
-            {
-                std::lock_guard<std::mutex> guard(visited_mutex);
-                auto visited_it = visited.find({next_cube_hash});
-                if (visited_it != visited.end() && visited_it->second.first <= cube_search.depth+1) {
-                    continue;
-                }
+            bool already_visited = false;
+            auto already_visited_lamda = [&already_visited, cube_search](const VisitedMap::value_type& value) {already_visited = value.second.first <= cube_search.depth+1;};
+            visited.if_contains({next_cube_hash}, already_visited_lamda);
+            if (already_visited) {
+                continue;
             }
 
             // add to search if the next cube is visited_times-2 better than current cube
@@ -161,10 +167,7 @@ void Search (ErrorHandler error_handler, phmap::parallel_flat_hash_map<CubeMapVi
                     std::lock_guard<std::mutex> guard(search_mutex);
                     search_queue.push(next);
                 }
-                {
-                    std::lock_guard<std::mutex> guard(visited_mutex);
-                    visited[{next_cube_hash}] = {cube_search.depth+1, rotation};
-                }
+                visited[{next_cube_hash}] = {cube_search.depth+1, rotation};
             }
         }
 
@@ -193,7 +196,7 @@ bool Solve (ErrorHandler error_handler, Actions& actions, Cube start_cube, uint6
     search_queue.push(GetCubeSearch(start_cube, 0, 0));
     std::mutex search_mutex;
 
-    phmap::parallel_flat_hash_map<CubeMapVisited, std::pair<uint8_t, Rotations>> visited;
+    VisitedMap visited;
     visited.insert({{start_cube.GetHash()}, {0, Rotations(-1)}});
     std::mutex visited_mutex;
 
