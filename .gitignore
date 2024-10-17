@@ -38,3 +38,4 @@ Makefile
 # ignore all files in position_data not ending in .cpp
 position_data
 !position_data/*.cpp
+out*

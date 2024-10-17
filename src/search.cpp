@@ -141,13 +141,13 @@ bool Search (ErrorHandler error_handler, phmap::parallel_flat_hash_map<CubeMapVi
             // add to search if the next cube is visited_times-2 better than current cube
             // -2 comes form best improvement possible in a position
             CubeSearch next = GetCubeSearch(next_cube, cube_search.depth+1, 0);
-            if (next.heuristic <= cube_search.heuristic-2) {
+            if (cube_search.visited_time==0 ? (next.heuristic <= cube_search.heuristic) : (next.heuristic == cube_search.heuristic)) {
                 search_queue.push(next);
                 visited[{next_cube.GetHash()}] = {cube_search.depth+1, rotation};
             }
         }
 
-        if (cube_search.visited_time < 7) {
+        if (cube_search.visited_time < 4) {
             search_queue.push(GetCubeSearch(cube, cube_search.depth, cube_search.visited_time+1));
         }
     }
