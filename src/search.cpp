@@ -11,6 +11,7 @@
 #include <vector>
 #include <parallel_hashmap/phmap.h>
 #include <nadeau.h>
+#include <concurrentqueue.h>
 
 
 #include "actions.h"
@@ -77,12 +78,14 @@ using VisitedMap = phmap::parallel_flat_hash_map<CubeMapVisited, std::pair<uint8
             phmap::priv::Allocator<std::pair<CubeMapVisited, std::pair<uint8_t, Rotations>>>,
             8, std::mutex>;
 
+using SearchQueue = std::vector<moodycamel::ConcurrentQueue<CubeSearch>>;
 
-void ShowMemory (ErrorHandler error_handler, VisitedMap& visited, std::priority_queue<CubeSearch, std::deque<CubeSearch>>& search_queue) {
+
+void ShowMemory (ErrorHandler error_handler, VisitedMap& visited, SearchQueue& search_queue) {
     const int indent = 8;
     std::stringstream out;
     out << "\n";
-    out << std::setw(indent) << "" << "PQ:  " << 12 * search_queue.size() << " = 12 * " << search_queue.size() << " = " << 12 * search_queue.size() / 1000000 << " MB" << std::endl;
+//    out << std::setw(indent) << "" << "PQ:  " << 12 * search_queue.size() << " = 12 * " << search_queue.size() << " = " << 12 * search_queue.size() / 1000000 << " MB" << std::endl;
     out << std::setw(indent) << "" << "Map: " << 11 * visited.size() << " = 11 * " << visited.size() << " = " << 11 * visited.size() / 1000000 << " MB" << std::endl;
     out << std::setw(indent) << "" << "Map capacity: " << 11 * visited.capacity() << " = 11 * " << visited.capacity() << " = " << 11 * visited.capacity() / 1000000 << " MB" << std::endl;
     out << std::setw(indent) << "" << "current: " << getCurrentRSS() << " = " << getCurrentRSS() / 1000000 << " MB" << std::endl;
@@ -92,28 +95,28 @@ void ShowMemory (ErrorHandler error_handler, VisitedMap& visited, std::priority_
 
 
 constexpr int kNotFoundSol = 1e9;
-constexpr int kMaxPositions = 10000000;
+constexpr int kMaxPositions = 1000000000;
 
 void Search (ErrorHandler error_handler, VisitedMap& visited,
-             std::priority_queue<CubeSearch, std::deque<CubeSearch>>& search_queue, std::atomic<int>& max_depth,
-             CubeSearch& tablebase_cube, std::atomic<uint64_t>& num_positions, std::mutex& search_mutex, std::mutex& visited_mutex, std::mutex& max_depth_mutex, int thread_id) {
+             SearchQueue& search_queue, std::atomic<int>& max_depth,
+             CubeSearch& tablebase_cube, std::atomic<uint64_t>& num_positions, int thread_id) {
 
     while (num_positions < kMaxPositions) {
         // get new position from priority_queue
         CubeSearch cube_search;
-        {
-            std::lock_guard<std::mutex> guard(search_mutex);
-            if (search_queue.empty()) {
-                // INFO: already visited all positions should break
-                std::cout << "break" << std::endl;
+        bool found = false;
+        for (moodycamel::ConcurrentQueue<CubeSearch>& queue : search_queue) {
+            if(!queue.try_dequeue(cube_search)) {
                 continue;
             }
-            cube_search = search_queue.top();
-            search_queue.pop();
+            found = true;
+            break;
+        }
+        if (!found) {
+            continue;
         }
 
-        ++num_positions;
-        if (num_positions % 100000 == 0) {
+        if (++num_positions % 1000000 == 0) {
             std::cout << thread_id << ": " << num_positions << " " << int(cube_search.heuristic) << std::endl;
         }
         Cube cube = DecodeHash(cube_search.hash);
@@ -163,20 +166,14 @@ void Search (ErrorHandler error_handler, VisitedMap& visited,
             // -2 comes form best improvement possible in a position
             CubeSearch next = GetCubeSearch(next_cube, cube_search.depth+1, 0);
             if (cube_search.visited_time==0 ? (next.heuristic <= cube_search.heuristic) : (next.heuristic == cube_search.heuristic)) {
-                {
-                    std::lock_guard<std::mutex> guard(search_mutex);
-                    search_queue.push(next);
-                }
+                search_queue[next.heuristic].enqueue(next);
                 visited[{next_cube_hash}] = {cube_search.depth+1, rotation};
             }
         }
 
         if (cube_search.visited_time < 4) {
             CubeSearch temp_cube_search = GetCubeSearch(cube, cube_search.depth, cube_search.visited_time+1);
-            {
-                std::lock_guard<std::mutex> guard(search_mutex);
-                search_queue.push(temp_cube_search);
-            }
+            search_queue[temp_cube_search.heuristic].enqueue(temp_cube_search);
         }
     }
 }
@@ -192,13 +189,13 @@ bool Solve (ErrorHandler error_handler, Actions& actions, Cube start_cube, uint6
 
     // initialize starting position
     CubeSearch tablebase_cube;
-    std::priority_queue<CubeSearch, std::deque<CubeSearch>> search_queue;
-    search_queue.push(GetCubeSearch(start_cube, 0, 0));
-    std::mutex search_mutex;
+    // TODO: num elements
+    SearchQueue search_queue(140);
+    CubeSearch start_cube_search = GetCubeSearch(start_cube, 0, 0);
+    search_queue[start_cube_search.heuristic].enqueue(start_cube_search);
 
     VisitedMap visited;
     visited.insert({{start_cube.GetHash()}, {0, Rotations(-1)}});
-    std::mutex visited_mutex;
 
     // best found depth
     std::atomic<int> max_depth = kNotFoundSol;
@@ -211,7 +208,7 @@ bool Solve (ErrorHandler error_handler, Actions& actions, Cube start_cube, uint6
         std::vector<std::jthread> threads;
         for (int i = 0; i < num_threads; i++) {
             threads.push_back(std::jthread(Search, error_handler, std::ref(visited), std::ref(search_queue), std::ref(max_depth),
-                    std::ref(tablebase_cube), std::ref(num_positions_atomic), std::ref(search_mutex), std::ref(visited_mutex), std::ref(max_depth_mutex), i));
+                    std::ref(tablebase_cube), std::ref(num_positions_atomic), i));
         }
     }
     num_positions = num_positions_atomic;
