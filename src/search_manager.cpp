@@ -98,58 +98,51 @@ void SearchManager (ErrorHandler error_handler, Actions& actions, std::mt19937& 
     error_handler.Handle(ErrorHandler::Level::kMemory, "search_manager.cpp", "currently using " + std::to_string(getCurrentRSS()/1000000) + " MB"); // NOLINT
     Cube cube;
 
-    const int max_depth = 15;
-    for (int depth = max_depth; depth <= max_depth; depth++) {
+    const int scrambling_depth = 1000;
+    // get some informations
+    std::vector<double> time_durations;
+    std::vector<int> search_depths;
+    std::vector<uint64_t> all_num_positions;
+
+    const int k_num_runs = 1000;
+    for (int run = 0; run < k_num_runs; run++) {
         if (actions.stop) {
             break;
         }
+        // get duration time
+        auto start_time = std::chrono::system_clock::now();
 
-        // get some informations
-        std::vector<double> time_durations;
-        std::vector<int> search_depths;
-        std::vector<uint64_t> all_num_positions;
+        // scramble
+        actions.Push(Action(Instructions::kIsScrambling, Rotations()));
+        RandomRotations(cube, actions, scrambling_depth, rng);
+        actions.Push(Action(Instructions::kIsSolving, Rotations()));
 
-        const int k_num_runs = 1;
-        for (int run = 0; run < k_num_runs; run++) {
-            if (actions.stop) {
-                break;
+        // solve cube
+        uint64_t num_positions = 0;
+        if (Solve(error_handler, actions, cube, num_positions)) {
+            error_handler.Handle(ErrorHandler::Level::kAll, "search.cpp",  std::to_string(run) + ": Found solution of depth " + std::to_string(actions.solve.size()) + " visiting " + std::to_string(num_positions) + " positions");
+
+            // statistic
+            search_depths.push_back(actions.solve.size());
+            all_num_positions.push_back(num_positions);
+
+            // show solution
+            while (!actions.solve.empty()) {
+                actions.Push(Action(Instructions::kRotation, actions.solve.top()));
+                actions.solve.pop();
             }
-            // get duration time
-            auto start_time = std::chrono::system_clock::now();
-
-            // scramble
-            actions.Push(Action(Instructions::kIsScrambling, Rotations()));
-            RandomRotations(cube, actions, 1000, rng);
-            actions.Push(Action(Instructions::kIsSolving, Rotations()));
-
-            // solve cube
-            uint64_t num_positions = 0;
-            if (Solve(error_handler, actions, cube, num_positions)) {
-                error_handler.Handle(ErrorHandler::Level::kAll, "search.cpp",  std::to_string(run) + ": Found solution of depth " + std::to_string(actions.solve.size()) + " visiting " + std::to_string(num_positions) + " positions");
-
-                // statistic
-                search_depths.push_back(actions.solve.size());
-                all_num_positions.push_back(num_positions);
-
-                // show solution
-                while (!actions.solve.empty()) {
-                    actions.Push(Action(Instructions::kRotation, actions.solve.top()));
-                    actions.solve.pop();
-                }
-            }
-
-            auto end_time = std::chrono::system_clock::now();
-            std::chrono::duration<double> time_duration = end_time - start_time;
-            if (!actions.stop) {
-                time_durations.push_back(time_duration.count());
-            }
-
-            actions.Push(Action(Instructions::kReset, Rotations()));
-            cube = Cube();
         }
 
-        // calculate some statistic
-        ShowSearchStatistic(error_handler, depth, search_depths.size(), time_durations, search_depths, all_num_positions);
+        auto end_time = std::chrono::system_clock::now();
+        std::chrono::duration<double> time_duration = end_time - start_time;
+        if (!actions.stop) {
+            time_durations.push_back(time_duration.count());
+        }
+
+        actions.Push(Action(Instructions::kReset, Rotations()));
+        cube = Cube();
     }
 
+    // calculate some statistic
+    ShowSearchStatistic(error_handler, scrambling_depth, search_depths.size(), time_durations, search_depths, all_num_positions);
 }

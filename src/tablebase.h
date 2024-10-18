@@ -1,3 +1,5 @@
+#pragma once
+
 #include "actions.h"
 #include "cube.h"
 #include "error_handler.h"

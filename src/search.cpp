@@ -1,9 +1,8 @@
+#include <atomic>
 #include <cstdint>
-#include <deque>
 #include <iomanip>
 #include <iostream>
 #include <mutex>
-#include <queue>
 #include <sstream>
 #include <string>
 #include <thread>
@@ -46,7 +45,7 @@ struct CubeSearch {
     uint8_t heuristic;
     uint8_t depth;
 
-    // this is a value between 0 and 7 describing how often this position is been visited
+    // this is a value from 0 to 4 describing how often this position is been visited
     uint8_t visited_time;
 
     // sort priority_queue smaller to larger
@@ -85,21 +84,25 @@ void ShowMemory (ErrorHandler error_handler, VisitedMap& visited) {
     const int indent = 8;
     std::stringstream out;
     out << "\n";
-    out << std::setw(indent) << "" << "Map: " << 11 * visited.size() << " = 11 * " << visited.size() << " = " << 11 * visited.size() / 1000000 << " MB" << std::endl;
-    out << std::setw(indent) << "" << "Map capacity: " << 11 * visited.capacity() << " = 11 * " << visited.capacity() << " = " << 11 * visited.capacity() / 1000000 << " MB" << std::endl;
-    out << std::setw(indent) << "" << "current: " << getCurrentRSS() << " = " << getCurrentRSS() / 1000000 << " MB" << std::endl;
-    out << std::setw(indent) << "" << "peak: " << getPeakRSS() << " = " << getPeakRSS() / 1000000 << " MB";
+    out << std::setw(indent) << "" << "Map: " << 11 * visited.size() << " = 11 * " << visited.size() << " = " << 11 * visited.size() / 1000000 << " MB" << std::endl; // NOLINT
+    out << std::setw(indent) << "" << "Map capacity: " << 11 * visited.capacity() << " = 11 * " << visited.capacity() << " = " << 11 * visited.capacity() / 1000000 << " MB" << std::endl; // NOLINT
+    out << std::setw(indent) << "" << "current: " << getCurrentRSS() << " = " << getCurrentRSS() / 1000000 << " MB" << std::endl; // NOLINT
+    out << std::setw(indent) << "" << "peak: " << getPeakRSS() << " = " << getPeakRSS() / 1000000 << " MB"; // NOLINT
     error_handler.Handle(ErrorHandler::Level::kMemory, "search.cpp", out.str());
 }
 
 
 constexpr int kNotFoundSol = 1e9;
-constexpr int kMaxPositions = 100000000;
+constexpr int kMaxPositions = 10000000;
+constexpr int kNumThreads = 24;
 
-void Search (ErrorHandler error_handler, VisitedMap& visited,
-             SearchQueue& search_queue, std::atomic<int>& max_depth, std::mutex& max_depth_mutex,
-             CubeSearch& tablebase_cube, std::atomic<uint64_t>& num_positions) {
+void Search (ErrorHandler error_handler, VisitedMap& visited, SearchQueue& search_queue,
+             std::atomic<int>& max_depth, std::mutex& max_depth_mutex, CubeSearch& tablebase_cube,
+             std::atomic<uint64_t>& num_positions,
+             std::atomic<uint64_t>& thread_sleep, std::atomic<uint64_t>& total_sleep) {  // needed to know when all positions have been looked at
 
+    bool this_thread_sleep = false;
+    uint64_t this_last_sleep = 0;
     while (num_positions < kMaxPositions) {
         // get new position from priority_queue
         CubeSearch cube_search;
@@ -111,8 +114,30 @@ void Search (ErrorHandler error_handler, VisitedMap& visited,
             found = true;
             break;
         }
+
+        // has searched through all positions
         if (!found) {
+            if (!this_thread_sleep) {
+                ++thread_sleep;
+            }
+            // order is important
+            uint64_t current_total_sleep = total_sleep;
+            uint64_t current_num_positions = num_positions;
+            // update total_sleep
+            if (thread_sleep == kNumThreads) {
+                total_sleep += (current_num_positions - this_last_sleep);
+                this_last_sleep = current_num_positions;
+            }
+            if (current_num_positions > 0 && current_total_sleep == current_num_positions*kNumThreads) {
+                // NOTE: No more positions are in the queue and all threads would be waiting
+                break;
+            }
+            this_thread_sleep = true;
             continue;
+        }
+        if (this_thread_sleep) {
+            --thread_sleep;
+            this_thread_sleep = false;
         }
 
         ++num_positions;
@@ -163,8 +188,7 @@ void Search (ErrorHandler error_handler, VisitedMap& visited,
                 continue;
             }
 
-            // add to search if the next cube is visited_times-2 better than current cube
-            // -2 comes form best improvement possible in a position
+            // add to search if the next cube is visited_times better than current cube
             CubeSearch next = GetCubeSearch(next_cube, cube_search.depth+1, 0);
             if (cube_search.visited_time==0 ? (next.heuristic <= cube_search.heuristic) : (next.heuristic == cube_search.heuristic)) {
                 search_queue[next.heuristic].enqueue(next);
@@ -204,12 +228,13 @@ bool Solve (ErrorHandler error_handler, Actions& actions, Cube start_cube, uint6
     std::atomic<uint64_t> num_positions_atomic = num_positions;
     
     // start multiple threads
-    const int num_threads = 2;
+    std::atomic<uint64_t> thread_sleep = 0;
+    std::atomic<uint64_t> total_sleep = 0;
     {
         std::vector<std::jthread> threads;
-        for (int i = 0; i < num_threads; i++) {
+        for (int i = 0; i < kNumThreads; i++) {
             threads.push_back(std::jthread(Search, error_handler, std::ref(visited), std::ref(search_queue), std::ref(max_depth),
-                    std::ref(max_depth_mutex), std::ref(tablebase_cube), std::ref(num_positions_atomic)));
+                    std::ref(max_depth_mutex), std::ref(tablebase_cube), std::ref(num_positions_atomic), std::ref(thread_sleep), std::ref(total_sleep)));
         }
     }
     num_positions = num_positions_atomic;
@@ -220,6 +245,7 @@ bool Solve (ErrorHandler error_handler, Actions& actions, Cube start_cube, uint6
     }
     if (max_depth == kNotFoundSol) {
         error_handler.Handle(ErrorHandler::Level::kWarning, "search.cpp", "Did not find a solution within " + std::to_string(num_positions) + " positions");
+        return false;
     }
 
 

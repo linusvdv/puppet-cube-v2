@@ -17,8 +17,8 @@ const std::array<int, 7> kColor = {
     33,
     32,
     0,
-    0,
-    0
+    90,
+    90
 };
 
 
