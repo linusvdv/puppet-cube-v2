@@ -98,11 +98,7 @@ constexpr int kNumThreads = 24;
 
 void Search (ErrorHandler error_handler, VisitedMap& visited, SearchQueue& search_queue,
              std::atomic<int>& max_depth, std::mutex& max_depth_mutex, CubeSearch& tablebase_cube,
-             std::atomic<uint64_t>& num_positions,
-             std::atomic<uint64_t>& thread_sleep, std::atomic<uint64_t>& total_sleep) {  // needed to know when all positions have been looked at
-
-    bool this_thread_sleep = false;
-    uint64_t this_last_sleep = 0;
+             std::atomic<uint64_t>& num_positions, std::atomic<uint64_t>& search_queue_size) {
     while (num_positions < kMaxPositions) {
         // get new position from priority_queue
         CubeSearch cube_search;
@@ -114,30 +110,12 @@ void Search (ErrorHandler error_handler, VisitedMap& visited, SearchQueue& searc
             found = true;
             break;
         }
-
-        // has searched through all positions
         if (!found) {
-            if (!this_thread_sleep) {
-                ++thread_sleep;
+            // has searched through all positions
+            if (search_queue_size == 0) {
+                return;
             }
-            // order is important
-            uint64_t current_total_sleep = total_sleep;
-            uint64_t current_num_positions = num_positions;
-            // update total_sleep
-            if (thread_sleep == kNumThreads) {
-                total_sleep += (current_num_positions - this_last_sleep);
-                this_last_sleep = current_num_positions;
-            }
-            if (current_num_positions > 0 && current_total_sleep == current_num_positions*kNumThreads) {
-                // NOTE: No more positions are in the queue and all threads would be waiting
-                break;
-            }
-            this_thread_sleep = true;
             continue;
-        }
-        if (this_thread_sleep) {
-            --thread_sleep;
-            this_thread_sleep = false;
         }
 
         ++num_positions;
@@ -145,6 +123,7 @@ void Search (ErrorHandler error_handler, VisitedMap& visited, SearchQueue& searc
 
         // check if it is posible to solve the current cube im this amount of moves
         if (cube_search.depth + (std::max(std::max({cube.GetCornerHeuristic(), int(cube.GetEdgeHeuristic1()), int(cube.GetEdgeHeuristic2())}) - GetTablebaseDepth(), 0)) >= max_depth) {
+            --search_queue_size;
             continue;
         }
 
@@ -163,6 +142,7 @@ void Search (ErrorHandler error_handler, VisitedMap& visited, SearchQueue& searc
 
         // searched a branch to depth 100
         if (cube_search.depth >= 100) {
+            --search_queue_size;
             continue;
         }
 
@@ -172,6 +152,7 @@ void Search (ErrorHandler error_handler, VisitedMap& visited, SearchQueue& searc
         auto already_visited_lamda = [&already_visited, cube_search](const VisitedMap::value_type& value) {already_visited = value.second.first < cube_search.depth;};
         visited.if_contains({cube_hash}, already_visited_lamda);
         if (already_visited) {
+            --search_queue_size;
             continue;
         }
 
@@ -192,14 +173,17 @@ void Search (ErrorHandler error_handler, VisitedMap& visited, SearchQueue& searc
             CubeSearch next = GetCubeSearch(next_cube, cube_search.depth+1, 0);
             if (cube_search.visited_time==0 ? (next.heuristic <= cube_search.heuristic) : (next.heuristic == cube_search.heuristic)) {
                 search_queue[next.heuristic].enqueue(next);
-                visited[{next_cube_hash}] = {cube_search.depth+1, rotation};
+                visited.try_emplace_l({next_cube_hash}, [cube_search, rotation](VisitedMap::value_type& value){value.second = {cube_search.depth+1, rotation}; }, std::make_pair(cube_search.depth+1, rotation));
+                ++search_queue_size;
             }
         }
 
         if (cube_search.visited_time < 4) {
             CubeSearch temp_cube_search = GetCubeSearch(cube, cube_search.depth, cube_search.visited_time+1);
             search_queue[temp_cube_search.heuristic].enqueue(temp_cube_search);
+            ++search_queue_size;
         }
+        --search_queue_size;
     }
 }
 
@@ -218,6 +202,7 @@ bool Solve (ErrorHandler error_handler, Actions& actions, Cube start_cube, uint6
     SearchQueue search_queue(140);
     CubeSearch start_cube_search = GetCubeSearch(start_cube, 0, 0);
     search_queue[start_cube_search.heuristic].enqueue(start_cube_search);
+    std::atomic<uint64_t> search_queue_size = 1;
 
     VisitedMap visited;
     visited.insert({{start_cube.GetHash()}, {0, Rotations(-1)}});
@@ -228,13 +213,11 @@ bool Solve (ErrorHandler error_handler, Actions& actions, Cube start_cube, uint6
     std::atomic<uint64_t> num_positions_atomic = num_positions;
     
     // start multiple threads
-    std::atomic<uint64_t> thread_sleep = 0;
-    std::atomic<uint64_t> total_sleep = 0;
     {
         std::vector<std::jthread> threads;
         for (int i = 0; i < kNumThreads; i++) {
             threads.push_back(std::jthread(Search, error_handler, std::ref(visited), std::ref(search_queue), std::ref(max_depth),
-                    std::ref(max_depth_mutex), std::ref(tablebase_cube), std::ref(num_positions_atomic), std::ref(thread_sleep), std::ref(total_sleep)));
+                    std::ref(max_depth_mutex), std::ref(tablebase_cube), std::ref(num_positions_atomic), std::ref(search_queue_size)));
         }
     }
     num_positions = num_positions_atomic;
