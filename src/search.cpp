@@ -81,11 +81,10 @@ using VisitedMap = phmap::parallel_flat_hash_map<CubeMapVisited, std::pair<uint8
 using SearchQueue = std::vector<moodycamel::ConcurrentQueue<CubeSearch>>;
 
 
-void ShowMemory (ErrorHandler error_handler, VisitedMap& visited, SearchQueue& search_queue) {
+void ShowMemory (ErrorHandler error_handler, VisitedMap& visited) {
     const int indent = 8;
     std::stringstream out;
     out << "\n";
-//    out << std::setw(indent) << "" << "PQ:  " << 12 * search_queue.size() << " = 12 * " << search_queue.size() << " = " << 12 * search_queue.size() / 1000000 << " MB" << std::endl;
     out << std::setw(indent) << "" << "Map: " << 11 * visited.size() << " = 11 * " << visited.size() << " = " << 11 * visited.size() / 1000000 << " MB" << std::endl;
     out << std::setw(indent) << "" << "Map capacity: " << 11 * visited.capacity() << " = 11 * " << visited.capacity() << " = " << 11 * visited.capacity() / 1000000 << " MB" << std::endl;
     out << std::setw(indent) << "" << "current: " << getCurrentRSS() << " = " << getCurrentRSS() / 1000000 << " MB" << std::endl;
@@ -95,11 +94,11 @@ void ShowMemory (ErrorHandler error_handler, VisitedMap& visited, SearchQueue& s
 
 
 constexpr int kNotFoundSol = 1e9;
-constexpr int kMaxPositions = 1000000000;
+constexpr int kMaxPositions = 100000000;
 
 void Search (ErrorHandler error_handler, VisitedMap& visited,
-             SearchQueue& search_queue, std::atomic<int>& max_depth,
-             CubeSearch& tablebase_cube, std::atomic<uint64_t>& num_positions, int thread_id) {
+             SearchQueue& search_queue, std::atomic<int>& max_depth, std::mutex& max_depth_mutex,
+             CubeSearch& tablebase_cube, std::atomic<uint64_t>& num_positions) {
 
     while (num_positions < kMaxPositions) {
         // get new position from priority_queue
@@ -116,9 +115,7 @@ void Search (ErrorHandler error_handler, VisitedMap& visited,
             continue;
         }
 
-        if (++num_positions % 1000000 == 0) {
-            std::cout << thread_id << ": " << num_positions << " " << int(cube_search.heuristic) << std::endl;
-        }
+        ++num_positions;
         Cube cube = DecodeHash(cube_search.hash);
 
         // check if it is posible to solve the current cube im this amount of moves
@@ -129,10 +126,14 @@ void Search (ErrorHandler error_handler, VisitedMap& visited,
         // cube in tablebase
         // if it exists a new shortest path exists
         if (TablebaseContainsOuter(cube.GetHash())) {
-            max_depth = cube_search.depth;
-            tablebase_cube = cube_search;
-            ShowMemory(error_handler, visited, search_queue);
-            error_handler.Handle(ErrorHandler::Level::kExtra, "search.cpp", "Found solution of depth " + std::to_string(cube_search.depth + GetTablebaseDepth()) + " visiting " + std::to_string(num_positions) + " positions");
+            std::lock_guard<std::mutex> guard(max_depth_mutex);
+            // improved depth
+            if (cube_search.depth < max_depth) {
+                max_depth = cube_search.depth;
+                tablebase_cube = cube_search;
+                ShowMemory(error_handler, visited);
+                error_handler.Handle(ErrorHandler::Level::kExtra, "search.cpp", "Found solution of depth " + std::to_string(cube_search.depth + GetTablebaseDepth()) + " visiting " + std::to_string(num_positions) + " positions");
+            }
         }
 
         // searched a branch to depth 100
@@ -203,17 +204,17 @@ bool Solve (ErrorHandler error_handler, Actions& actions, Cube start_cube, uint6
     std::atomic<uint64_t> num_positions_atomic = num_positions;
     
     // start multiple threads
-    const int num_threads = 20;
+    const int num_threads = 2;
     {
         std::vector<std::jthread> threads;
         for (int i = 0; i < num_threads; i++) {
             threads.push_back(std::jthread(Search, error_handler, std::ref(visited), std::ref(search_queue), std::ref(max_depth),
-                    std::ref(tablebase_cube), std::ref(num_positions_atomic), i));
+                    std::ref(max_depth_mutex), std::ref(tablebase_cube), std::ref(num_positions_atomic)));
         }
     }
     num_positions = num_positions_atomic;
 
-    ShowMemory(error_handler, visited, search_queue);
+    ShowMemory(error_handler, visited);
     if (max_depth != kNotFoundSol && num_positions < kMaxPositions) {
         error_handler.Handle(ErrorHandler::Level::kInfo, "search.cpp", "found optimal solution");
     }
