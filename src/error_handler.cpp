@@ -5,8 +5,6 @@
 #include <iostream>
 #include <string>
 
-#include <GLFW/glfw3.h>
-
 
 #include "error_handler.h"
 

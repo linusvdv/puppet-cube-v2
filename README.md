@@ -1,5 +1,12 @@
 # puppet-cube-v2
 
+<!--toc:start-->
+- [puppet-cube-v2](#puppet-cube-v2)
+  - [Pre compilation of position_data](#pre-compilation-of-positiondata)
+  - [Compilation](#compilation)
+  - [Run](#run)
+<!--toc:end-->
+
 ## Pre compilation of position_data
 
 Time: ca. 3 min.
@@ -17,7 +24,14 @@ cd ../
 
 ```bash
 cmake -B build -DCMAKE_BUILD_TYPE=Release
-cmake --build build
+cmake --build build -j
+```
+
+Compilation without GUI
+
+```bash
+cmake -B build -DCMAKE_BUILD_TYPE=Release -DGUI=OFF
+cmake --build build -j
 ```
 
 ## Run

@@ -7,11 +7,13 @@
 #include "actions.h"
 #include "cube.h"
 #include "error_handler.h"
-#include "window_manager.h"
 #include "settings.h"
 #include "rotation.h"
-#include "search.h"
 #include "search_manager.h"
+
+#ifdef GUI
+#include "window_manager.h"
+#endif
 
 
 int main (int argc, char *argv[]) {
@@ -28,8 +30,12 @@ int main (int argc, char *argv[]) {
 
     // check if user wants a graphical interface
     if (settings.gui) {
+        #ifdef GUI
         // create a graphical interface running on another thread
         window_manager = std::thread(WindowManager, error_handler, settings, std::ref(actions));
+        #else
+        error_handler.Handle(ErrorHandler::Level::kError, "main.cpp", "disable cmake -DGUI=OFF or run with --gui=false");
+        #endif
     }
 
     // random number initialisation

@@ -26,7 +26,7 @@ Setting::Setting(ErrorHandler& error_handler, int argc, char *argv[]) {
         if (argument.find("--gui=") == 0) {
             argument = argument.erase(0, std::string("--gui=").size());
             if (argument == "true") {
-                gui = false;
+                gui = true;
             }
             else if (argument == "false") {
                 gui = false;
