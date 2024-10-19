@@ -1,12 +1,15 @@
 #include <cstdint>
 #include <iostream>
-#include <queue>
+#include <string>
+#include <thread>
 #include <vector>
 #include <parallel_hashmap/phmap.h>
 
 
 #include "cube.h"
 #include "actions.h"
+#include "error_handler.h"
+#include "settings.h"
 
 
 struct PositionHash {
@@ -24,7 +27,12 @@ struct PositionHash {
 
 
 // positions reached from the solved cube after a specific number of moves
-std::vector<phmap::parallel_flat_hash_set<PositionHash>> tablebase;
+using Tablebase = phmap::parallel_flat_hash_set<PositionHash,
+        phmap::priv::hash_default_hash<PositionHash>,
+        phmap::priv::hash_default_eq<PositionHash>,
+        phmap::priv::Allocator<PositionHash>,
+        8, std::mutex>;
+std::vector<Tablebase> tablebase;
 
 
 // check if the cube is in the outermost tablebase;
@@ -68,8 +76,47 @@ bool TablebaseSolve (Cube& cube, Actions& actions, int depth, uint64_t& num_posi
 }
 
 
+void ParallelTablebaseIncrease(int depth, int thread_id, int num_threads) {
+    // go over all positions of this depth
+    auto current_it = tablebase[depth].begin();
+    if (current_it == tablebase[depth].end()) {
+        return;
+    }
+
+    for (int i = 0; i < thread_id; i++) {
+        if (++current_it == tablebase[depth].end()) {
+            return;
+        }
+    }
+
+    while (true) {
+        Cube cube = DecodeHash(current_it->hash);
+
+        // do all moves
+        std::vector<Rotations> legal_rotations = GetLegalRotations(cube);
+        for (Rotations rotation : legal_rotations) {
+            Cube next_cube = Rotate(cube, rotation);
+            PositionHash next_hash = {next_cube.GetHash()};
+
+            // check if the position is not already searched
+            if (tablebase[depth+1].contains(next_hash) || tablebase[depth].contains(next_hash) || (depth > 0 && tablebase[depth-1].contains(next_hash))) {
+                continue;
+            }
+
+            tablebase[depth+1].lazy_emplace_l(std::move(next_hash), []([[maybe_unused]]Tablebase::value_type& value){}, [next_hash](const Tablebase::constructor& ctor){ctor(std::move(next_hash));});
+        }
+
+        for (int i = 0; i < num_threads; i++) {
+            if (++current_it == tablebase[depth].end()) {
+                return;
+            }
+        }
+    }
+}
+
+
 // this function will use a BFS to find all positions of specific depth
-void TablebaseSearch (ErrorHandler error_handler, int depth) {
+void TablebaseSearch (ErrorHandler error_handler, Setting& settings, int depth) {
     if (int(tablebase.size()-1) >= depth) {
         return;
     }
@@ -80,32 +127,21 @@ void TablebaseSearch (ErrorHandler error_handler, int depth) {
 
     // solved position
     if (tablebase.empty()) {
-        tablebase.push_back(phmap::parallel_flat_hash_set<PositionHash>());
+        tablebase.push_back(Tablebase());
         tablebase[0].insert({0, 0});
     }
 
     // search from the next depth
     for (int i = tablebase.size()-1; i < depth; i++) {
-        tablebase.push_back(phmap::parallel_flat_hash_set<PositionHash>());
-
-        // go over all positions of this depth
-        for (const PositionHash& current : tablebase[i]) {
-            Cube cube = DecodeHash(current.hash);
-
-            // do all moves
-            std::vector<Rotations> legal_rotations = GetLegalRotations(cube);
-            for (Rotations rotation : legal_rotations) {
-                Cube next_cube = Rotate(cube, rotation);
-                PositionHash next_hash = {next_cube.GetHash()};
-
-                // check if the position is not already searched
-                if (tablebase[i+1].contains(next_hash) || tablebase[i].contains(next_hash) || (i > 0 && tablebase[i-1].contains(next_hash))) {
-                    continue;
-                }
-
-                tablebase[i+1].insert(next_hash);
+        tablebase.push_back(Tablebase());
+        // start multiple threads
+        {
+            std::vector<std::jthread> threads;
+            for (int j = 0; j < settings.num_threads; j++) {
+                threads.push_back(std::jthread(ParallelTablebaseIncrease, i, j, settings.num_threads));
             }
         }
+        error_handler.Handle(ErrorHandler::Level::kExtra, "tablebase.cpp", "tablebase size depth " + std::to_string(i+1) + ": " + std::to_string(tablebase.back().size()));
     }
 
     // get duration time

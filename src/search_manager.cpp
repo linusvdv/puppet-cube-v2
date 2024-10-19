@@ -92,7 +92,7 @@ void ShowSearchStatistic (ErrorHandler error_handler, Setting& settings, size_t 
 
 
 void SearchManager (ErrorHandler error_handler, Setting& settings, Actions& actions, std::mt19937& rng) {
-    TablebaseSearch(error_handler, settings.tablebase_depth);
+    TablebaseSearch(error_handler, settings, settings.tablebase_depth);
 
     error_handler.Handle(ErrorHandler::Level::kMemory, "search_manager.cpp", "currently using " + std::to_string(getCurrentRSS()/1000000) + " MB"); // NOLINT
     Cube cube;
