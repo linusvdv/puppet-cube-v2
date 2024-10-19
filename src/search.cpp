@@ -18,6 +18,7 @@
 #include "error_handler.h"
 #include "parallel_hashmap/phmap_fwd_decl.h"
 #include "rotation.h"
+#include "settings.h"
 #include "tablebase.h"
 
 
@@ -81,26 +82,24 @@ using SearchQueue = std::vector<moodycamel::ConcurrentQueue<CubeSearch>>;
 
 
 void ShowMemory (ErrorHandler error_handler, VisitedMap& visited) {
-    const int indent = 8;
     std::stringstream out;
     out << "\n";
-    out << std::setw(indent) << "" << "Map: " << 11 * visited.size() << " = 11 * " << visited.size() << " = " << 11 * visited.size() / 1000000 << " MB" << std::endl; // NOLINT
-    out << std::setw(indent) << "" << "Map capacity: " << 11 * visited.capacity() << " = 11 * " << visited.capacity() << " = " << 11 * visited.capacity() / 1000000 << " MB" << std::endl; // NOLINT
-    out << std::setw(indent) << "" << "current: " << getCurrentRSS() << " = " << getCurrentRSS() / 1000000 << " MB" << std::endl; // NOLINT
-    out << std::setw(indent) << "" << "peak: " << getPeakRSS() << " = " << getPeakRSS() / 1000000 << " MB"; // NOLINT
+    out << std::setw(Setting::kIndent) << "" << "Map: " << 11 * visited.size() << " = 11 * " << visited.size() << " = " << 11 * visited.size() / 1000000 << " MB" << std::endl; // NOLINT
+    out << std::setw(Setting::kIndent) << "" << "Map capacity: " << 11 * visited.capacity() << " = 11 * " << visited.capacity() << " = " << 11 * visited.capacity() / 1000000 << " MB" << std::endl; // NOLINT
+    out << std::setw(Setting::kIndent) << "" << "current: " << getCurrentRSS() << " = " << getCurrentRSS() / 1000000 << " MB" << std::endl; // NOLINT
+    out << std::setw(Setting::kIndent) << "" << "peak: " << getPeakRSS() << " = " << getPeakRSS() / 1000000 << " MB"; // NOLINT
     error_handler.Handle(ErrorHandler::Level::kMemory, "search.cpp", out.str());
 }
 
 
 constexpr int kNotFoundSol = 1e9;
-constexpr uint64_t kMaxPositions = 10000000;
 constexpr int kNumSearchQueues = 150;
 
 
-void Search (ErrorHandler error_handler, VisitedMap& visited, SearchQueue& search_queue,
+void Search (ErrorHandler error_handler, Setting& settings, VisitedMap& visited, SearchQueue& search_queue,
              std::atomic<int>& max_depth, std::mutex& max_depth_mutex, CubeSearch& tablebase_cube,
              std::atomic<uint64_t>& num_positions, std::atomic<uint64_t>& search_queue_size) {
-    while (num_positions < kMaxPositions) {
+    while (num_positions < settings.max_num_positions) {
         // get new position from priority_queue
         CubeSearch cube_search;
         bool found = false;
@@ -222,14 +221,14 @@ bool Solve (ErrorHandler error_handler, Setting& settings, Actions& actions, Cub
     {
         std::vector<std::jthread> threads;
         for (int i = 0; i < settings.num_threads; i++) {
-            threads.push_back(std::jthread(Search, error_handler, std::ref(visited), std::ref(search_queue), std::ref(max_depth),
+            threads.push_back(std::jthread(Search, error_handler, std::ref(settings), std::ref(visited), std::ref(search_queue), std::ref(max_depth),
                     std::ref(max_depth_mutex), std::ref(tablebase_cube), std::ref(num_positions_atomic), std::ref(search_queue_size)));
         }
     }
     num_positions = num_positions_atomic;
 
     ShowMemory(error_handler, visited);
-    if (max_depth != kNotFoundSol && num_positions < kMaxPositions) {
+    if (max_depth != kNotFoundSol && num_positions < settings.max_num_positions) {
         error_handler.Handle(ErrorHandler::Level::kInfo, "search.cpp", "found optimal solution");
     }
     if (max_depth == kNotFoundSol) {

@@ -32,4 +32,10 @@ public:
     float scrambling_multiplier = 400;
 
     int num_threads = 0;
+    int tablebase_depth = 5;
+    uint64_t max_num_positions = 10000000;
+    int num_runs = 1000;
+    int scramble_depth = 1000;
+
+    static constexpr int kIndent = 8;
 };

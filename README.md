@@ -5,6 +5,7 @@
   - [Pre compilation of position_data](#pre-compilation-of-positiondata)
   - [Compilation](#compilation)
   - [Run](#run)
+  - [Help](#help)
 <!--toc:end-->
 
 ## Pre compilation of position_data
@@ -38,4 +39,19 @@ cmake --build build -j
 
 ```bash
 ./build/bin/PuppetCubeV2
+```
+
+## Help
+```
+--help          shows this message
+--gui           graphical user interface [true/false]
+--rootPath      path to puppet-cube-v2/
+--errorLevel    amount of output [criticalError/error/info/all/extra/memory]
+--threads       number of threads [int >= 1]
+--runs          number of runs/start positions/scrambles [int >= 0]
+--positions     number of positions searched [int64_t >= 0]
+--tablebase_depthdepth of tablebase [int >= 0] be aware 9 is already ca. 40GB RAM
+--scramble_depthscramble depth [int >= 0]
+
+Example: ./build/bin/PuppetCubeV2 --gui=false --rootPath=./ --errorLevel=extra --threads=1 --runs=10 --positions=1000000 --tablebase_depth=7 --scramble_depth=1
 ```

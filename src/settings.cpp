@@ -1,5 +1,8 @@
 #include <cstddef>
+#include <iomanip>
+#include <ios>
 #include <ranges>
+#include <sstream>
 #include <string>
 #include <vector>
 #include <thread>
@@ -23,7 +26,25 @@ Setting::Setting(ErrorHandler& error_handler, int argc, char *argv[]) {
     rootPath = temp_root_path;
 
     for (std::string argument : arguments | std::views::drop(1)) {
-        if (argument.find("--gui=") == 0) {
+        if (argument.find("--help") == 0) {
+            std::stringstream help_description;
+            const int align = 16;
+            help_description << "help:" << std::endl << std::left;
+            help_description << std::setw(Setting::kIndent) << "" << std::setw(align) << "--help" << "shows this message" << std::endl;
+            help_description << std::setw(Setting::kIndent) << "" << std::setw(align) << "--gui" << "graphical user interface [true/false]" << std::endl;
+            help_description << std::setw(Setting::kIndent) << "" << std::setw(align) << "--rootPath" << "path to puppet-cube-v2/" << std::endl;
+            help_description << std::setw(Setting::kIndent) << "" << std::setw(align) << "--errorLevel" << "amount of output [criticalError/error/info/all/extra/memory]" << std::endl;
+            help_description << std::setw(Setting::kIndent) << "" << std::setw(align) << "--threads" << "number of threads [int >= 1]" << std::endl;
+            help_description << std::setw(Setting::kIndent) << "" << std::setw(align) << "--runs" << "number of runs/start positions/scrambles [int >= 0]" << std::endl;
+            help_description << std::setw(Setting::kIndent) << "" << std::setw(align) << "--positions" << "number of positions searched [int64_t >= 0]" << std::endl;
+            help_description << std::setw(Setting::kIndent) << "" << std::setw(align) << "--tablebase_depth" << "depth of tablebase [int >= 0] be aware 9 is already ca. 40GB RAM" << std::endl;
+            help_description << std::setw(Setting::kIndent) << "" << std::setw(align) << "--scramble_depth" << "scramble depth [int >= 0]" << std::endl;
+            help_description << std::endl;
+            help_description << std::setw(Setting::kIndent) << "" << "Example: ./build/bin/PuppetCubeV2 --gui=false --rootPath=./ --errorLevel=extra --threads=1 --runs=10 --positions=1000000 --tablebase_depth=7 --scramble_depth=10" << std::endl;
+            error_handler.Handle(ErrorHandler::Level::kInfo, "setting.cpp", help_description.str());
+        }
+
+        else if (argument.find("--gui=") == 0) {
             argument = argument.erase(0, std::string("--gui=").size());
             if (argument == "true") {
                 gui = true;
@@ -70,6 +91,22 @@ Setting::Setting(ErrorHandler& error_handler, int argc, char *argv[]) {
 
         else if (argument.find("--threads=") == 0) {
             num_threads = std::stoi(argument.erase(0, std::string("--threads=").size()));
+        }
+
+        else if (argument.find("--runs=") == 0) {
+            num_runs = std::stoi(argument.erase(0, std::string("--runs=").size()));
+        }
+
+        else if (argument.find("--positions=") == 0) {
+            max_num_positions = std::stoll(argument.erase(0, std::string("--positions=").size()));
+        }
+
+        else if (argument.find("--tablebase_depth=") == 0) {
+            tablebase_depth = std::stoi(argument.erase(0, std::string("--tablebase_depth=").size()));
+        }
+
+        else if (argument.find("--scramble_depth=") == 0) {
+            scramble_depth = std::stoi(argument.erase(0, std::string("--scramble_depth=").size()));
         }
 
         else {
