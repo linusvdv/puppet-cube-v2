@@ -28,7 +28,7 @@ cmake -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j
 ```
 
-Compilation without GUI
+Compilation without GUI. You do not need OpenGL:
 
 ```bash
 cmake -B build -DCMAKE_BUILD_TYPE=Release -DGUI=OFF
@@ -43,15 +43,15 @@ cmake --build build -j
 
 ## Help
 ```
---help          shows this message
---gui           graphical user interface [true/false]
---rootPath      path to puppet-cube-v2/
---errorLevel    amount of output [criticalError/error/info/all/extra/memory]
---threads       number of threads [int >= 1]
---runs          number of runs/start positions/scrambles [int >= 0]
---positions     number of positions searched [int64_t >= 0]
---tablebase_depthdepth of tablebase [int >= 0] be aware 9 is already ca. 40GB RAM
---scramble_depthscramble depth [int >= 0]
+--help              shows this message
+--gui               graphical user interface [true/false]
+--rootPath          path to puppet-cube-v2/
+--errorLevel        amount of output [criticalError/error/info/all/extra/memory]
+--threads           number of threads [int >= 1]
+--runs              number of runs/start positions/scrambles [int >= 0]
+--positions         number of positions searched [int64_t >= 0]
+--tablebase_depth   depth of tablebase [int >= 0] be aware 9 is already ca. 40GB RAM
+--scramble_depth    scramble depth [int >= 0]
 
 Example: ./build/bin/PuppetCubeV2 --gui=false --rootPath=./ --errorLevel=extra --threads=1 --runs=10 --positions=1000000 --tablebase_depth=7 --scramble_depth=1
 ```

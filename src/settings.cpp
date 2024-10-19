@@ -28,7 +28,7 @@ Setting::Setting(ErrorHandler& error_handler, int argc, char *argv[]) {
     for (std::string argument : arguments | std::views::drop(1)) {
         if (argument.find("--help") == 0) {
             std::stringstream help_description;
-            const int align = 16;
+            const int align = 20;
             help_description << "help:" << std::endl << std::left;
             help_description << std::setw(Setting::kIndent) << "" << std::setw(align) << "--help" << "shows this message" << std::endl;
             help_description << std::setw(Setting::kIndent) << "" << std::setw(align) << "--gui" << "graphical user interface [true/false]" << std::endl;
