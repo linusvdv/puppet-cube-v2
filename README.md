@@ -1,8 +1,9 @@
 # puppet-cube-v2
+[PuppetCubeV2.webm](https://github.com/user-attachments/assets/a0779cad-28bf-48d4-9e59-f1440ea8e9c0)
 
 <!--toc:start-->
 - [puppet-cube-v2](#puppet-cube-v2)
-  - [Pre compilation of position_data](#pre-compilation-of-positiondata)
+  - [Pre compilation of position_data](#pre-compilation-of-position_data)
   - [Compilation](#compilation)
   - [Run](#run)
   - [Help](#help)
