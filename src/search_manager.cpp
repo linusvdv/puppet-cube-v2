@@ -90,7 +90,7 @@ void ShowSearchStatistic (ErrorHandler error_handler, int depth, size_t num_runs
 }
 
 
-void SearchManager (ErrorHandler error_handler, Actions& actions, std::mt19937& rng) {
+void SearchManager (ErrorHandler error_handler, Setting& settings, Actions& actions, std::mt19937& rng) {
 
     // TODO: this depth is temporary
     TablebaseSearch(error_handler, 5);
@@ -119,7 +119,7 @@ void SearchManager (ErrorHandler error_handler, Actions& actions, std::mt19937& 
 
         // solve cube
         uint64_t num_positions = 0;
-        if (Solve(error_handler, actions, cube, num_positions)) {
+        if (Solve(error_handler, settings, actions, cube, num_positions)) {
             error_handler.Handle(ErrorHandler::Level::kAll, "search.cpp",  std::to_string(run) + ": Found solution of depth " + std::to_string(actions.solve.size()) + " visiting " + std::to_string(num_positions) + " positions");
 
             // statistic

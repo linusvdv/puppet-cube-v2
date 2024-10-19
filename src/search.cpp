@@ -94,7 +94,6 @@ void ShowMemory (ErrorHandler error_handler, VisitedMap& visited) {
 
 constexpr int kNotFoundSol = 1e9;
 constexpr uint64_t kMaxPositions = 10000000;
-constexpr int kNumThreads = 24;
 constexpr int kNumSearchQueues = 150;
 
 
@@ -196,7 +195,7 @@ void Search (ErrorHandler error_handler, VisitedMap& visited, SearchQueue& searc
 }
 
 
-bool Solve (ErrorHandler error_handler, Actions& actions, Cube start_cube, uint64_t& num_positions) {
+bool Solve (ErrorHandler error_handler, Setting& settings, Actions& actions, Cube start_cube, uint64_t& num_positions) {
     int tb_depth = TablebaseDepth(start_cube);
     if (tb_depth != -1) {
         TablebaseSolve(start_cube, actions, tb_depth+1, num_positions);
@@ -222,7 +221,7 @@ bool Solve (ErrorHandler error_handler, Actions& actions, Cube start_cube, uint6
     // start multiple threads
     {
         std::vector<std::jthread> threads;
-        for (int i = 0; i < kNumThreads; i++) {
+        for (int i = 0; i < settings.num_threads; i++) {
             threads.push_back(std::jthread(Search, error_handler, std::ref(visited), std::ref(search_queue), std::ref(max_depth),
                     std::ref(max_depth_mutex), std::ref(tablebase_cube), std::ref(num_positions_atomic), std::ref(search_queue_size)));
         }

@@ -30,4 +30,6 @@ public:
     float min_elapsed_time_since_last_rotation = 0.2; // seconds
     float rotation_speed = 2;
     float scrambling_multiplier = 400;
+
+    int num_threads = 0;
 };

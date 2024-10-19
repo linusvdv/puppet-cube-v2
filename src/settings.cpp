@@ -2,6 +2,7 @@
 #include <ranges>
 #include <string>
 #include <vector>
+#include <thread>
 
 
 #include "error_handler.h"
@@ -9,6 +10,9 @@
 
 
 Setting::Setting(ErrorHandler& error_handler, int argc, char *argv[]) {
+    // use all posible threads
+    num_threads = std::thread::hardware_concurrency();
+
     std::vector<std::string> arguments(argv, argv+argc);
 
     // get root path
@@ -62,6 +66,10 @@ Setting::Setting(ErrorHandler& error_handler, int argc, char *argv[]) {
             else {
                 error_handler.Handle(ErrorHandler::Level::kWarning, "settings.cpp", "error level type " + error_level + " not found");
             }
+        }
+
+        else if (argument.find("--threads=") == 0) {
+            num_threads = std::stoi(argument.erase(0, std::string("--threads=").size()));
         }
 
         else {

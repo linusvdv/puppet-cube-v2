@@ -3,4 +3,4 @@
 #include "actions.h"
 
 
-bool Solve (ErrorHandler error_handler, Actions& actions, Cube start_cube, uint64_t& num_positions);
+bool Solve (ErrorHandler error_handler, Setting& settings, Actions& actions, Cube start_cube, uint64_t& num_positions);

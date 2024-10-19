@@ -44,7 +44,7 @@ int main (int argc, char *argv[]) {
 
     error_handler.Handle(ErrorHandler::Level::kMemory, "main.cpp", "currently using " + std::to_string(getCurrentRSS()/1000000) + " MB"); // NOLINT
     // start the search manager
-    SearchManager(error_handler, actions, rng);
+    SearchManager(error_handler, settings, actions, rng);
 
     // wait until the window manager has finished
     if (settings.gui) {
