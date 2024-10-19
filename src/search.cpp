@@ -93,8 +93,10 @@ void ShowMemory (ErrorHandler error_handler, VisitedMap& visited) {
 
 
 constexpr int kNotFoundSol = 1e9;
-constexpr int kMaxPositions = 10000000;
+constexpr uint64_t kMaxPositions = 10000000;
 constexpr int kNumThreads = 24;
+constexpr int kNumSearchQueues = 150;
+
 
 void Search (ErrorHandler error_handler, VisitedMap& visited, SearchQueue& search_queue,
              std::atomic<int>& max_depth, std::mutex& max_depth_mutex, CubeSearch& tablebase_cube,
@@ -160,8 +162,14 @@ void Search (ErrorHandler error_handler, VisitedMap& visited, SearchQueue& searc
         for (Rotations rotation : GetLegalRotations(cube)) {
             Cube next_cube = Rotate(cube, rotation);
 
-            // check if next position is not already in the tablebase
             Cube::Hash next_cube_hash = next_cube.GetHash();
+
+            // too high depth to be usefull
+            if (cube_search.depth+1 + (std::max(std::max({next_cube.GetCornerHeuristic(), int(next_cube.GetEdgeHeuristic1()), int(next_cube.GetEdgeHeuristic2())}) - GetTablebaseDepth(), 0)) >= max_depth) {
+                continue;
+            }
+
+            // has already been visited
             bool already_visited = false;
             auto already_visited_lamda = [&already_visited, cube_search](const VisitedMap::value_type& value) {already_visited = value.second.first <= cube_search.depth+1;};
             visited.if_contains({next_cube_hash}, already_visited_lamda);
@@ -198,8 +206,7 @@ bool Solve (ErrorHandler error_handler, Actions& actions, Cube start_cube, uint6
 
     // initialize starting position
     CubeSearch tablebase_cube;
-    // TODO: num elements
-    SearchQueue search_queue(140);
+    SearchQueue search_queue(kNumSearchQueues);
     CubeSearch start_cube_search = GetCubeSearch(start_cube, 0, 0);
     search_queue[start_cube_search.heuristic].enqueue(start_cube_search);
     std::atomic<uint64_t> search_queue_size = 1;

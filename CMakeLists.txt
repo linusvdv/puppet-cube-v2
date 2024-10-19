@@ -73,7 +73,7 @@ add_executable(PuppetCubeV2
 
 target_link_libraries(PuppetCubeV2 PRIVATE glfw glad glm Threads::Threads)
 
-set(Debug_Options -Wextra -g -O0 -fno-inline -fno-omit-frame-pointer)
+set(Debug_Options -Wextra -g -O3 -fno-inline -fno-omit-frame-pointer)
 set(Release_Options -Wextra -g -O3)
 
 target_compile_options(PuppetCubeV2 PRIVATE -Wall
