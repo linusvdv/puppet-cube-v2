@@ -98,7 +98,7 @@ constexpr int kNumSearchQueues = 150;
 
 void Search (ErrorHandler error_handler, Setting& settings, VisitedMap& visited, SearchQueue& search_queue,
              std::atomic<int>& max_depth, std::mutex& max_depth_mutex, CubeSearch& tablebase_cube,
-             std::atomic<uint64_t>& num_positions, std::atomic<uint64_t>& search_queue_size) {
+             std::atomic<uint64_t>& num_positions, std::atomic<uint64_t>& search_queue_size, std::atomic<bool>& optimal) {
     while (num_positions < settings.max_num_positions) {
         // get new position from priority_queue
         CubeSearch cube_search;
@@ -113,6 +113,7 @@ void Search (ErrorHandler error_handler, Setting& settings, VisitedMap& visited,
         if (!found) {
             // has searched through all positions
             if (search_queue_size == 0) {
+                optimal = true;
                 return;
             }
             continue;
@@ -144,6 +145,10 @@ void Search (ErrorHandler error_handler, Setting& settings, VisitedMap& visited,
         if (cube_search.depth >= 100) {
             --search_queue_size;
             continue;
+        }
+
+        if (max_depth + GetTablebaseDepth() <= settings.min_depth) {
+            return;
         }
 
         Cube::Hash cube_hash = cube.GetHash();
@@ -221,19 +226,21 @@ bool Solve (ErrorHandler error_handler, Setting& settings, Actions& actions, Cub
     std::atomic<int> max_depth = kNotFoundSol;
     std::mutex max_depth_mutex;
     std::atomic<uint64_t> num_positions_atomic = num_positions;
+
+    std::atomic<bool> optimal = false;
     
     // start multiple threads
     {
         std::vector<std::jthread> threads;
         for (int i = 0; i < settings.num_threads; i++) {
             threads.push_back(std::jthread(Search, error_handler, std::ref(settings), std::ref(visited), std::ref(search_queue), std::ref(max_depth),
-                    std::ref(max_depth_mutex), std::ref(tablebase_cube), std::ref(num_positions_atomic), std::ref(search_queue_size)));
+                    std::ref(max_depth_mutex), std::ref(tablebase_cube), std::ref(num_positions_atomic), std::ref(search_queue_size), std::ref(optimal)));
         }
     }
     num_positions = num_positions_atomic;
 
     ShowMemory(error_handler, visited);
-    if (max_depth != kNotFoundSol && num_positions < settings.max_num_positions) {
+    if (optimal) {
         error_handler.Handle(ErrorHandler::Level::kInfo, "search.cpp", "found optimal solution");
     }
     if (max_depth == kNotFoundSol) {

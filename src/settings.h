@@ -35,6 +35,7 @@ public:
     int num_threads = 0;
     int tablebase_depth = 5;
     uint64_t max_num_positions = 10000000;
+    int min_depth = 0;
 
     // scramble
     int num_runs = 1000;

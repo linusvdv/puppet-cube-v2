@@ -54,6 +54,7 @@ cmake --build build -j
 --tablebase_depth   depth of tablebase [int >= 0] be aware 9 is already ca. 40GB RAM
 --scramble_depth    scramble depth [int >= 0]
 --start_offset      start offset to start from a different position [int >= 0]
+--min_depth         stops if it found a solution less or equal to min_depth [int >= 0]
 
 Example: ./build/bin/PuppetCubeV2 --gui=false --rootPath=./ --errorLevel=extra --threads=1 --runs=10 --positions=1000000 --tablebase_depth=7 --scramble_depth=1
 ```

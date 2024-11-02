@@ -44,6 +44,7 @@ Setting::Setting(ErrorHandler& error_handler, int argc, char *argv[]) {
             help_description << std::setw(Setting::kIndent) << "" << std::setw(align) << "--tablebase_depth" << "depth of tablebase [int >= 0] be aware 9 is already ca. 40GB RAM" << std::endl;
             help_description << std::setw(Setting::kIndent) << "" << std::setw(align) << "--scramble_depth" << "scramble depth [int >= 0]" << std::endl;
             help_description << std::setw(Setting::kIndent) << "" << std::setw(align) << "--start_offset" << "start offset to start from a different position [int >= 0]" << std::endl;
+            help_description << std::setw(Setting::kIndent) << "" << std::setw(align) << "--min_depth" << "stops if it found a solution less or equal to min_depth [int >= 0]" << std::endl;
             help_description << std::endl;
             help_description << std::setw(Setting::kIndent) << "" << "Example: ./build/bin/PuppetCubeV2 --gui=false --rootPath=./ --errorLevel=extra --threads=1 --runs=10 --positions=1000000 --tablebase_depth=7 --scramble_depth=10" << std::endl;
             error_handler.Handle(ErrorHandler::Level::kInfo, "setting.cpp", help_description.str());
@@ -116,6 +117,10 @@ Setting::Setting(ErrorHandler& error_handler, int argc, char *argv[]) {
 
         else if (argument.find("--start_offset=") == 0) {
             start_offset = std::stoi(argument.erase(0, std::string("--start_offset=").size()));
+        }
+
+        else if (argument.find("--min_depth=") == 0) {
+            min_depth = std::stoi(argument.erase(0, std::string("--min_depth=").size()));
         }
 
         else {
