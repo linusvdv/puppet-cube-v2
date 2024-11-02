@@ -102,7 +102,7 @@ void SearchManager (ErrorHandler error_handler, Setting& settings, Actions& acti
     std::vector<int> search_depths;
     std::vector<uint64_t> all_num_positions;
 
-    for (int run = 0; run < settings.num_runs; run++) {
+    for (int run = 0; run < settings.num_runs + settings.start_offset; run++) {
         if (actions.stop) {
             break;
         }
@@ -113,6 +113,12 @@ void SearchManager (ErrorHandler error_handler, Setting& settings, Actions& acti
         actions.Push(Action(Instructions::kIsScrambling, Rotations()));
         RandomRotations(cube, actions, settings.scramble_depth, rng);
         actions.Push(Action(Instructions::kIsSolving, Rotations()));
+
+        if (run < settings.start_offset) {
+            actions.Push(Action(Instructions::kReset, Rotations()));
+            cube = Cube();
+            continue;
+        }
 
         // solve cube
         uint64_t num_positions = 0;
