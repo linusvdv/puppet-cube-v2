@@ -179,7 +179,12 @@ void Search (ErrorHandler error_handler, Setting& settings, VisitedMap& visited,
             CubeSearch next = GetCubeSearch(next_cube, cube_search.depth+1, 0);
             if (cube_search.visited_time==0 ? (next.heuristic <= cube_search.heuristic) : (next.heuristic == cube_search.heuristic)) {
                 search_queue[next.heuristic].enqueue(next);
-                visited.try_emplace_l({next_cube_hash}, [cube_search, rotation](VisitedMap::value_type& value){value.second = {cube_search.depth+1, rotation}; }, std::make_pair(cube_search.depth+1, rotation));
+                visited.try_emplace_l({next_cube_hash},
+                                      [cube_search, rotation](VisitedMap::value_type& value){
+                                        if (cube_search.depth+1 < value.second.first) {
+                                            value.second = {cube_search.depth+1, rotation};
+                                        }
+                                      }, std::make_pair(cube_search.depth+1, rotation));
                 ++search_queue_size;
             }
         }
