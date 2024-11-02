@@ -1,5 +1,4 @@
 #include <cstdint>
-#include <iostream>
 #include <string>
 #include <thread>
 #include <vector>
@@ -31,7 +30,7 @@ using Tablebase = phmap::parallel_flat_hash_set<PositionHash,
         phmap::priv::hash_default_hash<PositionHash>,
         phmap::priv::hash_default_eq<PositionHash>,
         phmap::priv::Allocator<PositionHash>,
-        8, std::mutex>;
+        12, std::mutex>;
 std::vector<Tablebase> tablebase;
 
 

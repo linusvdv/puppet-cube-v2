@@ -76,7 +76,7 @@ CubeSearch GetCubeSearch (Cube& cube, uint8_t depth, uint8_t visited_time) {
 using VisitedMap = phmap::parallel_flat_hash_map<CubeMapVisited, std::pair<uint8_t, Rotations>,
             phmap::priv::hash_default_hash<CubeMapVisited>, phmap::priv::hash_default_eq<CubeMapVisited>,
             phmap::priv::Allocator<std::pair<CubeMapVisited, std::pair<uint8_t, Rotations>>>,
-            8, std::mutex>;
+            12, std::mutex>;
 
 using SearchQueue = std::vector<moodycamel::ConcurrentQueue<CubeSearch>>;
 
