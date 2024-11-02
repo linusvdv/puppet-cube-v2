@@ -16,6 +16,10 @@ Setting::Setting(ErrorHandler& error_handler, int argc, char *argv[]) {
     // use all posible threads
     num_threads = std::thread::hardware_concurrency();
 
+    #ifdef GUI
+    gui = true;
+    #endif // GUI
+
     std::vector<std::string> arguments(argv, argv+argc);
 
     // get root path
