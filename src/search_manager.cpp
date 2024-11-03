@@ -110,20 +110,23 @@ void SearchManager (ErrorHandler error_handler, Setting& settings, Actions& acti
         auto start_time = std::chrono::system_clock::now();
 
         // scramble
-        actions.Push(Action(Instructions::kIsScrambling, Rotations()));
-        RandomRotations(cube, actions, settings.scramble_depth, rng);
-        actions.Push(Action(Instructions::kIsSolving, Rotations()));
-
+        // not visual
         if (run < settings.start_offset) {
-            actions.Push(Action(Instructions::kReset, Rotations()));
+            RandomRotations(settings, cube, actions, settings.scramble_depth, rng, false);
             cube = Cube();
             continue;
         }
 
+        actions.Push(Action(Instructions::kIsScrambling, Rotations()), settings);
+        RandomRotations(settings, cube, actions, settings.scramble_depth, rng, true);
+        actions.Push(Action(Instructions::kIsSolving, Rotations()), settings);
+
+        error_handler.Handle(ErrorHandler::Level::kExtra, "search_manager.cpp", "Corner heuristic: " + std::to_string(cube.GetCornerHeuristic()));
+
         // solve cube
         uint64_t num_positions = 0;
         if (Solve(error_handler, settings, actions, cube, num_positions)) {
-            error_handler.Handle(ErrorHandler::Level::kAll, "search.cpp",  std::to_string(run) + ": Found solution of depth " + std::to_string(actions.solve.size()) + " visiting " + std::to_string(num_positions) + " positions");
+            error_handler.Handle(ErrorHandler::Level::kAll, "search_manager.cpp",  std::to_string(run) + ": Found solution of depth " + std::to_string(actions.solve.size()) + " visiting " + std::to_string(num_positions) + " positions");
 
             // statistic
             search_depths.push_back(actions.solve.size());
@@ -131,7 +134,7 @@ void SearchManager (ErrorHandler error_handler, Setting& settings, Actions& acti
 
             // show solution
             while (!actions.solve.empty()) {
-                actions.Push(Action(Instructions::kRotation, actions.solve.top()));
+                actions.Push(Action(Instructions::kRotation, actions.solve.top()), settings);
                 actions.solve.pop();
             }
         }
@@ -142,7 +145,7 @@ void SearchManager (ErrorHandler error_handler, Setting& settings, Actions& acti
             time_durations.push_back(time_duration.count());
         }
 
-        actions.Push(Action(Instructions::kReset, Rotations()));
+        actions.Push(Action(Instructions::kReset, Rotations()), settings);
         cube = Cube();
     }
 

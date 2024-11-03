@@ -5,6 +5,7 @@
 
 #include "actions.h"
 #include "cube.h"
+#include "settings.h"
 
 
 class Actions;
@@ -38,4 +39,4 @@ Cube Rotate (const Cube& cube, Rotations rotation);
 
 
 // get num_rotations random legal rotations
-void RandomRotations (Cube& cube, Actions& actions, int num_rotations, std::mt19937& rng);
+void RandomRotations (Setting settings, Cube& cube, Actions& actions, int num_rotations, std::mt19937& rng, bool should_push);

@@ -5,6 +5,7 @@
 #include "actions.h"
 #include "rotation.h"
 #include "cube.h"
+#include "settings.h"
 
 
 // get all legal rotations
@@ -39,10 +40,12 @@ Rotations GetRandomRotation (Cube& cube, std::mt19937& rng) {
 
 
 // add num_rotations random legal rotations to actions
-void RandomRotations (Cube& cube, Actions& actions, int num_rotations, std::mt19937& rng) {
+void RandomRotations (Setting settings, Cube& cube, Actions& actions, int num_rotations, std::mt19937& rng, bool should_push) {
     for (int i = 0; i < num_rotations; i++) {
         Rotations random_rotation = GetRandomRotation(cube, rng);
-        actions.Push(Action(Instructions::kRotation, random_rotation));
+        if (should_push) {
+            actions.Push(Action(Instructions::kRotation, random_rotation), settings);
+        }
         cube = Rotate(cube, random_rotation);
     }
 }

@@ -6,6 +6,7 @@
 #include <stack>
 
 #include "rotation.h"
+#include "settings.h"
 
 
 // is in file rotation.h
@@ -33,7 +34,7 @@ public:
     bool TryPop (Action& action);
 
     // pushes next action
-    void Push (const Action& action);
+    void Push (const Action& action, Setting settings);
 
     // stop program
     std::atomic<bool> stop = false;

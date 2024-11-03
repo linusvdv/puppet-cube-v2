@@ -1,4 +1,5 @@
 #include <mutex>
+#include "settings.h"
 
 #include "actions.h"
 
@@ -19,7 +20,10 @@ bool Actions::TryPop (Action& action) {
 
 
 // pushes next action
-void Actions::Push (const Action& action) {
+void Actions::Push (const Action& action, Setting settings) {
+    if (!settings.gui) {
+        return;
+    }
     // lock the mutex to use the queue
     std::lock_guard<std::mutex> guard(actions_mutex_);
 
