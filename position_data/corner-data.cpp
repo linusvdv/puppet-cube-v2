@@ -6,7 +6,10 @@
 #include <cstdint>
 #include <iostream>
 #include <queue>
+#include <string>
 #include <vector>
+
+#include <boost/multiprecision/cpp_int.hpp>
 
 
 constexpr int kNumRotations = 18;
@@ -293,7 +296,79 @@ struct NextPosition {
 };
 
 
-int main () {
+const int kDpDepth = 27;
+
+
+void GetNumberPossibilities(std::vector<uint16_t>& positions) {
+    std::vector<boost::multiprecision::uint128_t> possibilities(kNumPositions, 0);
+    // starting position
+    possibilities[0] = 1;
+
+    for (int dp_depth = 1; dp_depth <= kDpDepth; dp_depth++) {
+        for (int position = 0; position < kNumPositions; position++) {
+            // check if position is dp_depth
+            if ((positions[position]>>6) == dp_depth) {
+
+                std::array<Corner, kNumCorners> current_position = DecodePositionHash(position, 0); // unnecessary protruding hash
+                for (int rotation = Rotations::kR; rotation <= Rotations::kSc; rotation++) {
+                    // legal moves
+                    unsigned int legal_moves = uint16_t(positions[position]<<(16-6))>>(16-6);
+                    // the opposite turn is always allowed "R == L"
+                    if (rotation%4 <= 1 && rotation <= Rotations::kBc) {
+                        if ((legal_moves >> (rotation/2+rotation%4) & 1) == 0) {
+                            continue;
+                        }
+                    }
+                    else if (rotation <= Rotations::kBc) {
+                        // check the previous IsLegal L is the same as R
+                        if ((legal_moves >> (rotation/2+rotation%4-3) & 1) == 0) {
+                            continue;
+                        }
+                    }
+
+                    std::array<Corner, kNumCorners> next_position = Rotate(current_position, Rotations(rotation));
+
+                    if ((positions[GetPositionHash(next_position)]>>6)==dp_depth-1) {
+                        possibilities[position] += possibilities[GetPositionHash(next_position)];
+                    }
+                }
+
+                std::cout << dp_depth << ": " << possibilities[position] << std::endl;
+            }
+        }
+    }
+}
+
+
+void Statistic(std::vector<uint16_t>& positions, uint64_t num_positions) {
+    // interesting output
+    std::cout << "Number of positions: " << num_positions << std::endl;
+
+    uint64_t total_num_edges = 0;
+    uint64_t max_heuristic = 0;
+    std::vector<uint64_t> distribution(28, 0);
+    std::vector<uint64_t> distribution_edges(28, 0);
+    for (uint16_t position : positions) {
+        if (position != 0) {
+            total_num_edges += std::popcount(uint16_t(position << (16-6)));
+            max_heuristic = std::max(uint64_t(position >> 6), max_heuristic);
+            distribution[position>>6]++;
+            distribution_edges[position>>6] += std::popcount(uint16_t(position << (16-6)));
+        }
+    }
+
+    std::cout << "Total number of edges: " << (total_num_edges+3*num_positions) << "*490497638400 = 34024400694647193600" << std::endl;
+    std::cout << "Average Number of legal moves: " << double(total_num_edges*2)/num_positions+6 << std::endl;
+    std::cout << "Max heuristic: " << max_heuristic << std::endl;
+    for (uint64_t i = 0; i <= max_heuristic; i++) {
+        std::cout << i << ": " << distribution[i] << " " << double(distribution_edges[i]*2)/distribution[i]+6 << std::endl;
+    }
+
+    GetNumberPossibilities(positions);
+}
+
+
+int main (int argc, char *argv[]) {
     // initialise the map of legal positions
     LegalMapInitialisation();
 
@@ -363,25 +438,8 @@ int main () {
         num_positions++;
     }
 
-    std::cout << "Number of positions: " << num_positions << std::endl;
-
-    uint64_t total_num_edges = 0;
-    uint64_t max_heuristic = 0;
-    std::vector<uint64_t> distribution(28, 0);
-    std::vector<uint64_t> distribution_edges(28, 0);
-    for (uint16_t position : positions) {
-        if (position != 0) {
-            total_num_edges += std::popcount(uint16_t(position << (16-6)));
-            max_heuristic = std::max(uint64_t(position >> 6), max_heuristic);
-            distribution[position>>6]++;
-            distribution_edges[position>>6] += std::popcount(uint16_t(position << (16-6)));
-        }
-    }
-    std::cout << "Total number of edges: " << (total_num_edges+3*num_positions) << "*490497638400 = 34024400694647193600" << std::endl;
-    std::cout << "Average Number of legal moves: " << double(total_num_edges*2)/num_positions+6 << std::endl;
-    std::cout << "Max heuristic: " << max_heuristic << std::endl;
-    for (int i = 0; i <= max_heuristic; i++) {
-        std::cout << i << ": " << distribution[i] << " " << double(distribution_edges[i]*2)/distribution[i]+6 << std::endl;
+    if (argc > 1 && std::string(argv[1]) == "--statistic") {
+        Statistic(positions, num_positions);
     }
 
     // write to file
