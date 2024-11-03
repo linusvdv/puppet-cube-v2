@@ -100,6 +100,11 @@ void Search (ErrorHandler error_handler, Setting& settings, VisitedMap& visited,
              std::atomic<int>& max_depth, std::mutex& max_depth_mutex, CubeSearch& tablebase_cube,
              std::atomic<uint64_t>& num_positions, std::atomic<uint64_t>& search_queue_size, std::atomic<bool>& optimal) {
     while (num_positions < settings.max_num_positions) {
+        // stop if it found a solution of a specific depth
+        if (max_depth + GetTablebaseDepth() <= settings.min_depth) {
+            return;
+        }
+
         // get new position from priority_queue
         CubeSearch cube_search;
         bool found = false;
@@ -145,10 +150,6 @@ void Search (ErrorHandler error_handler, Setting& settings, VisitedMap& visited,
         if (cube_search.depth >= 100) {
             --search_queue_size;
             continue;
-        }
-
-        if (max_depth + GetTablebaseDepth() <= settings.min_depth) {
-            return;
         }
 
         Cube::Hash cube_hash = cube.GetHash();
