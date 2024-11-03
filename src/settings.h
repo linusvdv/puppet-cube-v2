@@ -41,6 +41,7 @@ public:
     int num_runs = 1000;
     int scramble_depth = 1000;
     int start_offset = 0;
+    int min_coner_heuristic = 0;
 
     static constexpr int kIndent = 8;
 };

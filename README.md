@@ -44,17 +44,18 @@ cmake --build build -j
 
 ## Help
 ```
---help              shows this message
---gui               graphical user interface [true/false]
---rootPath          path to puppet-cube-v2/
---errorLevel        amount of output [criticalError/error/info/all/extra/memory]
---threads           number of threads [int >= 1]
---runs              number of runs/start positions/scrambles [int >= 0]
---positions         number of positions searched [int64_t >= 0]
---tablebase_depth   depth of tablebase [int >= 0] be aware 9 is already ca. 40GB RAM
---scramble_depth    scramble depth [int >= 0]
---start_offset      start offset to start from a different position [int >= 0]
---min_depth         stops if it found a solution less or equal to min_depth [int >= 0]
+--help                  shows this message
+--gui                   graphical user interface [true/false]
+--rootPath              path to puppet-cube-v2/
+--errorLevel            amount of output [criticalError/error/info/all/extra/memory]
+--threads               number of threads [int >= 1]
+--runs                  number of runs/start positions/scrambles [int >= 0]
+--positions             number of positions searched [int64_t >= 0]
+--tablebase_depth       depth of tablebase [int >= 0] be aware 9 is already ca. 40GB RAM
+--scramble_depth        scramble depth [int >= 0]
+--start_offset          start offset to start from a different position [int >= 0]
+--min_depth             stops if it found a solution less or equal to min_depth [int >= 0]
+--min_coner_heuristic   scrambles until it finds a cube with this corner heuristic or higher [27 >= int >= 0]
 
-Example: ./build/bin/PuppetCubeV2 --gui=false --rootPath=./ --errorLevel=extra --threads=1 --runs=10 --positions=1000000 --tablebase_depth=7 --scramble_depth=1
+Example: ./build/bin/PuppetCubeV2 --gui=false --rootPath=./ --errorLevel=extra --threads=1 --runs=10 --positions=1000000 --tablebase_depth=7 --scramble_depth=10
 ```

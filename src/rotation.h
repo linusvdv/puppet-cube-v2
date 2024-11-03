@@ -39,4 +39,4 @@ Cube Rotate (const Cube& cube, Rotations rotation);
 
 
 // get num_rotations random legal rotations
-void RandomRotations (Setting settings, Cube& cube, Actions& actions, int num_rotations, std::mt19937& rng, bool should_push);
+uint64_t RandomRotations (Setting settings, Cube& cube, Actions& actions, int num_rotations, std::mt19937& rng, bool should_push);

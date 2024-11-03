@@ -40,14 +40,17 @@ Rotations GetRandomRotation (Cube& cube, std::mt19937& rng) {
 
 
 // add num_rotations random legal rotations to actions
-void RandomRotations (Setting settings, Cube& cube, Actions& actions, int num_rotations, std::mt19937& rng, bool should_push) {
-    for (int i = 0; i < num_rotations; i++) {
+uint64_t RandomRotations (Setting settings, Cube& cube, Actions& actions, int num_rotations, std::mt19937& rng, bool should_push) {
+    uint64_t total_rotations = 0;
+    while (total_rotations < uint64_t(num_rotations) || cube.GetCornerHeuristic() < settings.min_coner_heuristic) {
         Rotations random_rotation = GetRandomRotation(cube, rng);
         if (should_push) {
             actions.Push(Action(Instructions::kRotation, random_rotation), settings);
         }
         cube = Rotate(cube, random_rotation);
+        total_rotations++;
     }
+    return total_rotations;
 }
 
 

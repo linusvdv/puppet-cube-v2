@@ -32,7 +32,7 @@ Setting::Setting(ErrorHandler& error_handler, int argc, char *argv[]) {
     for (std::string argument : arguments | std::views::drop(1)) {
         if (argument.find("--help") == 0) {
             std::stringstream help_description;
-            const int align = 20;
+            const int align = 24;
             help_description << "help:" << std::endl << std::left;
             help_description << std::setw(Setting::kIndent) << "" << std::setw(align) << "--help" << "shows this message" << std::endl;
             help_description << std::setw(Setting::kIndent) << "" << std::setw(align) << "--gui" << "graphical user interface [true/false]" << std::endl;
@@ -45,6 +45,7 @@ Setting::Setting(ErrorHandler& error_handler, int argc, char *argv[]) {
             help_description << std::setw(Setting::kIndent) << "" << std::setw(align) << "--scramble_depth" << "scramble depth [int >= 0]" << std::endl;
             help_description << std::setw(Setting::kIndent) << "" << std::setw(align) << "--start_offset" << "start offset to start from a different position [int >= 0]" << std::endl;
             help_description << std::setw(Setting::kIndent) << "" << std::setw(align) << "--min_depth" << "stops if it found a solution less or equal to min_depth [int >= 0]" << std::endl;
+            help_description << std::setw(Setting::kIndent) << "" << std::setw(align) << "--min_coner_heuristic" << "scrambles until it finds a cube with this corner heuristic or higher [27 >= int >= 0]" << std::endl;
             help_description << std::endl;
             help_description << std::setw(Setting::kIndent) << "" << "Example: ./build/bin/PuppetCubeV2 --gui=false --rootPath=./ --errorLevel=extra --threads=1 --runs=10 --positions=1000000 --tablebase_depth=7 --scramble_depth=10" << std::endl;
             error_handler.Handle(ErrorHandler::Level::kInfo, "setting.cpp", help_description.str());
@@ -121,6 +122,10 @@ Setting::Setting(ErrorHandler& error_handler, int argc, char *argv[]) {
 
         else if (argument.find("--min_depth=") == 0) {
             min_depth = std::stoi(argument.erase(0, std::string("--min_depth=").size()));
+        }
+
+        else if (argument.find("--min_coner_heuristic=") == 0) {
+            min_coner_heuristic = std::stoi(argument.erase(0, std::string("--min_coner_heuristic=").size()));
         }
 
         else {

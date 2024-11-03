@@ -5,6 +5,7 @@
 #include <string>
 #include <sstream>
 #include <iostream>
+#include <vector>
 #include <nadeau.h>
 
 
@@ -22,7 +23,7 @@ std::string PrecisionDouble (double number) {
 }
 
 
-void ShowSearchStatistic (ErrorHandler error_handler, Setting& settings, size_t num_runs, std::vector<double>& time_durations, std::vector<int>& search_depths, std::vector<uint64_t>& all_num_positions) {
+void ShowSearchStatistic (ErrorHandler error_handler, Setting& settings, size_t num_runs, std::vector<double>& time_durations, std::vector<int>& search_depths, std::vector<uint64_t>& scramble_depths, std::vector<uint64_t>& all_num_positions) {
     if (num_runs <= 0) {
         return;
     }
@@ -46,46 +47,56 @@ void ShowSearchStatistic (ErrorHandler error_handler, Setting& settings, size_t 
     statistic << std::setw(Setting::kIndent) << "" << "threads: " << settings.num_threads << std::endl;
     statistic << std::setw(Setting::kIndent) << "" << "depth: " << settings.scramble_depth << std::endl;
     statistic << std::setw(Setting::kIndent) << "" << "number of runs: " << num_runs << std::endl;
-    statistic << std::setw(Setting::kIndent) << "" << std::setw(Setting::kIndent) << "" << std::setw(table_space) << "time (s)" << std::setw(table_space) << "positions" << std::setw(table_space) << "depths" << std::endl;
+    statistic << std::setw(Setting::kIndent) << "" << std::setw(Setting::kIndent) << "" <<
+        std::setw(table_space) << "time (s)" << std::setw(table_space) << "positions" << std::setw(table_space) << "depths" << std::setw(table_space) << "scramble" << std::endl;
 
     statistic << std::setw(Setting::kIndent) << "" << std::left << std::setw(Setting::kIndent) << "total" << std::right
         << std::setw(table_space) << PrecisionDouble(std::reduce(time_durations.begin(), time_durations.end()))
         << std::setw(table_space) << std::reduce(all_num_positions.begin(), all_num_positions.end())
-        << std::setw(table_space) << std::reduce(search_depths.begin(), search_depths.end()) << std::endl;
+        << std::setw(table_space) << std::reduce(search_depths.begin(), search_depths.end())
+        << std::setw(table_space) << std::reduce(scramble_depths.begin(), scramble_depths.end()) << std::endl;
 
     statistic << std::setw(Setting::kIndent) << "" << std::left << std::setw(Setting::kIndent) << "max" << std::right
         << std::setw(table_space) << PrecisionDouble(*std::max_element(time_durations.begin(), time_durations.end()))
         << std::setw(table_space) << *std::max_element(all_num_positions.begin(), all_num_positions.end())
-        << std::setw(table_space) << *std::max_element(search_depths.begin(), search_depths.end()) << std::endl;
+        << std::setw(table_space) << *std::max_element(search_depths.begin(), search_depths.end())
+        << std::setw(table_space) << *std::max_element(scramble_depths.begin(), scramble_depths.end()) << std::endl;
 
     std::nth_element(time_durations.begin(), time_durations.begin() + q_3, time_durations.end());
     std::nth_element(all_num_positions.begin(), all_num_positions.begin() + q_3, all_num_positions.end());
     std::nth_element(search_depths.begin(), search_depths.begin() + q_3, search_depths.end());
+    std::nth_element(scramble_depths.begin(), scramble_depths.begin() + q_3, scramble_depths.end());
     statistic << std::setw(Setting::kIndent) << "" << std::left << std::setw(Setting::kIndent) << "Q3" << std::right
         << std::setw(table_space) << PrecisionDouble(time_durations[q_3])
         << std::setw(table_space) << all_num_positions[q_3]
-        << std::setw(table_space) << search_depths[q_3] << std::endl;
+        << std::setw(table_space) << search_depths[q_3]
+        << std::setw(table_space) << scramble_depths[q_3] << std::endl;
 
     std::nth_element(time_durations.begin(), time_durations.begin() + q_2, time_durations.end());
     std::nth_element(all_num_positions.begin(), all_num_positions.begin() + q_2, all_num_positions.end());
     std::nth_element(search_depths.begin(), search_depths.begin() + q_2, search_depths.end());
+    std::nth_element(scramble_depths.begin(), scramble_depths.begin() + q_2, scramble_depths.end());
     statistic << std::setw(Setting::kIndent) << "" << std::left << std::setw(Setting::kIndent) << "median" << std::right
         << std::setw(table_space) << PrecisionDouble(time_durations[q_2])
         << std::setw(table_space) << all_num_positions[q_2]
-        << std::setw(table_space) << search_depths[q_2] << std::endl;
+        << std::setw(table_space) << search_depths[q_2]
+        << std::setw(table_space) << scramble_depths[q_2] << std::endl;
 
     std::nth_element(time_durations.begin(), time_durations.begin() + q_1, time_durations.end());
     std::nth_element(all_num_positions.begin(), all_num_positions.begin() + q_1, all_num_positions.end());
     std::nth_element(search_depths.begin(), search_depths.begin() + q_1, search_depths.end());
+    std::nth_element(scramble_depths.begin(), scramble_depths.begin() + q_1, scramble_depths.end());
     statistic << std::setw(Setting::kIndent) << "" << std::left << std::setw(Setting::kIndent) << "Q1" << std::right
         << std::setw(table_space) << PrecisionDouble(time_durations[q_1])
         << std::setw(table_space) << all_num_positions[q_1]
-        << std::setw(table_space) << search_depths[q_1] << std::endl;
+        << std::setw(table_space) << search_depths[q_1]
+        << std::setw(table_space) << scramble_depths[q_1] << std::endl;
 
     statistic << std::setw(Setting::kIndent) << "" << std::left << std::setw(Setting::kIndent) << "min" << std::right
         << std::setw(table_space) << PrecisionDouble(*std::min_element(time_durations.begin(), time_durations.end()))
         << std::setw(table_space) << *std::min_element(all_num_positions.begin(), all_num_positions.end())
-        << std::setw(table_space) << *std::min_element(search_depths.begin(), search_depths.end());
+        << std::setw(table_space) << *std::min_element(search_depths.begin(), search_depths.end())
+        << std::setw(table_space) << *std::min_element(scramble_depths.begin(), scramble_depths.end());
 
     error_handler.Handle(ErrorHandler::Level::kInfo, "search_manager.cpp", statistic.str());
 }
@@ -101,6 +112,7 @@ void SearchManager (ErrorHandler error_handler, Setting& settings, Actions& acti
     std::vector<double> time_durations;
     std::vector<int> search_depths;
     std::vector<uint64_t> all_num_positions;
+    std::vector<uint64_t> scramble_depths;
 
     for (int run = 0; run < settings.num_runs + settings.start_offset; run++) {
         if (actions.stop) {
@@ -118,7 +130,7 @@ void SearchManager (ErrorHandler error_handler, Setting& settings, Actions& acti
         }
 
         actions.Push(Action(Instructions::kIsScrambling, Rotations()), settings);
-        RandomRotations(settings, cube, actions, settings.scramble_depth, rng, true);
+        scramble_depths.push_back(RandomRotations(settings, cube, actions, settings.scramble_depth, rng, true));
         actions.Push(Action(Instructions::kIsSolving, Rotations()), settings);
 
         error_handler.Handle(ErrorHandler::Level::kExtra, "search_manager.cpp", "Corner heuristic: " + std::to_string(cube.GetCornerHeuristic()));
@@ -150,5 +162,5 @@ void SearchManager (ErrorHandler error_handler, Setting& settings, Actions& acti
     }
 
     // calculate some statistic
-    ShowSearchStatistic(error_handler, settings, search_depths.size(), time_durations, search_depths, all_num_positions);
+    ShowSearchStatistic(error_handler, settings, search_depths.size(), time_durations, search_depths, scramble_depths, all_num_positions);
 }
