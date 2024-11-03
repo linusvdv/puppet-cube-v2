@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <array>
 #include <bit>
 #include <cassert>
@@ -362,7 +363,24 @@ int main () {
         num_positions++;
     }
 
-    std::cout << num_positions << std::endl;
+    std::cout << "Number of positions: " << num_positions << std::endl;
+
+    uint64_t total_num_edges = 0;
+    uint64_t max_heuristic = 0;
+    std::vector<uint64_t> distribution(28, 0);
+    for (uint16_t position : positions) {
+        if (position != 0) {
+            total_num_edges += std::popcount(uint16_t(position << (16-6)));
+            max_heuristic = std::max(uint64_t(position >> 6), max_heuristic);
+            distribution[position>>6]++;
+        }
+    }
+    std::cout << "Total number of edges: " << (total_num_edges+3*num_positions) << "*490497638400 = 34024400694647193600" << std::endl;
+    std::cout << "Average Number of legal moves: " << double(total_num_edges*2)/num_positions+6 << std::endl;
+    std::cout << "Max heuristic: " << max_heuristic << std::endl;
+    for (int i = 0; i <= max_heuristic; i++) {
+        std::cout << i << ": " << distribution[i] << std::endl;
+    }
 
     // write to file
     if (std::FILE* file = std::fopen("corner-data.bin", "wb")) {
