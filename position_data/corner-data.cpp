@@ -368,18 +368,20 @@ int main () {
     uint64_t total_num_edges = 0;
     uint64_t max_heuristic = 0;
     std::vector<uint64_t> distribution(28, 0);
+    std::vector<uint64_t> distribution_edges(28, 0);
     for (uint16_t position : positions) {
         if (position != 0) {
             total_num_edges += std::popcount(uint16_t(position << (16-6)));
             max_heuristic = std::max(uint64_t(position >> 6), max_heuristic);
             distribution[position>>6]++;
+            distribution_edges[position>>6] += std::popcount(uint16_t(position << (16-6)));
         }
     }
     std::cout << "Total number of edges: " << (total_num_edges+3*num_positions) << "*490497638400 = 34024400694647193600" << std::endl;
     std::cout << "Average Number of legal moves: " << double(total_num_edges*2)/num_positions+6 << std::endl;
     std::cout << "Max heuristic: " << max_heuristic << std::endl;
     for (int i = 0; i <= max_heuristic; i++) {
-        std::cout << i << ": " << distribution[i] << std::endl;
+        std::cout << i << ": " << distribution[i] << " " << double(distribution_edges[i]*2)/distribution[i]+6 << std::endl;
     }
 
     // write to file
