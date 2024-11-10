@@ -310,7 +310,7 @@ void GetNumberPossibilities(std::vector<uint16_t>& positions) {
             if ((positions[position]>>6) == dp_depth) {
 
                 std::array<Corner, kNumCorners> current_position = DecodePositionHash(position, 0); // unnecessary protruding hash
-                for (int rotation = Rotations::kR; rotation <= Rotations::kSc; rotation++) {
+                for (int rotation = Rotations::kR; rotation <= Rotations::kBc; rotation++) {
                     // legal moves
                     unsigned int legal_moves = uint16_t(positions[position]<<(16-6))>>(16-6);
                     // the opposite turn is always allowed "R == L"
@@ -333,7 +333,7 @@ void GetNumberPossibilities(std::vector<uint16_t>& positions) {
                     }
                 }
 
-                std::cout << dp_depth << ": " << possibilities[position] << std::endl;
+                // std::cout << dp_depth << ": " << possibilities[position] << std::endl;
             }
         }
     }
@@ -364,7 +364,7 @@ void Statistic(std::vector<uint16_t>& positions, uint64_t num_positions) {
         std::cout << i << ": " << distribution[i] << " " << double(distribution_edges[i]*2)/distribution[i]+6 << std::endl;
     }
 
-    GetNumberPossibilities(positions);
+    // GetNumberPossibilities(positions);
 }
 
 
@@ -402,13 +402,13 @@ int main (int argc, char *argv[]) {
         unsigned int legal_moves = 0;
 
         // go over all legal moves
-        for (int rotation = Rotations::kR; rotation <= Rotations::kSc; rotation++) {
+        for (int rotation = Rotations::kR; rotation <= Rotations::kBc; rotation++) {
             std::array<Corner, kNumCorners> next_position = Rotate(current_position, Rotations(rotation));
 
             // the opposite turn is always allowed "R == L"
             if (rotation%4 <= 1 && rotation <= Rotations::kBc) {
                 if (!IsLegal(next_position)) {
-                    continue;
+                    //continue;
                 }
                 // check if the rotation is legal
                 // add this move to legal moves

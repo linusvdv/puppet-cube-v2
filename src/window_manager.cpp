@@ -146,7 +146,7 @@ void WindowManager (ErrorHandler error_handler, Setting settings, Actions& actio
 
     while (glfwWindowShouldClose(window) == 0) {
         // clear background
-        glClearColor(0.2F, 0.3F, 0.3F, 1.0F);
+        glClearColor(1.0F, 1.0F, 1.0F, 1.0F);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         // rotate the model

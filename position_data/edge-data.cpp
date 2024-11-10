@@ -136,7 +136,7 @@ int main () {
         next_edges.pop();
         num_positions++;
 
-        for (unsigned int rotation = kR; rotation <= kSc; rotation++) {
+        for (unsigned int rotation = kR; rotation <= kBc; rotation++) {
             std::vector<Piece> next_edge = Rotate(edges, Rotations(rotation));
             int next_hash = GetEdgeHash(next_edge);
             if (edge_position[next_hash] == uint8_t(-1)) {
