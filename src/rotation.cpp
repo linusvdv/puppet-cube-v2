@@ -15,7 +15,7 @@ std::vector<Rotations> GetLegalRotations (Cube& cube) {
     cube.GetPositionData();
 
     // make list of legal moves and checking if the moves are allowed
-    for (int i = 0; i < int(Rotations::kBc); i++) {
+    for (int i = 0; i <= int(Rotations::kBc); i++) {
         if (i <= int(Rotations::kBc)) {
             if ((i%4 <= 1 && (cube.position_data >> (i/2+i%4) & 1) == 0) ||
                 (i%4 > 1 && (cube.position_data >> (i/2+i%4-3) & 1) == 0)) {

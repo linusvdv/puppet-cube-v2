@@ -9,8 +9,6 @@
 #include <string>
 #include <vector>
 
-#include <boost/multiprecision/cpp_int.hpp>
-
 
 constexpr int kNumRotations = 18;
 constexpr int kNumCorners = 8;
@@ -300,7 +298,7 @@ const int kDpDepth = 27;
 
 
 void GetNumberPossibilities(std::vector<uint16_t>& positions) {
-    std::vector<boost::multiprecision::uint128_t> possibilities(kNumPositions, 0);
+    std::vector<uint64_t> possibilities(kNumPositions, 0);
     // starting position
     possibilities[0] = 1;
 
