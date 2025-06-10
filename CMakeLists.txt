@@ -31,6 +31,7 @@ add_executable(PuppetCubeV2
     src/settings.cpp
     src/cube.cpp
     src/corner_orientation.cpp
+    src/corner_position.cpp
 )
 
 target_link_libraries(PuppetCubeV2 PRIVATE Threads::Threads)

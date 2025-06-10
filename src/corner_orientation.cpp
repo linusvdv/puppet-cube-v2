@@ -61,7 +61,7 @@ void Rotation (std::array<uint8_t, kNumCorners>& orientations, std::array<int, 4
 
 
 std::array<uint8_t, kNumCorners> Rotate (std::array<uint8_t, kNumCorners> orientations, Rotations rotation) {
-    constexpr std::array<std::array<int, 4>, 12> swaps = {{
+    constexpr std::array<std::array<int, 4>, 12> kSwaps = {{
         {0, 1, 3, 2},  // R
         {0, 2, 3, 1},  // R'
         {4, 6, 7, 5},  // L
@@ -77,42 +77,42 @@ std::array<uint8_t, kNumCorners> Rotate (std::array<uint8_t, kNumCorners> orient
     }};
 
     if (rotation == kR || rotation == kM) {
-        Rotation<1, 2>(orientations, swaps[0]);
+        Rotation<1, 2>(orientations, kSwaps[0]);  // NOLINT
     }
     if (rotation == kRc || rotation == kMc) {
-        Rotation<1, 2>(orientations, swaps[1]);
+        Rotation<1, 2>(orientations, kSwaps[1]);  // NOLINT
     }
     if (rotation == kL || rotation == kMc) {
-        Rotation<1, 2>(orientations, swaps[2]);
+        Rotation<1, 2>(orientations, kSwaps[2]);  // NOLINT
     }
     if (rotation == kLc || rotation == kM) {
-        Rotation<1, 2>(orientations, swaps[3]);
+        Rotation<1, 2>(orientations, kSwaps[3]);  // NOLINT
     }
 
     if (rotation == kU || rotation == kE) {
-        Rotation<0, 2>(orientations, swaps[4]);
+        Rotation<0, 2>(orientations, kSwaps[4]);  // NOLINT
     }
     if (rotation == kUc || rotation == kEc) {
-        Rotation<0, 2>(orientations, swaps[5]);
+        Rotation<0, 2>(orientations, kSwaps[5]);  // NOLINT
     }
     if (rotation == kD || rotation == kEc) {
-        Rotation<0, 2>(orientations, swaps[6]);
+        Rotation<0, 2>(orientations, kSwaps[6]);  // NOLINT
     }
     if (rotation == kDc || rotation == kE) {
-        Rotation<0, 2>(orientations, swaps[7]);
+        Rotation<0, 2>(orientations, kSwaps[7]);  // NOLINT
     }
 
     if (rotation == kF || rotation == kSc) {
-        Rotation<0, 1>(orientations, swaps[8]);
+        Rotation<0, 1>(orientations, kSwaps[8]);  // NOLINT
     }
     if (rotation == kFc || rotation == kS) {
-        Rotation<0, 1>(orientations, swaps[9]);
+        Rotation<0, 1>(orientations, kSwaps[9]);  // NOLINT
     }
     if (rotation == kB || rotation == kS) {
-        Rotation<0, 1>(orientations, swaps[10]);
+        Rotation<0, 1>(orientations, kSwaps[10]); // NOLINT 
     }
     if (rotation == kBc || rotation == kSc) {
-        Rotation<0, 1>(orientations, swaps[11]);
+        Rotation<0, 1>(orientations, kSwaps[11]); // NOLINT 
     }
 
     return orientations;

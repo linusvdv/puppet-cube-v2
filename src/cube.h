@@ -37,4 +37,5 @@ public:
 
 private:
     static std::vector<uint8_t> corner_orientation;
+    static std::vector<uint8_t> corner_position;
 };
