@@ -9,6 +9,8 @@
 #include <sstream>
 #include <string_view>
 
+#include "nadeau.h"
+
 
 enum class LoggerLevel {
     kCriticalError,
@@ -80,7 +82,17 @@ void Logger::Log (LoggerLevel level, const std::source_location& source_location
         oss << "[" << file_name << ":" << source_location.line() << "] In function " << source_location.function_name() << " --- ";
     }
 
-    ((oss << args << ' '), ...) << "\033[0m" << "\n";
+    if (level == LoggerLevel::kMemory) {
+        oss << getCurrentRSS() / 1024 / 1024 << " MB";  // NOLINT
+    }
+    else if constexpr (sizeof...(args) == 0) {
+        Log(LoggerLevel::kError, source_location, "no arguments passed to Log");
+        return;
+    }
+    else {
+        ((oss << args << ' '), ...);
+    }
+    oss << "\033[0m" << "\n";
     std::cout << oss.str() << std::flush;
 
     if (level == LoggerLevel::kCriticalError) {
@@ -96,4 +108,4 @@ void Logger::Log (LoggerLevel level, const std::source_location& source_location
 #define LOG_INFO(...)     Logger::Log(LoggerLevel::kInfo, std::source_location::current(), __VA_ARGS__)
 #define LOG_ALL(...)      Logger::Log(LoggerLevel::kAll, std::source_location::current(), __VA_ARGS__)
 #define LOG_EXTRA(...)    Logger::Log(LoggerLevel::kExtra, std::source_location::current(), __VA_ARGS__)
-#define LOG_MEMORY(...)   Logger::Log(LoggerLevel::kMemory, std::source_location::current(), __VA_ARGS__)
+#define LOG_MEMORY()   Logger::Log(LoggerLevel::kMemory, std::source_location::current())

@@ -23,10 +23,14 @@ find_package(Threads REQUIRED)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 option(BUILD_SHARED_LIBS "Build shared libraries" OFF)
 
+include_directories(include/)
+
 add_executable(PuppetCubeV2
     src/main.cpp
     src/logger.cpp
     src/settings.cpp
+    src/cube.cpp
+    src/corner_orientation.cpp
 )
 
 target_link_libraries(PuppetCubeV2 PRIVATE Threads::Threads)
