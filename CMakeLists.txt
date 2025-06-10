@@ -32,11 +32,12 @@ add_executable(PuppetCubeV2
     src/cube.cpp
     src/corner_orientation.cpp
     src/corner_position.cpp
+    src/corner_heuristic.cpp
 )
 
 target_link_libraries(PuppetCubeV2 PRIVATE Threads::Threads)
 
-set(Debug_Options -Wextra -g -O3 -fno-inline -fno-omit-frame-pointer)
+set(Debug_Options -Wextra -g -O0 -fno-inline -fno-omit-frame-pointer)
 set(Release_Options -Wextra -g -O3)
 
 target_compile_options(PuppetCubeV2 PRIVATE -Wall

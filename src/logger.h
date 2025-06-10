@@ -83,7 +83,7 @@ void Logger::Log (LoggerLevel level, const std::source_location& source_location
     }
 
     if (level == LoggerLevel::kMemory) {
-        oss << getCurrentRSS() / 1024 / 1024 << " MB";  // NOLINT
+        oss << "Current: " << getCurrentRSS() / 1024 / 1024 << " MB \tMax: " << getPeakRSS() / 1024 / 1024 << " MB";  // NOLINT
     }
     else if constexpr (sizeof...(args) == 0) {
         Log(LoggerLevel::kError, source_location, "no arguments passed to Log");

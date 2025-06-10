@@ -3,6 +3,7 @@
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
+#include <queue>
 #include <vector>
 
 #include "cube.h"
@@ -13,7 +14,7 @@ constexpr int kNumCornerOrientation = 2187;  // 3^7
 constexpr int kCornerOrientationSize = kNumCornerOrientation * kNumRotations; // 3^7 * 18
 
 
-int OrientationsToHash (std::array<uint8_t, kNumCorners>& orientations) {
+int OrientationsToHash (const std::array<uint8_t, kNumCorners>& orientations) {
     int hash = 0;
     for (int i = 0; i < kNumCorners-1; i++) {
         hash *= 3;
@@ -26,20 +27,6 @@ int OrientationsToHash (std::array<uint8_t, kNumCorners>& orientations) {
 }
 
 
-std::array<uint8_t, kNumCorners> HashToOrientations (int hash) {
-    std::array<uint8_t, kNumCorners> orientations;
-    int acc = 0;
-    for (int i = kNumCorners-2; i >= 0; i--) {
-        orientations[i] = 1 << (hash % 3);
-        acc += (hash % 3);
-        hash /= 3;
-    }
-    int last_orientation = (3 - (acc%3)) % 3;
-    orientations[kNumCorners-1] = 1 << last_orientation;
-    return orientations;
-}
-
-
 // swap bit shift_1 with bit shift_2
 template <size_t shift_1, size_t shift_2>
 uint8_t SwapBits (uint8_t bits) {
@@ -47,81 +34,83 @@ uint8_t SwapBits (uint8_t bits) {
 }
 
 
-template <size_t shift_1, size_t shift_2>
-void Rotation (std::array<uint8_t, kNumCorners>& orientations, std::array<int, 4> swap) {
-    uint8_t temp = orientations[swap[3]];
-    orientations[swap[3]] = orientations[swap[2]];
-    orientations[swap[2]] = orientations[swap[1]];
-    orientations[swap[1]] = orientations[swap[0]];
-    orientations[swap[0]] = temp;
-    for (int idx : swap) {
-        orientations[idx] = SwapBits<shift_1, shift_2>(orientations[idx]);
-    }
-}
+// map the current position to next position
+// -1 marks no change in rotation direction
+constexpr std::array<std::array<int8_t, kNumCorners>, kNumRotations> kCornerRotation =
+{{
+    { 4, -1,  0, -1,  6, -1,  2, -1}, // R
+    { 2, -1,  6, -1,  0, -1,  4, -1}, // R'
+    {-1,  3, -1,  7, -1,  1, -1,  5}, // L
+    {-1,  5, -1,  1, -1,  7, -1,  3}, // L'
+    { 1,  5, -1, -1,  0,  4, -1, -1}, // U
+    { 4,  0, -1, -1,  5,  1, -1, -1}, // U'
+    {-1, -1,  6,  2, -1, -1,  7,  3}, // D
+    {-1, -1,  3,  7, -1, -1,  2,  6}, // D'
+    { 2,  0,  3,  1, -1, -1, -1, -1}, // F
+    { 1,  3,  0,  2, -1, -1, -1, -1}, // F'
+    {-1, -1, -1, -1,  5,  7,  4,  6}, // B
+    {-1, -1, -1, -1,  6,  4,  7,  5}, // B'
+    { 4,  5,  0,  1,  6,  7,  2,  3}, // M  -  R  + L'
+    { 2,  3,  6,  7,  0,  1,  4,  5}, // M' -  R' + L 
+    { 1,  5,  3,  7,  0,  4,  2,  6}, // E  -  U  + D'
+    { 4,  0,  6,  2,  5,  1,  7,  3}, // E' -  U' + D
+    { 1,  3,  0,  2,  5,  7,  4,  6}, // S  -  F' + B
+    { 2,  0,  3,  1,  6,  4,  7,  5}, // S' -  F  + B'
+}};
 
 
-std::array<uint8_t, kNumCorners> Rotate (std::array<uint8_t, kNumCorners> orientations, Rotations rotation) {
-    constexpr std::array<std::array<int, 4>, 12> kSwaps = {{
-        {0, 1, 3, 2},  // R
-        {0, 2, 3, 1},  // R'
-        {4, 6, 7, 5},  // L
-        {4, 5, 7, 6},  // L'
-        {0, 4, 5, 1},  // U
-        {0, 1, 5, 4},  // U'
-        {2, 3, 7, 6},  // D
-        {2, 6, 7, 3},  // D'
-        {0, 2, 6, 4},  // F
-        {0, 4, 6, 2},  // F'
-        {1, 5, 7, 3},  // B
-        {1, 3, 7, 5},  // B'
-    }};
+std::array<uint8_t, kNumCorners> OrientationRotate (const std::array<uint8_t, kNumCorners>& old_orientations, Rotations rotation) {
+    std::array<uint8_t, kNumCorners> orientations;
+    for (int i = 0; i < kNumCorners; i++) {
+        if (kCornerRotation[rotation][i] == -1) {
+            orientations[i] = old_orientations[i];
+        }
+        else {
+            orientations[kCornerRotation[rotation][i]] = old_orientations[i];
+        }
+    }
+    for (int i = 0; i < kNumCorners; i++) {
+        // chage the position of the corner
+        if (kCornerRotation[rotation][i] == -1) {
+            continue;
+        }
 
-    if (rotation == kR || rotation == kM) {
-        Rotation<1, 2>(orientations, kSwaps[0]);  // NOLINT
+        // rotate the protruding pieces and their orientation
+        switch (rotation) {
+            case kR:
+            case kRc:
+            case kL:
+            case kLc:
+            case kM:
+            case kMc:
+                orientations[i] = SwapBits<1, 2>(orientations[i]);
+                break;
+            case kU:
+            case kUc:
+            case kD:
+            case kDc:
+            case kE:
+            case kEc:
+                orientations[i] = SwapBits<0, 2>(orientations[i]);
+                break;
+            case kF:
+            case kFc:
+            case kB:
+            case kBc:
+            case kS:
+            case kSc:
+                orientations[i] = SwapBits<0, 1>(orientations[i]);
+                break;
+        }
     }
-    if (rotation == kRc || rotation == kMc) {
-        Rotation<1, 2>(orientations, kSwaps[1]);  // NOLINT
-    }
-    if (rotation == kL || rotation == kMc) {
-        Rotation<1, 2>(orientations, kSwaps[2]);  // NOLINT
-    }
-    if (rotation == kLc || rotation == kM) {
-        Rotation<1, 2>(orientations, kSwaps[3]);  // NOLINT
-    }
-
-    if (rotation == kU || rotation == kE) {
-        Rotation<0, 2>(orientations, kSwaps[4]);  // NOLINT
-    }
-    if (rotation == kUc || rotation == kEc) {
-        Rotation<0, 2>(orientations, kSwaps[5]);  // NOLINT
-    }
-    if (rotation == kD || rotation == kEc) {
-        Rotation<0, 2>(orientations, kSwaps[6]);  // NOLINT
-    }
-    if (rotation == kDc || rotation == kE) {
-        Rotation<0, 2>(orientations, kSwaps[7]);  // NOLINT
-    }
-
-    if (rotation == kF || rotation == kSc) {
-        Rotation<0, 1>(orientations, kSwaps[8]);  // NOLINT
-    }
-    if (rotation == kFc || rotation == kS) {
-        Rotation<0, 1>(orientations, kSwaps[9]);  // NOLINT
-    }
-    if (rotation == kB || rotation == kS) {
-        Rotation<0, 1>(orientations, kSwaps[10]); // NOLINT 
-    }
-    if (rotation == kBc || rotation == kSc) {
-        Rotation<0, 1>(orientations, kSwaps[11]); // NOLINT 
-    }
-
     return orientations;
 }
 
 
 // precomputation of the corner orientations
-std::vector<uint8_t> CornerOrientationInitialization () {
-    std::vector<uint8_t> corner_orientation(kCornerOrientationSize, 0);
+std::vector<uint16_t> CornerOrientationInitialization () {
+    std::vector<uint16_t> corner_orientation(kCornerOrientationSize, 0);
+    std::vector<bool> visited(kNumCornerOrientation, false);
 
     // distinguish the different orientations
     // 0th bit - x direction
@@ -135,23 +124,39 @@ std::vector<uint8_t> CornerOrientationInitialization () {
     // 3 - -1 -1  1
     // ...
     // 7 - -1 -1 -1
-    std::array<uint8_t, kNumCorners> orientations;
+    std::array<uint8_t, kNumCorners> start_orientations = {1, 1, 1, 1, 1, 1, 1, 1};
+    std::queue<std::array<uint8_t, kNumCorners>> next_queue;
+    next_queue.push(start_orientations);
+    visited[0] = true;
+    int cnt = 1;
 
-    for (int i = 0; i < kNumCornerOrientation; i++) {
-        orientations = HashToOrientations(i);
+    while (!next_queue.empty()) {
+        std::array<uint8_t, kNumCorners> orientations = next_queue.front();
+        next_queue.pop();
+        int old_hash = OrientationsToHash(orientations);
 
         for (uint8_t j = 0; j < kNumRotations; j++) {
             Rotations rotation = static_cast<Rotations>(j);
 
-            std::array<uint8_t, kNumCorners> rotated = Rotate(orientations, rotation);
+            std::array<uint8_t, kNumCorners> rotated = OrientationRotate(orientations, rotation);
             int hash = OrientationsToHash(rotated);
 
             if (hash >= kCornerOrientationSize) {
                 LOG_CRITICAL("Calculated hash too big");
             }
-            corner_orientation[(i*kNumRotations) + j] = hash;
+            corner_orientation[(old_hash*kNumRotations) + j] = hash;
+            if (visited[hash]) {
+                continue;
+            }
+            visited[hash] = true;
+            next_queue.push(rotated);
+            cnt++;
         }
     }
 
+    if (cnt != kNumCornerOrientation) {
+        LOG_WARNING(cnt, "/", kNumCornerOrientation);
+        LOG_CRITICAL("Didn't find all");
+    }
     return corner_orientation;
 }

@@ -1,5 +1,7 @@
 #include <array>
+#include <cassert>
 #include <cstdint>
+#include <queue>
 #include <vector>
 
 #include "cube.h"
@@ -8,33 +10,6 @@
 
 constexpr int kNumCornerPositions = 40320;  // 8!
 constexpr int kCornerPositionsSize = kNumCornerPositions * kNumRotations;
-
-
-std::array<uint8_t, kNumCorners> HashToPosition (int hash) {
-    std::array<uint8_t, kNumCorners> positions;
-    std::array<bool, kNumCorners> visited;
-    visited.fill(false);
-
-    int shift = kNumCornerPositions;
-    for (int i = 0; i < kNumCorners; i++) {
-        shift /= kNumCorners - i;
-
-        int cur = hash / shift;
-        hash %= shift;
-
-        for (int j = 0; j < kNumCorners; j++) {
-            if (!visited[j]) {
-                cur--;
-            }
-            if (cur == -1) {
-                positions[i] = j;
-                visited[j] = true;
-                break;
-            }
-        }
-    }
-    return positions;
-}
 
 
 int PositionToHash (std::array<uint8_t, kNumCorners>& positions) {
@@ -95,8 +70,9 @@ std::array<uint8_t, kNumCorners> Rotate(std::array<uint8_t, kNumCorners> positio
 }
 
 
-std::vector<uint8_t> CornerPositionInitialization() {
-    std::vector<uint8_t> corner_positions(kCornerPositionsSize, 0);
+std::vector<uint16_t> CornerPositionInitialization() {
+    std::vector<uint16_t> corner_positions(kCornerPositionsSize, 0);
+    std::vector<bool> visited(kNumCornerPositions, false);
 
     // index - position in 3D space (x y z)
     // 0 -  1  1  1
@@ -105,22 +81,36 @@ std::vector<uint8_t> CornerPositionInitialization() {
     // 3 - -1 -1  1
     // ...
     // 7 - -1 -1 -1
-    std::array<uint8_t, kNumCorners> positions;
+    std::array<uint8_t, kNumCorners> starting_positions = {0, 1, 2, 3, 4, 5, 6, 7};
+    std::queue<std::array<uint8_t, kNumCorners>> next_queue;
+    next_queue.push(starting_positions);
+    visited[PositionToHash(starting_positions)] = true;
+    int cnt = 1;
 
-    for (int i = 0; i < kNumCornerPositions; i++) {
-        positions = HashToPosition(i);
+    while (!next_queue.empty()) {
+        std::array<uint8_t, kNumCorners> positions = next_queue.front();
+        next_queue.pop();
+        int old_hash = PositionToHash(positions);
 
         for (uint8_t rotation = 0; rotation < kNumRotations; rotation++) {
-
             std::array<uint8_t, kNumCorners> rotated = Rotate(positions, rotation);
             int hash = PositionToHash(rotated);
 
             if (hash >= kCornerPositionsSize) {
                 LOG_CRITICAL("Calculated hash too big");
             }
-            corner_positions[(i*kNumRotations) + rotation] = hash;
+            corner_positions[(old_hash*kNumRotations) + rotation] = hash;
+            if (visited[hash]) {
+                continue;
+            }
+            visited[hash] = true;
+            cnt++;
+            next_queue.push(rotated);
         }
     }
 
+    if (cnt != kNumCornerPositions) {
+        LOG_CRITICAL("Did not find all positions", cnt);
+    }
     return corner_positions;
 }
