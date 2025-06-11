@@ -1,9 +1,7 @@
 #include <array>
 #include <cassert>
 #include <cstdint>
-#include <map>
 #include <queue>
-#include <set>
 #include <vector>
 
 #include "corner_orientation.h"
@@ -15,6 +13,7 @@ constexpr int kNumCornerOrientation = 2187;  // 3^7
 constexpr int kNumCornerPositions = 40320;  // 8!
 constexpr int kNumCornerHeuristic = kNumCornerOrientation * kNumCornerPositions;
 constexpr int kSizeLegalMap = 256;
+constexpr int kNumLegalCornerConfigurations = 11382336;
 
 
 struct Corners {
@@ -45,7 +44,7 @@ void LegalMapInitialisation (std::array<bool, kSizeLegalMap>& legal_map) {
 
 
 // convert four protruding pieces to a hash which can be looked at
-int LegalHash (std::array<uint8_t, 4>& protruding_pieces, int idx) {
+int LegalHash (const std::array<uint8_t, 4>& protruding_pieces, int idx) {
     int hash = 0;
     for (uint8_t protruding_piece : protruding_pieces) {
         for (int i = 1; i <= 2; i++) {
@@ -57,7 +56,7 @@ int LegalHash (std::array<uint8_t, 4>& protruding_pieces, int idx) {
 }
 
 
-bool IsLegal (std::array<bool, kSizeLegalMap>& legal_map, std::array<uint8_t, kNumCorners> protruding) {
+bool IsLegal (const std::array<bool, kSizeLegalMap>& legal_map, const std::array<uint8_t, kNumCorners>& protruding) {
     // go over all directions
     for (int i = 0; i < 3; i++) {
         // positive or negative
@@ -80,7 +79,6 @@ bool IsLegal (std::array<bool, kSizeLegalMap>& legal_map, std::array<uint8_t, kN
 }
 
 
-// TODO: protrution
 Corners Rotate (const std::vector<uint16_t>& corner_orientation, const std::vector<uint16_t>& corner_position, Corners corners, int rotation) {
     corners.orientation = corner_orientation[(corners.orientation*kNumRotations) + rotation];
     corners.position = corner_position[(corners.position*kNumRotations) + rotation];
@@ -104,7 +102,6 @@ std::vector<uint16_t> CornerHeuristicInitialization(const std::vector<uint16_t>&
     bool needs_depth_increase = false;
 
     int count = 1;
-    int maxi = 0;
 
     while (!next_queue.empty()) {
         Corners current = next_queue.front();
@@ -115,20 +112,30 @@ std::vector<uint16_t> CornerHeuristicInitialization(const std::vector<uint16_t>&
             needs_depth_increase = true;
         }
 
+        uint16_t legal_moves = 0;
         for (int rotation = 0; rotation < kNumRotations; rotation++) {
             Corners next = Rotate(corner_orientation, corner_position, current, rotation);
 
             if ((next.orientation == 0 && next.position == 0) ||
                 (corner_heuristic[(int(next.orientation)*kNumCornerPositions) + int(next.position)] != 0)) {
+                if (rotation%2 == 0 && rotation < 12) {
+                    legal_moves |= 1 << (rotation/2);
+                }
                 continue;
             }
             if (!IsLegal(legal_map, next.protruding)) {
                 continue;
             }
+            if (rotation%2 == 0 && rotation < 12) {
+                legal_moves |= 1 << (rotation/2);
+            }
 
             count++;
-            corner_heuristic[(int(next.orientation)*kNumCornerPositions) + int(next.position)] = depth;
-            maxi = std::max(maxi, (int(next.orientation)*kNumCornerPositions) + int(next.position));
+            if (count % (kNumLegalCornerConfigurations / 20) == 0) {
+                LOG_EXTRA(count / (kNumLegalCornerConfigurations / 100), "%");
+            }
+
+            corner_heuristic[(next.orientation*kNumCornerPositions) + next.position] = depth;
             next_queue.push(next);
 
             if (needs_depth_increase) {
@@ -136,9 +143,14 @@ std::vector<uint16_t> CornerHeuristicInitialization(const std::vector<uint16_t>&
                 needs_depth_increase = false;
             }
         }
+        corner_heuristic[(current.orientation*kNumCornerPositions) + current.position] |= legal_moves << 8;
     }
 
-    LOG_EXTRA(count, "maxi", maxi);
+    if (count != kNumLegalCornerConfigurations) {
+        LOG_CRITICAL("Found", count, "number of legal conrer configurations instead of", kNumLegalCornerConfigurations);
+    }
+    LOG_EXTRA(count, "legal corner configurations");
+    LOG_EXTRA("max depth:", depth-1);
 
     return corner_heuristic;
 }
