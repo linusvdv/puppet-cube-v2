@@ -120,16 +120,16 @@ std::vector<uint16_t> CornerHeuristicInitialization(const std::vector<uint16_t>&
 
             if ((next.orientation == 0 && next.position == 0) ||
                 (corner_heuristic[(int(next.orientation)*kNumCornerPositions) + int(next.position)] != 0)) {
-                if (rotation%2 == 0 && rotation < 12) {
-                    legal_moves |= 1 << (rotation/2);
+                if (rotation%4 <= 1 && rotation < 12) {
+                    legal_moves |= 1 << ((rotation+1)/2);
                 }
                 continue;
             }
             if (!IsLegal(legal_map, next.protruding)) {
                 continue;
             }
-            if (rotation%2 == 0 && rotation < 12) {
-                legal_moves |= 1 << (rotation/2);
+            if (rotation%4 <= 1 && rotation < 12) {
+                legal_moves |= 1 << ((rotation+1)/2);
             }
 
             level_count++;

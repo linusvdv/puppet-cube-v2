@@ -1,10 +1,8 @@
-#include <unordered_set>
-
 #include "cube.h"
 
 
-std::unordered_set<Cube::State> TablebasePrecomputation (std::unordered_set<Cube::State>& previous, std::unordered_set<Cube::State>& current) {
-    std::unordered_set<Cube::State> next;
+Cube::Tablebase TablebasePrecomputation (Cube::Tablebase& previous, Cube::Tablebase& current) {
+    Cube::Tablebase next;
 
     for (const Cube::State& position : current) {
         for (uint8_t rotation = 0; rotation < kNumRotations; rotation++) {

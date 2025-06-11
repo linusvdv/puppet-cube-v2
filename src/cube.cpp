@@ -17,7 +17,7 @@ std::vector<uint16_t> Cube::corner_heuristics;
 
 std::vector<uint16_t> Cube::edge_orientations;
 std::vector<uint32_t> Cube::edge_positions;
-std::vector<std::unordered_set<Cube::State>> Cube::tablebase;
+std::vector<Cube::Tablebase> Cube::tablebase;
 
 
 void Cube::Initialize() {
@@ -45,13 +45,14 @@ void Cube::Initialize() {
 
 void Cube::TablebaseInitialization() {
     tablebase = {{}};
-    std::unordered_set<State> starting_set;
+    Cube::Tablebase starting_set;
     starting_set.insert(State(0, 0, 0, 0, kNumEdgePositions-1));
     tablebase.push_back(starting_set);
     for (int i = 1; i <= 8; i++) {
         tablebase.emplace_back(TablebasePrecomputation(tablebase[i-1], tablebase[i]));
         LOG_ALL("Depth", i, ":", tablebase.back().size());
     }
+    LOG_MEMORY();
 }
 
 
@@ -62,21 +63,18 @@ Cube::Cube() {
 
 
 constexpr std::array<uint8_t, kNumRotations> kLegalMoveIndex = {
-    8, 9, 9, 8, 10, 11, 11, 10, 12, 13, 13, 12, 0, 0, 0, 0, 0, 0
+    8, 9, 8, 9, 10, 11, 10, 11, 12, 13, 12, 13, 0, 0, 0, 0, 0, 0
 };
 
 
 bool Cube::State::Rotate(uint8_t rotation) {
-    /*if (kLegalMoveIndex[rotation] != 0 && ((corner_heuristics[(corner_orientation*kNumCornerPositions) + corner_position] >> kLegalMoveIndex[rotation]) & 1) == 0) {
+    if (kLegalMoveIndex[rotation] != 0 && ((corner_heuristics[(corner_orientation*kNumCornerPositions) + corner_position] >> kLegalMoveIndex[rotation]) & 1) == 0) {
         return false;
-    }*/
+    }
     corner_orientation = corner_orientations[(corner_orientation*kNumRotations) + rotation];
     corner_position = corner_positions[(corner_position*kNumRotations) + rotation];
     edge_orientation = edge_orientations[(edge_orientation*kNumRotations) + rotation];
     edge_position_1 = edge_positions[(edge_position_1*kNumRotations) + rotation];
     edge_position_2 = edge_positions[(edge_position_2*kNumRotations) + rotation];
-    if (corner_heuristics[(corner_orientation*kNumCornerPositions) + corner_position] == 0) {
-        return false;
-    }
     return true;
 }

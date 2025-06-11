@@ -1,8 +1,9 @@
 #pragma once
 #include <cstdint>
-#include <unordered_set>
 #include <tuple>
 #include <vector>
+#include "parallel_hashmap/phmap_fwd_decl.h"
+#include <parallel_hashmap/phmap.h>
 
 
 constexpr int kNumEdgePositions = 665280;  // 12! / 6!
@@ -49,7 +50,32 @@ public:
         }
 
         bool Rotate(uint8_t rotation);
+
+        friend std::size_t hash_value(const Cube::State& s) {
+            constexpr int kMagicVal = 0x9e3779b9;
+            std::size_t h1 = std::hash<uint16_t>{}(s.corner_orientation);
+            std::size_t h2 = std::hash<uint16_t>{}(s.corner_position);
+            std::size_t h3 = std::hash<uint16_t>{}(s.edge_orientation);
+            std::size_t h4 = std::hash<uint32_t>{}(s.edge_position_1);
+            std::size_t h5 = std::hash<uint32_t>{}(s.edge_position_2);
+
+            // Combine hashes (standard method)
+            std::size_t seed = h1;
+            seed ^= h2 + kMagicVal + (seed << 6) + (seed >> 2);
+            seed ^= h3 + kMagicVal + (seed << 6) + (seed >> 2);
+            seed ^= h4 + kMagicVal + (seed << 6) + (seed >> 2);
+            seed ^= h5 + kMagicVal + (seed << 6) + (seed >> 2);
+
+            return seed;
+        }
     };
+
+    using Tablebase = phmap::parallel_flat_hash_set<State,
+        phmap::priv::hash_default_hash<State>,
+        phmap::priv::hash_default_eq<State>,
+        phmap::priv::Allocator<State>,
+        12, std::mutex>;
+
 
     // corner and edge precomputation
     static void Initialize();
@@ -67,29 +93,7 @@ private:
     static std::vector<uint32_t> edge_positions;
     // TODO: Edge Heuristc
 
-    static std::vector<std::unordered_set<State>> tablebase;
+    static std::vector<Tablebase> tablebase;
 
     State cube_;
 };
-
-namespace std {
-    template<>
-    struct hash<Cube::State> {
-        size_t operator()(const Cube::State& s) const {
-            size_t h1 = hash<uint16_t>{}(s.corner_orientation);
-            size_t h2 = hash<uint16_t>{}(s.corner_position);
-            size_t h3 = hash<uint16_t>{}(s.edge_orientation);
-            size_t h4 = hash<uint32_t>{}(s.edge_position_1);
-            size_t h5 = hash<uint32_t>{}(s.edge_position_2);
-
-            // Combine hashes (standard method)
-            size_t seed = h1;
-            seed ^= h2 + 0x9e3779b9 + (seed << 6) + (seed >> 2);
-            seed ^= h3 + 0x9e3779b9 + (seed << 6) + (seed >> 2);
-            seed ^= h4 + 0x9e3779b9 + (seed << 6) + (seed >> 2);
-            seed ^= h5 + 0x9e3779b9 + (seed << 6) + (seed >> 2);
-
-            return seed;
-        }
-    };
-}
