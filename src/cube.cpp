@@ -6,13 +6,16 @@
 #include "corner_position.h"
 #include "cube.h"
 #include "edge_orientation.h"
+#include "edge_position.h"
 #include "logger.h"
 
 
 std::vector<uint16_t> Cube::corner_orientation;
 std::vector<uint16_t> Cube::corner_position;
 std::vector<uint16_t> Cube::corner_heuristic;
+
 std::vector<uint16_t> Cube::edge_orientation;
+std::vector<uint32_t> Cube::edge_position;
 
 
 void Cube::Initialize() {
@@ -30,5 +33,9 @@ void Cube::Initialize() {
 
     LOG_ALL("[4/7] Edge Orientation Initialization ...");
     edge_orientation = EdgeOrientationInitialization();
+    LOG_MEMORY();
+
+    LOG_ALL("[5/7] Edge Position Initialization ...");
+    edge_position = EdgePositionInitialization();
     LOG_MEMORY();
 }

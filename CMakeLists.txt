@@ -34,6 +34,7 @@ add_executable(PuppetCubeV2
     src/corner_position.cpp
     src/corner_heuristic.cpp
     src/edge_orientation.cpp
+    src/edge_position.cpp
 )
 
 target_link_libraries(PuppetCubeV2 PRIVATE Threads::Threads)

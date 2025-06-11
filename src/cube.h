@@ -44,4 +44,5 @@ private:
     static std::vector<uint16_t> corner_heuristic;
 
     static std::vector<uint16_t> edge_orientation;
+    static std::vector<uint32_t> edge_position;
 };
