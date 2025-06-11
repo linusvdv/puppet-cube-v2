@@ -8,7 +8,6 @@
 #include "logger.h"
 
 
-constexpr int kNumCornerPositions = 40320;  // 8!
 constexpr int kCornerPositionsSize = kNumCornerPositions * kNumRotations;
 
 

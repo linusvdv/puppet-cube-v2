@@ -10,7 +10,6 @@
 
 
 constexpr int kNumCornerOrientation = 2187;  // 3^7
-constexpr int kNumCornerPositions = 40320;  // 8!
 constexpr int kNumCornerHeuristic = kNumCornerOrientation * kNumCornerPositions;
 constexpr int kSizeLegalMap = 256;
 constexpr int kNumLegalCornerConfigurations = 11382336;
@@ -102,12 +101,15 @@ std::vector<uint16_t> CornerHeuristicInitialization(const std::vector<uint16_t>&
     bool needs_depth_increase = false;
 
     int count = 1;
+    int level_count = 1;
 
     while (!next_queue.empty()) {
         Corners current = next_queue.front();
         next_queue.pop();
 
         if (current.orientation == depth_increase.orientation && current.position == depth_increase.position) {
+            LOG_EXTRA(depth, "level_count:", level_count);
+            level_count = 0;
             depth++;
             needs_depth_increase = true;
         }
@@ -130,6 +132,7 @@ std::vector<uint16_t> CornerHeuristicInitialization(const std::vector<uint16_t>&
                 legal_moves |= 1 << (rotation/2);
             }
 
+            level_count++;
             count++;
             if (count % (kNumLegalCornerConfigurations / 20) == 0) {
                 LOG_EXTRA(count / (kNumLegalCornerConfigurations / 100), "%");

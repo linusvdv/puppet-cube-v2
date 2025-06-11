@@ -11,6 +11,10 @@ int main (int argc, char *argv[]) {
     Settings(argc, argv);
 
     Cube::Initialize();
+    LOG_INFO("Cube Initialized");
+
+    Cube::TablebaseInitialization();
+    LOG_INFO("Tablebase Initialized");
 
     return 0;
 }

@@ -7,7 +7,6 @@
 #include "logger.h"
 
 
-constexpr int kNumEdgePositions = 665280;  // 12! / 6!
 constexpr int kEdgePositionsSize = kNumEdgePositions * kNumRotations;  // 12! / 6! * 18
 constexpr int kNumPieces = 6;
 

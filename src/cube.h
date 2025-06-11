@@ -1,48 +1,95 @@
 #pragma once
 #include <cstdint>
+#include <unordered_set>
+#include <tuple>
 #include <vector>
 
 
-constexpr int kNumCornerData = 88179840;  // 8! * 3^7
-constexpr int kNumEdgeData = 42577920;  // 12! / 6! * 2^6
+constexpr int kNumEdgePositions = 665280;  // 12! / 6!
+constexpr int kNumCornerPositions = 40320;  // 8!
 constexpr int kNumRotations = 18;
 constexpr int kNumCorners = 8;
 constexpr int kNumEdges = 12;
 
 
 enum Rotations : uint8_t {
-    kR = 0,
-    kRc = 1,
-    kL = 2,
-    kLc = 3,
-    kU = 4,
-    kUc = 5,
-    kD = 6,
-    kDc = 7,
-    kF = 8,
-    kFc = 9,
-    kB = 10,
-    kBc = 11,
-    kM = 12,
-    kMc = 13,
-    kE = 14,
-    kEc = 15,
-    kS = 16,
-    kSc = 17
+    kR,
+    kRc,
+    kL,
+    kLc,
+    kU,
+    kUc,
+    kD,
+    kDc,
+    kF,
+    kFc,
+    kB,
+    kBc,
+    kM,
+    kMc,
+    kE,
+    kEc,
+    kS,
+    kSc
 };
-
 
 class Cube {
 public:
+    // 18 bits
+    struct State {
+        uint16_t corner_orientation;
+        uint16_t corner_position;
+        uint16_t edge_orientation;
+        uint32_t edge_position_1;
+        uint32_t edge_position_2;
+
+        bool operator==(const State& other) const {
+            return std::tie(corner_orientation, corner_position, edge_orientation, edge_position_1, edge_position_2) ==
+                std::tie(other.corner_orientation, other.corner_position, other.edge_orientation, other.edge_position_1, other.edge_position_2);
+        }
+
+        bool Rotate(uint8_t rotation);
+    };
+
     // corner and edge precomputation
     static void Initialize();
+    static void TablebaseInitialization();
+
+    Cube();
 
 private:
     // precomputation
-    static std::vector<uint16_t> corner_orientation;
-    static std::vector<uint16_t> corner_position;
-    static std::vector<uint16_t> corner_heuristic;
+    static std::vector<uint16_t> corner_orientations;
+    static std::vector<uint16_t> corner_positions;
+    static std::vector<uint16_t> corner_heuristics;
 
-    static std::vector<uint16_t> edge_orientation;
-    static std::vector<uint32_t> edge_position;
+    static std::vector<uint16_t> edge_orientations;
+    static std::vector<uint32_t> edge_positions;
+    // TODO: Edge Heuristc
+
+    static std::vector<std::unordered_set<State>> tablebase;
+
+    State cube_;
 };
+
+namespace std {
+    template<>
+    struct hash<Cube::State> {
+        size_t operator()(const Cube::State& s) const {
+            size_t h1 = hash<uint16_t>{}(s.corner_orientation);
+            size_t h2 = hash<uint16_t>{}(s.corner_position);
+            size_t h3 = hash<uint16_t>{}(s.edge_orientation);
+            size_t h4 = hash<uint32_t>{}(s.edge_position_1);
+            size_t h5 = hash<uint32_t>{}(s.edge_position_2);
+
+            // Combine hashes (standard method)
+            size_t seed = h1;
+            seed ^= h2 + 0x9e3779b9 + (seed << 6) + (seed >> 2);
+            seed ^= h3 + 0x9e3779b9 + (seed << 6) + (seed >> 2);
+            seed ^= h4 + 0x9e3779b9 + (seed << 6) + (seed >> 2);
+            seed ^= h5 + 0x9e3779b9 + (seed << 6) + (seed >> 2);
+
+            return seed;
+        }
+    };
+}
