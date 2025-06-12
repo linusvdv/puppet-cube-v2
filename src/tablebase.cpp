@@ -1,10 +1,13 @@
 #include "cube.h"
 
 
-Cube::Tablebase TablebasePrecomputation (Cube::Tablebase& previous, Cube::Tablebase& current) {
-    Cube::Tablebase next;
-
+void TablebasePrecomputation (const Cube::Tablebase& previous, const Cube::Tablebase& current, Cube::Tablebase& next, int thread_idx, int num_threads) {
+    int count = 0;
     for (const Cube::State& position : current) {
+        count++;
+        if (count%num_threads != thread_idx) {
+            continue;
+        }
         for (uint8_t rotation = 0; rotation < kNumRotations; rotation++) {
             Cube::State next_position = position;
             if (!next_position.Rotate(rotation)) {
@@ -17,6 +20,4 @@ Cube::Tablebase TablebasePrecomputation (Cube::Tablebase& previous, Cube::Tableb
             next.insert(next_position);
         }
     }
-
-    return next;
 }

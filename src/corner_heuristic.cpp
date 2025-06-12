@@ -1,12 +1,15 @@
 #include <array>
+#include <atomic>
 #include <cassert>
 #include <cstdint>
 #include <queue>
+#include <thread>
 #include <vector>
 
 #include "corner_orientation.h"
 #include "cube.h"
 #include "logger.h"
+#include "settings.h"
 
 
 constexpr int kNumCornerOrientation = 2187;  // 3^7
@@ -19,7 +22,37 @@ struct Corners {
     uint16_t orientation;
     uint16_t position;
     std::array<uint8_t, kNumCorners> protruding;
+
+    bool operator==(const Corners& other) const {
+        return std::tie(orientation, position, protruding) ==
+               std::tie(other.orientation, other.position, other.protruding);
+    }
+
+    friend std::size_t hash_value(const Corners& c) {
+        constexpr int kMagicVal = 0x9e3779b9;
+        std::size_t h1 = std::hash<uint16_t>{}(c.orientation);
+        std::size_t h2 = std::hash<uint16_t>{}(c.position);
+
+        // Hash the array
+        std::size_t h3 = 0;
+        for (uint8_t val : c.protruding) {
+            h3 ^= std::hash<uint8_t>{}(val) + kMagicVal + (h3 << 6) + (h3 >> 2);
+        }
+
+        // Combine all hashes
+        std::size_t seed = h1;
+        seed ^= h2 + kMagicVal + (seed << 6) + (seed >> 2);
+        seed ^= h3 + kMagicVal + (seed << 6) + (seed >> 2);
+
+        return seed;
+    }
 };
+
+using ParallelCorners = phmap::parallel_flat_hash_set<Corners,
+    phmap::priv::hash_default_hash<Corners>,
+    phmap::priv::hash_default_eq<Corners>,
+    phmap::priv::Allocator<Corners>,
+    12, std::mutex>;
 
 
 // pre initialise legal map
@@ -86,73 +119,80 @@ Corners Rotate (const std::vector<uint16_t>& corner_orientation, const std::vect
 }
 
 
-std::vector<uint16_t> CornerHeuristicInitialization(const std::vector<uint16_t>& corner_orientation, const std::vector<uint16_t>& corner_position) {
-    std::vector<uint16_t> corner_heuristic(kNumCornerHeuristic, 0);
-
-    std::array<bool, kSizeLegalMap> legal_map;
-    LegalMapInitialisation(legal_map);
-
-    Corners solved_state(0, 0, {{0b000, 0b001, 0b010, 0b011, 0b100, 0b101, 0b110, 0b111}});  // NOLINT
-
-    std::queue<Corners> next_queue;
-    next_queue.push(solved_state);
-    int depth = 0;
-    Corners depth_increase = solved_state;
-    bool needs_depth_increase = false;
-
-    int count = 1;
-    int level_count = 1;
-
-    while (!next_queue.empty()) {
-        Corners current = next_queue.front();
-        next_queue.pop();
-
-        if (current.orientation == depth_increase.orientation && current.position == depth_increase.position) {
-            LOG_EXTRA(depth, "level_count:", level_count);
-            level_count = 0;
-            depth++;
-            needs_depth_increase = true;
+void ParallelCornerHeuristic(const std::vector<uint16_t>& corner_orientation, const std::vector<uint16_t>& corner_position,
+                             const std::array<bool, kSizeLegalMap>& legal_map, const ParallelCorners& last, const ParallelCorners& current, ParallelCorners& next,
+                             tbb::concurrent_vector<uint16_t>& corner_heuristic, std::atomic<int>& cnt, int depth, int thread_idx, int num_threads) {
+    int corner_cnt = 0;
+    for (const Corners& corners : current) {
+        corner_cnt++;
+        if (corner_cnt % num_threads != thread_idx) {
+            continue;
         }
 
         uint16_t legal_moves = 0;
         for (int rotation = 0; rotation < kNumRotations; rotation++) {
-            Corners next = Rotate(corner_orientation, corner_position, current, rotation);
-
-            if ((next.orientation == 0 && next.position == 0) ||
-                (corner_heuristic[(int(next.orientation)*kNumCornerPositions) + int(next.position)] != 0)) {
+            Corners next_corners = Rotate(corner_orientation, corner_position, corners, rotation);
+            if (last.contains(next_corners) || current.contains(next_corners)) {
                 if (rotation%4 <= 1 && rotation < 12) {
                     legal_moves |= 1 << ((rotation+1)/2);
                 }
                 continue;
             }
-            if (!IsLegal(legal_map, next.protruding)) {
+            if (!IsLegal(legal_map, next_corners.protruding)) {
                 continue;
             }
             if (rotation%4 <= 1 && rotation < 12) {
                 legal_moves |= 1 << ((rotation+1)/2);
             }
 
-            level_count++;
-            count++;
-            if (count % (kNumLegalCornerConfigurations / 20) == 0) {
-                LOG_EXTRA(count / (kNumLegalCornerConfigurations / 100), "%");
-            }
+            corner_heuristic[(next_corners.orientation*kNumCornerPositions) + next_corners.position] = depth;
+            next.insert(next_corners);
+        }
+        corner_heuristic[(corners.orientation*kNumCornerPositions) + corners.position] |= legal_moves << 8;
+        int current_cnt = cnt++;
+        if (current_cnt % (kNumLegalCornerConfigurations / 20) == 0) {
+            LOG_EXTRA(current_cnt / (kNumLegalCornerConfigurations / 100), "%");
+        }
+    }
+}
 
-            corner_heuristic[(next.orientation*kNumCornerPositions) + next.position] = depth;
-            next_queue.push(next);
 
-            if (needs_depth_increase) {
-                depth_increase = next;
-                needs_depth_increase = false;
+tbb::concurrent_vector<uint16_t> CornerHeuristicInitialization(const std::vector<uint16_t>& corner_orientation, const std::vector<uint16_t>& corner_position) {
+    tbb::concurrent_vector<uint16_t> corner_heuristic(kNumCornerHeuristic, 0);
+
+    std::array<bool, kSizeLegalMap> legal_map;
+    LegalMapInitialisation(legal_map);
+
+    Corners solved_state(0, 0, {{0b000, 0b001, 0b010, 0b011, 0b100, 0b101, 0b110, 0b111}});  // NOLINT
+
+    std::atomic<int> cnt = 0;
+    ParallelCorners last = {};
+    ParallelCorners current = {solved_state};
+    ParallelCorners next = {};
+    int depth = 0;
+    do {
+        depth++;
+
+        {
+            std::vector<std::jthread> threads;
+            for (int j = 0; j < Settings::num_threads; j++) {
+                threads.push_back(std::jthread(
+                    ParallelCornerHeuristic, std::ref(corner_orientation), std::ref(corner_position),
+                    std::ref(legal_map), std::ref(last), std::ref(current), std::ref(next),
+                    std::ref(corner_heuristic), std::ref(cnt), depth, j, Settings::num_threads
+                ));
             }
         }
-        corner_heuristic[(current.orientation*kNumCornerPositions) + current.position] |= legal_moves << 8;
-    }
 
-    if (count != kNumLegalCornerConfigurations) {
-        LOG_CRITICAL("Found", count, "number of legal conrer configurations instead of", kNumLegalCornerConfigurations);
+        std::swap(last, current);
+        std::swap(current, next);
+        next = {};
+    } while (!current.empty());
+
+    if (cnt != kNumLegalCornerConfigurations) {
+        LOG_CRITICAL("Found", cnt, "number of legal conrer configurations instead of", kNumLegalCornerConfigurations);
     }
-    LOG_EXTRA(count, "legal corner configurations");
+    LOG_EXTRA(cnt, "legal corner configurations");
     LOG_EXTRA("max depth:", depth-1);
 
     return corner_heuristic;

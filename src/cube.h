@@ -2,8 +2,8 @@
 #include <cstdint>
 #include <tuple>
 #include <vector>
-#include "parallel_hashmap/phmap_fwd_decl.h"
 #include <parallel_hashmap/phmap.h>
+#include <tbb/concurrent_vector.h>
 
 
 constexpr int kNumEdgePositions = 665280;  // 12! / 6!
@@ -37,6 +37,7 @@ enum Rotations : uint8_t {
 class Cube {
 public:
     // 18 bits
+    #pragma pack(push, 1)
     struct State {
         uint16_t corner_orientation;
         uint16_t corner_position;
@@ -69,6 +70,7 @@ public:
             return seed;
         }
     };
+    #pragma pack(pop)
 
     using Tablebase = phmap::parallel_flat_hash_set<State,
         phmap::priv::hash_default_hash<State>,
@@ -87,7 +89,7 @@ private:
     // precomputation
     static std::vector<uint16_t> corner_orientations;
     static std::vector<uint16_t> corner_positions;
-    static std::vector<uint16_t> corner_heuristics;
+    static tbb::concurrent_vector<uint16_t> corner_heuristics;
 
     static std::vector<uint16_t> edge_orientations;
     static std::vector<uint32_t> edge_positions;

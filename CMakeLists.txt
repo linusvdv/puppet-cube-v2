@@ -23,6 +23,10 @@ find_package(Threads REQUIRED)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 option(BUILD_SHARED_LIBS "Build shared libraries" OFF)
 
+# TBB concurrent vectors
+find_package(TBB REQUIRED)
+
+
 # parallel hashmap by Gregory Popovitch
 include(FetchContent)
 FetchContent_Declare(
@@ -48,10 +52,10 @@ add_executable(PuppetCubeV2
     src/tablebase.cpp
 )
 
-target_link_libraries(PuppetCubeV2 PRIVATE Threads::Threads)
+target_link_libraries(PuppetCubeV2 PRIVATE Threads::Threads TBB::tbb)
 
 set(Debug_Options -Wextra -g -O0 -fno-inline -fno-omit-frame-pointer)
-set(Release_Options -Wextra -g -O3 -flto)
+set(Release_Options -Wextra -g -O3)
 
 target_compile_options(PuppetCubeV2 PRIVATE -Wall
     $<$<CONFIG:Debug>:${Debug_Options}>

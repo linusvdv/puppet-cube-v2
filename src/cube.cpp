@@ -1,4 +1,5 @@
 #include <cstdint>
+#include <thread>
 #include <vector>
 
 #include "corner_heuristic.h"
@@ -8,12 +9,13 @@
 #include "edge_orientation.h"
 #include "edge_position.h"
 #include "logger.h"
+#include "settings.h"
 #include "tablebase.h"
 
 
 std::vector<uint16_t> Cube::corner_orientations;
 std::vector<uint16_t> Cube::corner_positions;
-std::vector<uint16_t> Cube::corner_heuristics;
+tbb::concurrent_vector<uint16_t> Cube::corner_heuristics;
 
 std::vector<uint16_t> Cube::edge_orientations;
 std::vector<uint32_t> Cube::edge_positions;
@@ -49,7 +51,14 @@ void Cube::TablebaseInitialization() {
     starting_set.insert(State(0, 0, 0, 0, kNumEdgePositions-1));
     tablebase.push_back(starting_set);
     for (int i = 1; i <= 8; i++) {
-        tablebase.emplace_back(TablebasePrecomputation(tablebase[i-1], tablebase[i]));
+        tablebase.push_back({});
+        // start multiple threads
+        {
+            std::vector<std::jthread> threads;
+            for (int j = 0; j < Settings::num_threads; j++) {
+                threads.push_back(std::jthread(TablebasePrecomputation, std::ref(tablebase[i-1]), std::ref(tablebase[i]), std::ref(tablebase[i+1]), j, Settings::num_threads));
+            }
+        }
         LOG_ALL("Depth", i, ":", tablebase.back().size());
     }
     LOG_MEMORY();
