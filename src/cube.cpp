@@ -6,6 +6,7 @@
 #include "corner_orientation.h"
 #include "corner_position.h"
 #include "cube.h"
+#include "edge_heuristic.h"
 #include "edge_orientation.h"
 #include "edge_position.h"
 #include "logger.h"
@@ -15,10 +16,12 @@
 
 std::vector<uint16_t> Cube::corner_orientations;
 std::vector<uint16_t> Cube::corner_positions;
-tbb::concurrent_vector<uint16_t> Cube::corner_heuristics;
+std::vector<uint16_t> Cube::corner_heuristics;
 
 std::vector<uint16_t> Cube::edge_orientations;
 std::vector<uint32_t> Cube::edge_positions;
+std::vector<uint8_t> Cube::edge_heuristics_1;
+
 std::vector<Cube::Tablebase> Cube::tablebase;
 
 
@@ -42,6 +45,10 @@ void Cube::Initialize() {
     LOG_ALL("[5/7] Edge Position Initialization ...");
     edge_positions = EdgePositionInitialization();
     LOG_MEMORY();
+
+    LOG_ALL("[6/7] Edge Heuristic 1 Initialization ...");
+    edge_heuristics_1 = EdgeHeuristicInitialization(edge_orientations, edge_positions, 0, 0);
+    LOG_MEMORY();
 }
 
 
@@ -59,7 +66,7 @@ void Cube::TablebaseInitialization() {
                 threads.push_back(std::jthread(TablebasePrecomputation, std::ref(tablebase[i-1]), std::ref(tablebase[i]), std::ref(tablebase[i+1]), j, Settings::num_threads));
             }
         }
-        LOG_ALL("Depth", i, ":", tablebase.back().size());
+        LOG_ALL("Tablebase depth", i, ":", tablebase.back().size());
     }
     LOG_MEMORY();
 }

@@ -23,10 +23,6 @@ find_package(Threads REQUIRED)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 option(BUILD_SHARED_LIBS "Build shared libraries" OFF)
 
-# TBB concurrent vectors
-find_package(TBB REQUIRED)
-
-
 # parallel hashmap by Gregory Popovitch
 include(FetchContent)
 FetchContent_Declare(
@@ -49,10 +45,11 @@ add_executable(PuppetCubeV2
     src/corner_heuristic.cpp
     src/edge_orientation.cpp
     src/edge_position.cpp
+    src/edge_heuristic.cpp
     src/tablebase.cpp
 )
 
-target_link_libraries(PuppetCubeV2 PRIVATE Threads::Threads TBB::tbb)
+target_link_libraries(PuppetCubeV2 PRIVATE Threads::Threads)
 
 set(Debug_Options -Wextra -g -O0 -fno-inline -fno-omit-frame-pointer)
 set(Release_Options -Wextra -g -O3)

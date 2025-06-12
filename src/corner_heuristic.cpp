@@ -2,7 +2,6 @@
 #include <atomic>
 #include <cassert>
 #include <cstdint>
-#include <queue>
 #include <thread>
 #include <vector>
 
@@ -121,7 +120,7 @@ Corners Rotate (const std::vector<uint16_t>& corner_orientation, const std::vect
 
 void ParallelCornerHeuristic(const std::vector<uint16_t>& corner_orientation, const std::vector<uint16_t>& corner_position,
                              const std::array<bool, kSizeLegalMap>& legal_map, const ParallelCorners& last, const ParallelCorners& current, ParallelCorners& next,
-                             tbb::concurrent_vector<uint16_t>& corner_heuristic, std::atomic<int>& cnt, int depth, int thread_idx, int num_threads) {
+                             std::vector<uint16_t>& corner_heuristic, std::atomic<int>& cnt, int depth, int thread_idx, int num_threads) {
     int corner_cnt = 0;
     for (const Corners& corners : current) {
         corner_cnt++;
@@ -145,9 +144,9 @@ void ParallelCornerHeuristic(const std::vector<uint16_t>& corner_orientation, co
                 legal_moves |= 1 << ((rotation+1)/2);
             }
 
-            corner_heuristic[(next_corners.orientation*kNumCornerPositions) + next_corners.position] = depth;
             next.insert(next_corners);
         }
+        corner_heuristic[(corners.orientation*kNumCornerPositions) + corners.position] = depth;
         corner_heuristic[(corners.orientation*kNumCornerPositions) + corners.position] |= legal_moves << 8;
         int current_cnt = cnt++;
         if (current_cnt % (kNumLegalCornerConfigurations / 20) == 0) {
@@ -157,8 +156,8 @@ void ParallelCornerHeuristic(const std::vector<uint16_t>& corner_orientation, co
 }
 
 
-tbb::concurrent_vector<uint16_t> CornerHeuristicInitialization(const std::vector<uint16_t>& corner_orientation, const std::vector<uint16_t>& corner_position) {
-    tbb::concurrent_vector<uint16_t> corner_heuristic(kNumCornerHeuristic, 0);
+std::vector<uint16_t> CornerHeuristicInitialization(const std::vector<uint16_t>& corner_orientation, const std::vector<uint16_t>& corner_position) {
+    std::vector<uint16_t> corner_heuristic(kNumCornerHeuristic, 0);
 
     std::array<bool, kSizeLegalMap> legal_map;
     LegalMapInitialisation(legal_map);
@@ -171,8 +170,6 @@ tbb::concurrent_vector<uint16_t> CornerHeuristicInitialization(const std::vector
     ParallelCorners next = {};
     int depth = 0;
     do {
-        depth++;
-
         {
             std::vector<std::jthread> threads;
             for (int j = 0; j < Settings::num_threads; j++) {
@@ -184,6 +181,7 @@ tbb::concurrent_vector<uint16_t> CornerHeuristicInitialization(const std::vector
             }
         }
 
+        depth++;
         std::swap(last, current);
         std::swap(current, next);
         next = {};

@@ -3,11 +3,11 @@
 #include <tuple>
 #include <vector>
 #include <parallel_hashmap/phmap.h>
-#include <tbb/concurrent_vector.h>
 
 
-constexpr int kNumEdgePositions = 665280;  // 12! / 6!
 constexpr int kNumCornerPositions = 40320;  // 8!
+constexpr int kNumEdgePositions = 665280;  // 12! / 6!
+constexpr int kNumEdgeOrientation = 2048;  // 2^11
 constexpr int kNumRotations = 18;
 constexpr int kNumCorners = 8;
 constexpr int kNumEdges = 12;
@@ -89,10 +89,11 @@ private:
     // precomputation
     static std::vector<uint16_t> corner_orientations;
     static std::vector<uint16_t> corner_positions;
-    static tbb::concurrent_vector<uint16_t> corner_heuristics;
+    static std::vector<uint16_t> corner_heuristics;
 
     static std::vector<uint16_t> edge_orientations;
     static std::vector<uint32_t> edge_positions;
+    static std::vector<uint8_t> edge_heuristics_1;
     // TODO: Edge Heuristc
 
     static std::vector<Tablebase> tablebase;

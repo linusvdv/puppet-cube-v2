@@ -7,7 +7,6 @@
 #include "logger.h"
 
 
-constexpr int kNumEdgeOrientation = 2048;  // 2^11
 constexpr int kEdgeOrientationSize = kNumEdgeOrientation * kNumRotations;  // 2^11 * 18
 
 
