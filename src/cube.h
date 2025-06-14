@@ -5,12 +5,21 @@
 #include <parallel_hashmap/phmap.h>
 
 
-constexpr int kNumCornerPositions = 40320;  // 8!
-constexpr int kNumEdgePositions = 665280;  // 12! / 6!
-constexpr int kNumEdgeOrientation = 2048;  // 2^11
-constexpr int kNumRotations = 18;
 constexpr int kNumCorners = 8;
 constexpr int kNumEdges = 12;
+constexpr int kNumRotations = 18;
+
+constexpr int kNumCornerOrientation = 2187;  // 3^7
+constexpr int kCornerOrientationSize = kNumCornerOrientation * kNumRotations; // 3^7 * 18
+constexpr int kNumCornerPositions = 40320;  // 8!
+constexpr int kCornerPositionsSize = kNumCornerPositions * kNumRotations;
+constexpr int kNumCornerHeuristic = kNumCornerOrientation * kNumCornerPositions;
+
+constexpr int kNumEdgeOrientation = 2048;  // 2^11
+constexpr int kEdgeOrientationSize = kNumEdgeOrientation * kNumRotations;  // 2^11 * 18
+constexpr int kNumEdgePositions = 665280;  // 12! / 6!
+constexpr int kEdgePositionsSize = kNumEdgePositions * kNumRotations;  // 12! / 6! * 18
+constexpr int kNumEdgeHeuristic = kNumEdgePositions * kNumEdgeOrientation;
 
 
 enum Rotations : uint8_t {
@@ -93,8 +102,7 @@ private:
 
     static std::vector<uint16_t> edge_orientations;
     static std::vector<uint32_t> edge_positions;
-    static std::vector<uint8_t> edge_heuristics_1;
-    // TODO: Edge Heuristc
+    static std::vector<uint8_t> edge_heuristics;
 
     static std::vector<Tablebase> tablebase;
 

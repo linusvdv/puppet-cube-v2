@@ -8,9 +8,6 @@
 #include "logger.h"
 
 
-constexpr int kCornerPositionsSize = kNumCornerPositions * kNumRotations;
-
-
 int PositionToHash (std::array<uint8_t, kNumCorners>& positions) {
     int hash = 0;
     std::array<bool, kNumCorners> visited;

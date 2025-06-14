@@ -10,10 +10,6 @@
 #include "logger.h"
 
 
-constexpr int kNumCornerOrientation = 2187;  // 3^7
-constexpr int kCornerOrientationSize = kNumCornerOrientation * kNumRotations; // 3^7 * 18
-
-
 int OrientationsToHash (const std::array<uint8_t, kNumCorners>& orientations) {
     int hash = 0;
     for (int i = 0; i < kNumCorners-1; i++) {

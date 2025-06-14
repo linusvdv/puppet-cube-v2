@@ -11,8 +11,6 @@
 #include "settings.h"
 
 
-constexpr int kNumCornerOrientation = 2187;  // 3^7
-constexpr int kNumCornerHeuristic = kNumCornerOrientation * kNumCornerPositions;
 constexpr int kSizeLegalMap = 256;
 constexpr int kNumLegalCornerConfigurations = 11382336;
 

@@ -5,7 +5,6 @@
 #include "logger.h"
 
 
-constexpr int kNumEdgeHeuristic = kNumEdgePositions * kNumEdgeOrientation;
 constexpr int kEdgeHeuristicSize = kNumEdgeHeuristic;
 
 

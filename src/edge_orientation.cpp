@@ -7,9 +7,6 @@
 #include "logger.h"
 
 
-constexpr int kEdgeOrientationSize = kNumEdgeOrientation * kNumRotations;  // 2^11 * 18
-
-
 // map the current position to next position
 // -1 marks no change in rotation direction
 constexpr std::array<std::array<int8_t, kNumEdges>, kNumRotations> kEdgeRotation =
