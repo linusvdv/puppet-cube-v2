@@ -4,7 +4,7 @@
 
 
 __global__ void PrintTest() {
-    printf("TEST");
+    printf("Hi from GPU\n");
 }
 
 void Search () {

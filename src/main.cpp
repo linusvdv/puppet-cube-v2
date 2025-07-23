@@ -1,5 +1,6 @@
 #include "cube.h"
 #include "logger.h"
+#include "search.h"
 #include "settings.h"
 
 
@@ -15,6 +16,8 @@ int main (int argc, char *argv[]) {
 
     Cube::TablebaseInitialization();
     LOG_INFO("Tablebase Initialized");
+
+    Search();
 
     return 0;
 }
