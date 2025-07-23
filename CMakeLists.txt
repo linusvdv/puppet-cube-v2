@@ -4,6 +4,19 @@ include(FetchContent)
 
 project(PuppetCubeV2)
 
+find_package(CUDAToolkit 12.0 REQUIRED)
+
+# Ensure the CUDA compiler matches the found toolkit version
+if(CUDAToolkit_FOUND AND NOT CMAKE_CUDA_COMPILER)
+    # Use the nvcc from the same installation as the found toolkit
+    set(CMAKE_CUDA_COMPILER "${CUDAToolkit_BIN_DIR}/nvcc")
+    message(STATUS "Setting CUDA compiler to match toolkit: ${CMAKE_CUDA_COMPILER}")
+endif()
+
+# Verify the compiler exists
+if(CMAKE_CUDA_COMPILER AND NOT EXISTS ${CMAKE_CUDA_COMPILER})
+    message(FATAL_ERROR "CUDA compiler not found at: ${CMAKE_CUDA_COMPILER}")
+endif()
 enable_language(CUDA)
 
 # cuda
@@ -57,6 +70,10 @@ add_executable(PuppetCubeV2
 )
 
 target_link_libraries(PuppetCubeV2 PRIVATE Threads::Threads)
+
+if(NOT CMAKE_BUILD_TYPE)
+    set(CMAKE_BUILD_TYPE Release)
+endif()
 
 set(Debug_Options -O0 -fno-inline -fno-omit-frame-pointer)
 set(Release_Options -O3)
