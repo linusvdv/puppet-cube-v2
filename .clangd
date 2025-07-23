@@ -1,3 +1,28 @@
+If:
+  PathMatch: .*\.cu$
 CompileFlags:
-  Add: [-std=c++20, -stdlib=libstdc++]
+  Add:
+    - --cuda-host-only
+    - -std=c++17
+    - --cuda-gpu-arch=sm_89
+    - --cuda-path=/usr/local/cuda
+    - -I/usr/local/cuda/include
+    - -I/usr/local/cuda/samples/common/inc
+    - -I/usr/include
+    - -L/usr/local/cuda/lib64
+  Remove:
+    - -forward-unknown-to-host-compiler
+    - --generate-code=arch=compute_89,code=[compute_89,sm_89]
+    - -x
+    - cu
+
+---
+
+If:
+  PathMatch: \.(cpp|cc|cxx|c)$
+CompileFlags:
+  Add:
+    - -std=c++20
+    - -stdlib=libstdc++
+    - -I/usr/include
   CompilationDatabase: build/

@@ -5,39 +5,28 @@
 <!--toc:start-->
 - [puppet-cube-v2](#puppet-cube-v2)
   - [Abstract](#abstract)
-  - [Pre compilation of position_data](#pre-compilation-of-positiondata)
+  - [Requirements](#requirements)
   - [Compilation](#compilation)
   - [Run](#run)
   - [Help](#help)
 <!--toc:end-->
+
+
 ## Abstract
 
 In this thesis, the Puppet Cube V2, a shapeshifting variant of the classic Rubik’s Cube, is investigated in two parts, namely its 3D rendering and its solution finding with the help of a search. The interactive visualization of this cube incorporates features such as lighting and transparency. The primary focus of this study was the search. The Puppet Cube V2, represented as a graph, is used to investigate five different graph algorithms. The resulting program is able to find short solutions to randomly scrambled cubes quickly and improves the found solution with additional search time. A comprehensive description of the final implementation is provided, which is able to prove an optimal solution, although there exist $5 \cdot 10^{18}$ positions of the Puppet Cube V2. The algorithm runs in parallel to enhance computational efficiency. Additionally, the thesis presents key properties of the Puppet Cube V2 and the employed algorithm. Notably, a lower bound for God’s Number is established, which shows that there exist positions where 30 moves are required to solve the cube. Furthermore, the research highlights improvements in the average depth when searching for longer. Finally, a comparison to a state-of-the-art Rubik’s Cube solver further proves the effectiveness of the proposed approach.
 
-## Pre compilation of position_data
+## Requirements
+- cmake >= 3.21
+- cuda >= 12
 
-Time: ca. 3 min.
-
-```bash
-cd position_data/
-g++ -Wall -Wextra -g3 -std=c++20 -O3 corner-data.cpp -o corner-data
-./corner-data
-g++ -Wall -Wextra -g3 -std=c++20 -O3 edge-data.cpp -o edge-data
-./edge-data
-cd ../
-```
+- Nvidia GPU > XXX GB RAM
+- XXX RAM
 
 ## Compilation
 
 ```bash
-cmake -B build -DCMAKE_BUILD_TYPE=Release
-cmake --build build -j
-```
-
-Compilation without GUI. You do not need OpenGL:
-
-```bash
-cmake -B build -DCMAKE_BUILD_TYPE=Release -DGUI=OFF
+cmake -B build -DCMAKE_CUDA_COMPILER=/usr/local/cuda-12.9/bin/nvcc -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j
 ```
 
@@ -47,6 +36,7 @@ cmake --build build -j
 ./build/bin/PuppetCubeV2
 ```
 
+<!---
 ## Help
 ```
 --help                  shows this message
@@ -64,3 +54,4 @@ cmake --build build -j
 
 Example: ./build/bin/PuppetCubeV2 --gui=false --rootPath=./ --errorLevel=extra --threads=1 --runs=10 --positions=1000000 --tablebase_depth=7 --scramble_depth=10
 ```
+-->

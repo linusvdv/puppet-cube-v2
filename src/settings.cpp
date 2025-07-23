@@ -6,16 +6,11 @@
 
 
 std::string Settings::root_path;
-bool Settings::gui = false;
 int Settings::num_threads = 1;
 
 
 Settings::Settings (int argc, char *argv[]) {
     num_threads = std::thread::hardware_concurrency();
-
-    #ifdef GUI
-    gui = true;
-    #endif // GUI
 
     std::vector<std::string> arguments(argv, argv+argc);
 

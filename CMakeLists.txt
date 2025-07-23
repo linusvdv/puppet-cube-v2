@@ -4,17 +4,13 @@ include(FetchContent)
 
 project(PuppetCubeV2)
 
-set(CMAKE_CXX_STANDARD 20)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
+enable_language(CUDA)
+
+set(CMAKE_CUDA_ARCHITECTURES 89)
+
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
-
-option(GUI "Enable Graphical User Interface features" ON)
-
-if(GUI)
-    add_compile_definitions(GUI)
-endif()
 
 # pthread
 set(THREADS_PREFER_PTHREAD_FLAG ON)
@@ -47,14 +43,17 @@ add_executable(PuppetCubeV2
     src/edge_position.cpp
     src/edge_heuristic.cpp
     src/tablebase.cpp
+    src/search.cu
 )
 
 target_link_libraries(PuppetCubeV2 PRIVATE Threads::Threads)
 
-set(Debug_Options -Wextra -g -O0 -fno-inline -fno-omit-frame-pointer)
-set(Release_Options -Wextra -g -O3)
+set(Debug_Options -O0 -fno-inline -fno-omit-frame-pointer)
+set(Release_Options -O3)
 
-target_compile_options(PuppetCubeV2 PRIVATE -Wall
+target_compile_options(PuppetCubeV2 PRIVATE
+    $<$<COMPILE_LANGUAGE:CXX>:-Wall -Wextra -g -std=c++20>
+    $<$<COMPILE_LANGUAGE:CUDA>:-Wall -Wextra -g -std=c++20>
     $<$<CONFIG:Debug>:${Debug_Options}>
     $<$<CONFIG:Release>:${Release_Options}>
 )
