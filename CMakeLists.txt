@@ -6,9 +6,19 @@ project(PuppetCubeV2)
 
 enable_language(CUDA)
 
+# cuda
 set(CMAKE_CUDA_ARCHITECTURES 89)
+if(CMAKE_VERSION VERSION_GREATER_EQUAL "3.23")
+    set(CMAKE_CUDA_STANDARD 20)
+    set(CMAKE_CUDA_STANDARD_REQUIRED ON)
+endif()
+
 
 set(CMAKE_CXX_EXTENSIONS OFF)
+if(CMAKE_VERSION VERSION_GREATER_EQUAL "3.23")
+    set(CMAKE_CXX_STANDARD 20)
+    set(CMAKE_CXX_STANDARD_REQUIRED ON)
+endif()
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
@@ -52,8 +62,8 @@ set(Debug_Options -O0 -fno-inline -fno-omit-frame-pointer)
 set(Release_Options -O3)
 
 target_compile_options(PuppetCubeV2 PRIVATE
-    $<$<COMPILE_LANGUAGE:CXX>:-Wall -Wextra -g -std=c++20>
-    $<$<COMPILE_LANGUAGE:CUDA>:-Wall -Wextra -g -std=c++20>
+    $<$<COMPILE_LANGUAGE:CXX>:-Wall -Wextra -g $<$<VERSION_LESS:${CMAKE_VERSION},3.23>:-std=c++20>>
+    $<$<COMPILE_LANGUAGE:CUDA>:-Wall -Wextra -g $<$<VERSION_LESS:${CMAKE_VERSION},3.23>:-std=c++20>>
     $<$<CONFIG:Debug>:${Debug_Options}>
     $<$<CONFIG:Release>:${Release_Options}>
 )
