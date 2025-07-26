@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.16)
+cmake_minimum_required(VERSION 3.23.1 FATAL_ERROR)
 
 include(FetchContent)
 
@@ -18,20 +18,17 @@ if(CMAKE_CUDA_COMPILER AND NOT EXISTS ${CMAKE_CUDA_COMPILER})
     message(FATAL_ERROR "CUDA compiler not found at: ${CMAKE_CUDA_COMPILER}")
 endif()
 enable_language(CUDA)
+set(CMAKE_CUDA_USE_RESPONSE_FILE_FOR_INCLUDES OFF)
 
 # cuda
 set(CMAKE_CUDA_ARCHITECTURES 89)
-if(CMAKE_VERSION VERSION_GREATER_EQUAL "3.23")
-    set(CMAKE_CUDA_STANDARD 20)
-    set(CMAKE_CUDA_STANDARD_REQUIRED ON)
-endif()
+set(CMAKE_CUDA_STANDARD 20)
+set(CMAKE_CUDA_STANDARD_REQUIRED ON)
 
 
 set(CMAKE_CXX_EXTENSIONS OFF)
-if(CMAKE_VERSION VERSION_GREATER_EQUAL "3.23")
-    set(CMAKE_CXX_STANDARD 20)
-    set(CMAKE_CXX_STANDARD_REQUIRED ON)
-endif()
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
@@ -42,6 +39,7 @@ find_package(Threads REQUIRED)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 option(BUILD_SHARED_LIBS "Build shared libraries" OFF)
 
+
 # parallel hashmap by Gregory Popovitch
 include(FetchContent)
 FetchContent_Declare(
@@ -51,6 +49,20 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(parallel-hashmap)
 include_directories(${parallel-hashmap_SOURCE_DIR})
+
+# cuco
+include(cmake/CPM.cmake)
+
+CPMAddPackage(
+  NAME cuco
+  GITHUB_REPOSITORY NVIDIA/cuCollections
+  GIT_TAG dev
+  OPTIONS
+     "BUILD_TESTS OFF"
+     "BUILD_BENCHMARKS OFF"
+     "BUILD_EXAMPLES OFF"
+)
+
 
 include_directories(include/)
 
@@ -67,9 +79,13 @@ add_executable(PuppetCubeV2
     src/edge_heuristic.cpp
     src/tablebase.cpp
     src/search.cu
+    src/cuco_static_set_chunked.cu
 )
 
-target_link_libraries(PuppetCubeV2 PRIVATE Threads::Threads)
+target_link_libraries(PuppetCubeV2 PRIVATE Threads::Threads cuco)
+target_include_directories(PuppetCubeV2 SYSTEM PRIVATE
+  $<TARGET_PROPERTY:cuco,INTERFACE_INCLUDE_DIRECTORIES>
+)
 
 if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Release)
@@ -79,8 +95,8 @@ set(Debug_Options -O0 -fno-inline -fno-omit-frame-pointer)
 set(Release_Options -O3)
 
 target_compile_options(PuppetCubeV2 PRIVATE
-    $<$<COMPILE_LANGUAGE:CXX>:-Wall -Wextra -g $<$<VERSION_LESS:${CMAKE_VERSION},3.23>:-std=c++20>>
-    $<$<COMPILE_LANGUAGE:CUDA>:-Wall -Wextra -g $<$<VERSION_LESS:${CMAKE_VERSION},3.23>:-std=c++20>>
+    $<$<COMPILE_LANGUAGE:CXX>:-Wall -Wextra -g>
+    $<$<COMPILE_LANGUAGE:CUDA>:-Wall -Wextra -g --expt-extended-lambda>
     $<$<CONFIG:Debug>:${Debug_Options}>
     $<$<CONFIG:Release>:${Release_Options}>
 )

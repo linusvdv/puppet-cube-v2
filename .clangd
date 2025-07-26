@@ -1,29 +1,24 @@
+Diagnostics:
+  Suppress:
+    - pp_hash_error
+
 If:
-  PathMatch: .*\.cu$
+  PathMatch: .*\.(cu|h)$
 CompileFlags:
   Add:
-    - --cuda-host-only
     - -std=c++17
-    - --cuda-gpu-arch=sm_89
-    - --cuda-path=/usr/local/cuda
-    - -I/usr/local/cuda/include
-    - -I/usr/local/cuda/samples/common/inc
-    - -I/usr/include
-    - -L/usr/local/cuda/lib64
+    - Ibuild/_dep/cuco-src/include
   Remove:
     - -forward-unknown-to-host-compiler
     - --generate-code=arch=compute_89,code=[compute_89,sm_89]
-    - --options-file
-    - -x
-    - cu
-
----
+    - --expt-extended-lambda
 
 If:
   PathMatch: \.(cpp|cc|cxx|c)$
 CompileFlags:
   Add:
-    - -std=c++20
-    - -stdlib=libstdc++
-    - -I/usr/include
-  CompilationDatabase: build/
+    - Ibuild/_dep/cuco-src/include
+  Remove:
+    - -forward-unknown-to-host-compiler
+    - --generate-code=arch=compute_89,code=[compute_89,sm_89]
+    - --expt-extended-lambda
