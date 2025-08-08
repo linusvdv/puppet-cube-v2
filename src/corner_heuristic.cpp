@@ -5,10 +5,10 @@
 #include <thread>
 #include <vector>
 
-#include "corner_orientation.h"
-#include "cube.h"
-#include "logger.h"
-#include "settings.h"
+#include "corner_orientation.hpp"
+#include "cube.hpp"
+#include "logger.hpp"
+#include "settings.hpp"
 
 
 constexpr int kSizeLegalMap = 256;

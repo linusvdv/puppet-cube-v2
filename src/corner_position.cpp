@@ -4,8 +4,8 @@
 #include <queue>
 #include <vector>
 
-#include "cube.h"
-#include "logger.h"
+#include "cube.hpp"
+#include "logger.hpp"
 
 
 int PositionToHash (std::array<uint8_t, kNumCorners>& positions) {

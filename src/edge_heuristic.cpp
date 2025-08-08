@@ -1,8 +1,8 @@
 #include <queue>
 #include <vector>
 
-#include "cube.h"
-#include "logger.h"
+#include "cube.hpp"
+#include "logger.hpp"
 
 
 constexpr int kEdgeHeuristicSize = kNumEdgeHeuristic;

@@ -5,16 +5,16 @@
 #include <thread>
 #include <vector>
 
-#include "corner_heuristic.h"
-#include "corner_orientation.h"
-#include "corner_position.h"
-#include "cube.h"
-#include "edge_heuristic.h"
-#include "edge_orientation.h"
-#include "edge_position.h"
-#include "logger.h"
-#include "settings.h"
-#include "tablebase.h"
+#include "corner_heuristic.hpp"
+#include "corner_orientation.hpp"
+#include "corner_position.hpp"
+#include "cube.hpp"
+#include "edge_heuristic.hpp"
+#include "edge_orientation.hpp"
+#include "edge_position.hpp"
+#include "logger.hpp"
+#include "settings.hpp"
+#include "tablebase.hpp"
 
 
 std::vector<uint16_t> Cube::corner_orientations;
@@ -134,4 +134,10 @@ bool Cube::State::Rotate(uint8_t rotation) {
     edge_position_1 = edge_positions[(edge_position_1*kNumRotations) + rotation];
     edge_position_2 = edge_positions[(edge_position_2*kNumRotations) + rotation];
     return true;
+}
+
+void Cube::UploadComputationToDevice() {
+    #ifdef USE_CUDA
+    
+    #endif // USE_CUDA
 }

@@ -3,7 +3,7 @@
 #include <cstdint>
 #include <vector>
 
-#include "cube.h"
+#include "cube.hpp"
 
 
 std::array<uint8_t, kNumCorners> OrientationRotate (const std::array<uint8_t, kNumCorners>& orientations, Rotations rotation);

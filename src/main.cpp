@@ -1,7 +1,10 @@
-#include "cube.h"
-#include "logger.h"
-#include "search.h"
-#include "settings.h"
+#include "cube.hpp"
+#include "logger.hpp"
+#include "settings.hpp"
+
+#ifdef USE_CUDA
+#include "cuda_search.cuh"
+#endif
 
 
 int main (int argc, char *argv[]) {
@@ -17,7 +20,9 @@ int main (int argc, char *argv[]) {
     Cube::TablebaseInitialization();
     LOG_INFO("Tablebase Initialized");
 
-    Search();
+    #ifdef USE_CUDA
+    Initialize();
+    #endif
 
     return 0;
 }

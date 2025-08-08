@@ -78,7 +78,7 @@ add_executable(PuppetCubeV2
     src/edge_position.cpp
     src/edge_heuristic.cpp
     src/tablebase.cpp
-    src/search.cu
+    src/cuda_search.cu
     src/cuco_static_set_chunked.cu
 )
 
@@ -96,7 +96,7 @@ set(Release_Options -O3)
 
 target_compile_options(PuppetCubeV2 PRIVATE
     $<$<COMPILE_LANGUAGE:CXX>:-Wall -Wextra -g>
-    $<$<COMPILE_LANGUAGE:CUDA>:-Wall -Wextra -g --expt-extended-lambda>
+    $<$<COMPILE_LANGUAGE:CUDA>:-Wall -Wextra -g --expt-extended-lambda -diag-suppress 68>
     $<$<CONFIG:Debug>:${Debug_Options}>
     $<$<CONFIG:Release>:${Release_Options}>
 )

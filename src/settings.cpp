@@ -2,7 +2,7 @@
 #include <thread>
 #include <vector>
 
-#include "settings.h"
+#include "settings.hpp"
 
 
 std::string Settings::root_path;
