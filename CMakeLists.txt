@@ -4,28 +4,6 @@ include(FetchContent)
 
 project(PuppetCubeV2)
 
-find_package(CUDAToolkit 12.0 REQUIRED)
-
-# Ensure the CUDA compiler matches the found toolkit version
-if(CUDAToolkit_FOUND AND NOT CMAKE_CUDA_COMPILER)
-    # Use the nvcc from the same installation as the found toolkit
-    set(CMAKE_CUDA_COMPILER "${CUDAToolkit_BIN_DIR}/nvcc")
-    message(STATUS "Setting CUDA compiler to match toolkit: ${CMAKE_CUDA_COMPILER}")
-endif()
-
-# Verify the compiler exists
-if(CMAKE_CUDA_COMPILER AND NOT EXISTS ${CMAKE_CUDA_COMPILER})
-    message(FATAL_ERROR "CUDA compiler not found at: ${CMAKE_CUDA_COMPILER}")
-endif()
-enable_language(CUDA)
-set(CMAKE_CUDA_USE_RESPONSE_FILE_FOR_INCLUDES OFF)
-
-# cuda
-set(CMAKE_CUDA_ARCHITECTURES 89)
-set(CMAKE_CUDA_STANDARD 20)
-set(CMAKE_CUDA_STANDARD_REQUIRED ON)
-
-
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -50,19 +28,49 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(parallel-hashmap)
 include_directories(${parallel-hashmap_SOURCE_DIR})
 
-# cuco
-include(cmake/CPM.cmake)
+# ===========================================
+# Important option to enable the CUDA search!
+# ===========================================
+# - ON
+# - OFF
 
-CPMAddPackage(
-  NAME cuco
-  GITHUB_REPOSITORY NVIDIA/cuCollections
-  GIT_TAG dev
-  OPTIONS
-     "BUILD_TESTS OFF"
-     "BUILD_BENCHMARKS OFF"
-     "BUILD_EXAMPLES OFF"
-)
+option(USE_CUDA "Build with CUDA support" ON)
 
+if(USE_CUDA)
+    find_package(CUDAToolkit 12.0 REQUIRED)
+
+    # Ensure the CUDA compiler matches the found toolkit version
+    if(CUDAToolkit_FOUND AND NOT CMAKE_CUDA_COMPILER)
+        # Use the nvcc from the same installation as the found toolkit
+        set(CMAKE_CUDA_COMPILER "${CUDAToolkit_BIN_DIR}/nvcc")
+        message(STATUS "Setting CUDA compiler to match toolkit: ${CMAKE_CUDA_COMPILER}")
+    endif()
+
+    # Verify the compiler exists
+    if(CMAKE_CUDA_COMPILER AND NOT EXISTS ${CMAKE_CUDA_COMPILER})
+        message(FATAL_ERROR "CUDA compiler not found at: ${CMAKE_CUDA_COMPILER}")
+    endif()
+
+    # cuda
+    enable_language(CUDA)
+    set(CMAKE_CUDA_USE_RESPONSE_FILE_FOR_INCLUDES OFF)
+    set(CMAKE_CUDA_ARCHITECTURES 89)
+    set(CMAKE_CUDA_STANDARD 20)
+    set(CMAKE_CUDA_STANDARD_REQUIRED ON)
+
+    # cuco
+    include(cmake/CPM.cmake)
+
+    CPMAddPackage(
+    NAME cuco
+    GITHUB_REPOSITORY NVIDIA/cuCollections
+    GIT_TAG dev
+    OPTIONS
+        "BUILD_TESTS OFF"
+        "BUILD_BENCHMARKS OFF"
+        "BUILD_EXAMPLES OFF"
+    )
+endif()
 
 include_directories(include/)
 
@@ -78,14 +86,34 @@ add_executable(PuppetCubeV2
     src/edge_position.cpp
     src/edge_heuristic.cpp
     src/tablebase.cpp
-    src/cuda_search.cu
-    src/cuco_static_set_chunked.cu
 )
 
-target_link_libraries(PuppetCubeV2 PRIVATE Threads::Threads cuco)
-target_include_directories(PuppetCubeV2 SYSTEM PRIVATE
-  $<TARGET_PROPERTY:cuco,INTERFACE_INCLUDE_DIRECTORIES>
-)
+if(USE_CUDA)
+    add_compile_definitions(USE_CUDA)
+
+    target_sources(PuppetCubeV2 PRIVATE
+        src/cuda_search.cu
+        src/cuco_static_set_chunked.cu
+    )
+
+    target_link_libraries(PuppetCubeV2 PRIVATE Threads::Threads cuco)
+    target_include_directories(PuppetCubeV2 SYSTEM PRIVATE
+        $<TARGET_PROPERTY:cuco,INTERFACE_INCLUDE_DIRECTORIES>
+    )
+
+    target_compile_options(PuppetCubeV2 PRIVATE
+        $<$<COMPILE_LANGUAGE:CUDA>:-Wall -Wextra -g --expt-extended-lambda -diag-suppress 68>
+    )
+else()
+    target_link_libraries(PuppetCubeV2 PRIVATE Threads::Threads)
+endif()
+
+
+# ============
+# Build Option
+# ============
+# - Release
+# - Debug
 
 if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Release)
@@ -94,9 +122,9 @@ endif()
 set(Debug_Options -O0 -fno-inline -fno-omit-frame-pointer)
 set(Release_Options -O3)
 
+
 target_compile_options(PuppetCubeV2 PRIVATE
     $<$<COMPILE_LANGUAGE:CXX>:-Wall -Wextra -g>
-    $<$<COMPILE_LANGUAGE:CUDA>:-Wall -Wextra -g --expt-extended-lambda -diag-suppress 68>
     $<$<CONFIG:Debug>:${Debug_Options}>
     $<$<CONFIG:Release>:${Release_Options}>
 )

@@ -13,7 +13,5 @@ void UploadCubeComputationToDevice(
 
     std::vector<uint16_t>& edge_orientations,
     std::vector<uint32_t>& edge_positions,
-    std::vector<uint8_t>& edge_heuristics,
-
-    std::vector<Cube::Tablebase>& tablebase
+    std::vector<uint8_t>& edge_heuristics
     );

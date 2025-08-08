@@ -17,8 +17,6 @@ public:
     static uint16_t* d_edge_orientations;
     static uint32_t* d_edge_positions;
     static uint8_t* d_edge_heuristics;
-
-    static cuco::static_set<Cube::State> d_tablebase_surface;
 };
 
 
@@ -29,8 +27,6 @@ uint16_t* CudaSearch::d_corner_heuristics = nullptr;
 uint16_t* CudaSearch::d_edge_orientations = nullptr;
 uint32_t* CudaSearch::d_edge_positions = nullptr;
 uint8_t* CudaSearch::d_edge_heuristics = nullptr;
-
-cuco::static_set<Cube::State> CudaSearch::d_tablebase_surface{};
 
 
 __global__ void PrintTest() {
@@ -49,9 +45,7 @@ void UploadCubeComputationToDevice(
 
     std::vector<uint16_t>& edge_orientations,
     std::vector<uint32_t>& edge_positions,
-    std::vector<uint8_t>& edge_heuristics,
-
-    std::vector<Cube::Tablebase>& tablebase
+    std::vector<uint8_t>& edge_heuristics
     ) {
 
     // corner orientation
