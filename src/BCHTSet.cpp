@@ -77,7 +77,8 @@ int GetBucketIndex(Cube::State& cube, uint32_t hash, uint32_t num_buckets) {
             return i;
         }
     }
-    LOG_ERROR("hash and bucket do not fit");
+    LOG_ERROR(hash, "!=", start_buckets[0], start_buckets[1], start_buckets[2]);
+    LOG_CRITICAL("hash and bucket do not fit");
     return -1;
 }
 
@@ -96,44 +97,45 @@ bool BfsInsert(std::vector<Cube::State>& table, uint32_t num_buckets, Cube::Stat
     }
 
     // Parent map: child node -> parent node
-    std::map<Cube::State, std::pair<Cube::State, uint32_t>> parents;
-    std::set<uint32_t> used_keys;
-    std::priority_queue<std::pair<int, Cube::State>, std::vector<std::pair<int, Cube::State>>, std::greater<>> p_q;
+    std::map<uint32_t, uint32_t> parents;
+    std::set<uint32_t> used_hash_idxs;
+    std::priority_queue<std::pair<int, std::pair<Cube::State, uint32_t>>, std::vector<std::pair<int, std::pair<Cube::State, uint32_t>>>, std::greater<>> p_q;
 
     // insert the starting nodes
-    p_q.push({0, key});
-    parents.insert({key, {Cube::State(), -1}});
+    p_q.push({0, {key, -1}});
 
     // bfs / dijkstra
-    while (p_q.empty()) {
-        std::pair<int, Cube::State> current = p_q.top();
+    while (!p_q.empty()) {
+        std::pair<int, std::pair<Cube::State, uint32_t>> current = p_q.top();
         p_q.pop();
 
-        std::array<uint32_t, 3> current_buckets = GetStartBuckets(current.second, num_buckets);
+
+        std::array<uint32_t, 3> current_buckets = GetStartBuckets(current.second.first, num_buckets);
         for (int j = 0; j < 3; j++) {
             for (int i = 0; i < kBucketSize; i++) {
                 uint32_t hash_idx = (current_buckets[j]*kBucketSize) + i;
+                if (used_hash_idxs.contains(hash_idx)) {
+                    continue;
+                }
+                used_hash_idxs.insert(hash_idx);
+
                 // found empty spot
                 if (table[hash_idx] == Cube::State()) {
-                    uint32_t final_hash = hash_idx;
-                    std::pair<Cube::State, uint32_t> final_parent = parents[current.second];
-                    while (final_parent.first != Cube::State()) {
-                        table[final_hash] = final_parent.first;
-                        final_hash = final_parent.second;
-                        final_parent = parents[final_parent.first];
+                    uint32_t final_hash_idx = hash_idx;
+                    uint32_t final_parent = current.second.second;
+                    while (final_parent != uint32_t(-1)) {
+                        table[final_hash_idx] = table[final_parent];
+                        GetBucketIndex(table[final_hash_idx], final_hash_idx/kBucketSize, num_buckets);
+                        final_hash_idx = final_parent;
+                        final_parent = parents[final_parent];
                     }
                     return true;
                 }
 
-                if (used_keys.contains(hash_idx)) {
-                    continue;
-                }
-                used_keys.insert(hash_idx);
-
-                int prev_bucket_index = GetBucketIndex(table[hash_idx], hash_idx, num_buckets);
+                int prev_bucket_index = GetBucketIndex(table[hash_idx], current_buckets[j], num_buckets);
                 int diff = j - prev_bucket_index;
-                p_q.push({current.first + diff, table[hash_idx]});
-                parents[table[hash_idx]] = {current.second, hash_idx};
+                p_q.push({current.first + diff, {table[hash_idx], hash_idx}});
+                parents[hash_idx] = current.second.second;
             }
         }
     }
@@ -143,8 +145,9 @@ bool BfsInsert(std::vector<Cube::State>& table, uint32_t num_buckets, Cube::Stat
 
 
 std::vector<Cube::State> BuildBCHTSet(const Cube::Tablebase& tablebase) {
-    uint32_t num_buckets = tablebase.size() / kBucketSize * kLoadFacor;
-    std::vector<Cube::State> table(num_buckets);
+    uint32_t num_buckets = std::ceil(double(tablebase.size()) / kBucketSize / kLoadFacor);
+    std::vector<Cube::State> table(num_buckets*kBucketSize);
+    LOG_ALL("TB load factor:", tablebase.size() / double(table.size()) * 100);
 
     uint32_t cnt = 0;
     bool failed = false;

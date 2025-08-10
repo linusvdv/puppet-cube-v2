@@ -21,7 +21,6 @@ int main (int argc, char *argv[]) {
     LOG_INFO("Tablebase Initialized");
 
     #ifdef USE_CUDA
-    Cube::Initialize();
     #endif
 
     return 0;
