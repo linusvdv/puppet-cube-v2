@@ -48,14 +48,19 @@ public:
     // 18 bits
     #pragma pack(push, 1)
     struct State {
-        uint16_t corner_orientation; // 12 bits
-        uint16_t corner_position;    // 16 bits
-        uint16_t edge_orientation;   // 11 bits
-        uint32_t edge_position_1;    // 20 bits
-        uint32_t edge_position_2;    // 20 bits
+        uint16_t corner_orientation = -1; // 12 bits
+        uint16_t corner_position = -1;    // 16 bits
+        uint16_t edge_orientation = -1;   // 11 bits
+        uint32_t edge_position_1 = -1;    // 20 bits
+        uint32_t edge_position_2 = -1;    // 20 bits
 
         bool operator==(const State& other) const {
             return std::tie(corner_orientation, corner_position, edge_orientation, edge_position_1, edge_position_2) ==
+                std::tie(other.corner_orientation, other.corner_position, other.edge_orientation, other.edge_position_1, other.edge_position_2);
+        }
+
+        bool operator<(const State& other) const {
+            return std::tie(corner_orientation, corner_position, edge_orientation, edge_position_1, edge_position_2) <
                 std::tie(other.corner_orientation, other.corner_position, other.edge_orientation, other.edge_position_1, other.edge_position_2);
         }
 

@@ -57,19 +57,6 @@ if(USE_CUDA)
     set(CMAKE_CUDA_ARCHITECTURES 89)
     set(CMAKE_CUDA_STANDARD 20)
     set(CMAKE_CUDA_STANDARD_REQUIRED ON)
-
-    # cuco
-    include(cmake/CPM.cmake)
-
-    CPMAddPackage(
-    NAME cuco
-    GITHUB_REPOSITORY NVIDIA/cuCollections
-    GIT_TAG dev
-    OPTIONS
-        "BUILD_TESTS OFF"
-        "BUILD_BENCHMARKS OFF"
-        "BUILD_EXAMPLES OFF"
-    )
 endif()
 
 include_directories(include/)
@@ -86,6 +73,7 @@ add_executable(PuppetCubeV2
     src/edge_position.cpp
     src/edge_heuristic.cpp
     src/tablebase.cpp
+    src/BCHTSet.cpp
 )
 
 if(USE_CUDA)
@@ -93,13 +81,10 @@ if(USE_CUDA)
 
     target_sources(PuppetCubeV2 PRIVATE
         src/cuda_search.cu
-        src/cuco_static_set_chunked.cu
+        src/BCHTSet.cu
     )
 
-    target_link_libraries(PuppetCubeV2 PRIVATE Threads::Threads cuco)
-    target_include_directories(PuppetCubeV2 SYSTEM PRIVATE
-        $<TARGET_PROPERTY:cuco,INTERFACE_INCLUDE_DIRECTORIES>
-    )
+    target_link_libraries(PuppetCubeV2 PRIVATE Threads::Threads)
 
     target_compile_options(PuppetCubeV2 PRIVATE
         $<$<COMPILE_LANGUAGE:CUDA>:-Wall -Wextra -g --expt-extended-lambda -diag-suppress 68>

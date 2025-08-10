@@ -1,5 +1,4 @@
 #include <cstdio>
-#include <cuco/static_set.cuh>
 #include <cuda.h>
 #include <cuda_device_runtime_api.h>
 #include <vector>

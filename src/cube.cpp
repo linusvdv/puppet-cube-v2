@@ -5,6 +5,7 @@
 #include <thread>
 #include <vector>
 
+#include "BCHTSet.hpp"
 #include "corner_heuristic.hpp"
 #include "corner_orientation.hpp"
 #include "corner_position.hpp"
@@ -110,6 +111,7 @@ void Cube::TablebaseInitialization() {
         LOG_ALL("Tablebase depth", i, ":", tablebase.back().size());
     }
     LOG_MEMORY();
+    BuildBCHTSet(tablebase.back());
 }
 
 
