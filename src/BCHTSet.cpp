@@ -54,11 +54,14 @@ uint32_t ComputeBucket(std::pair<uint64_t, uint64_t> pack_state, uint32_t num_bu
     return uint32_t(combined % num_buckets);
 }
 
+
+// 3 independent hashers with different seeds
+constexpr SplitMix128 hasher1(0x123456789abcdef0ULL, 0xfedcba9876543210ULL);  // NOLINT
+constexpr SplitMix128 hasher2(0x0f1e2d3c4b5a6978ULL, 0x87654321abcdef09ULL);  // NOLINT
+constexpr SplitMix128 hasher3(0xabcdef0123456789ULL, 0x0123456789abcdefULL);  // NOLINT
+
+
 std::array<uint32_t, 3> GetStartBuckets(const Cube::State& key, uint32_t num_buckets) {
-    // 3 independent hashers with different seeds
-    constexpr SplitMix128 hasher1(0x123456789abcdef0ULL, 0xfedcba9876543210ULL);  // NOLINT
-    constexpr SplitMix128 hasher2(0x0f1e2d3c4b5a6978ULL, 0x87654321abcdef09ULL);  // NOLINT
-    constexpr SplitMix128 hasher3(0xabcdef0123456789ULL, 0x0123456789abcdefULL);  // NOLINT
 
     std::pair<uint64_t, uint64_t> pack_state = PackState(key);
 
@@ -70,7 +73,7 @@ std::array<uint32_t, 3> GetStartBuckets(const Cube::State& key, uint32_t num_buc
 }
 
 
-int GetBucketIndex(Cube::State& cube, uint32_t hash, uint32_t num_buckets) {
+int GetBucketIndex(const Cube::State& cube, uint32_t hash, uint32_t num_buckets) {
     std::array<uint32_t, 3> start_buckets = GetStartBuckets(cube, num_buckets);
     for (int i = 0; i < 3; i++) {
         if (start_buckets[i] == hash) {
@@ -83,7 +86,7 @@ int GetBucketIndex(Cube::State& cube, uint32_t hash, uint32_t num_buckets) {
 }
 
 
-bool BfsInsert(std::vector<Cube::State>& table, uint32_t num_buckets, Cube::State key) {
+bool BfsInsert(std::vector<Cube::State>& table, uint32_t num_buckets, const Cube::State& key) {
     std::array<uint32_t, 3> start_buckets = GetStartBuckets(key, num_buckets);
 
     // Layer 0: try direct insert
@@ -169,4 +172,21 @@ std::vector<Cube::State> BuildBCHTSet(const Cube::Tablebase& tablebase) {
     LOG_INFO("Build of the BCHT set");
 
     return table;
+}
+
+
+bool BCHTSetContains(const std::vector<Cube::State>& table, const Cube::State& key) {
+    uint32_t num_buckets = table.size() / kBucketSize;
+    std::array<uint32_t, 3> start_buckets = GetStartBuckets(key, num_buckets);
+    for (int i = 0; i < 3; i++) {
+        for (int j = 0; j < kBucketSize; j++) {
+            if (table[(start_buckets[i] * kBucketSize) + j] == key) {
+                return true;
+            }
+            if (table[(start_buckets[i] * kBucketSize) + j] == Cube::State()) {
+                return false;
+            }
+        }
+    }
+    return false;
 }
