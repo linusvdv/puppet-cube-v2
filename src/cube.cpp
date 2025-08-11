@@ -1,6 +1,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
+#include <cstdlib>
 #include <string>
 #include <thread>
 #include <vector>
@@ -111,7 +112,73 @@ void Cube::TablebaseInitialization() {
         LOG_ALL("Tablebase depth", i, ":", tablebase.back().size());
     }
     LOG_MEMORY();
-    BuildBCHTSet(tablebase.back());
+
+    // only second last tb
+    std::vector<State> bcht_tb = BuildBCHTSet(tablebase[6]);
+
+    std::vector<State> random_positions;
+    for (const State& state : tablebase[6]) {
+        random_positions.push_back(state);
+    }
+    for (const State& state : tablebase[7]) {
+        random_positions.push_back(state);
+    }
+
+    for (int i = 0; i < random_positions.size(); i++) {
+        std::swap(random_positions[i], random_positions[rand()%random_positions.size()]);
+    }
+
+
+    // Time them
+    LOG_ALL("Start timing of phmap");
+    namespace sc = std::chrono;
+
+    auto phmap_time = sc::system_clock::now(); // get the current time
+ 
+    size_t phmap_hit = 0;
+    size_t phmap_miss = 0;
+    for (const State& state : random_positions) {
+        if (tablebase[7].contains(state)) {
+            phmap_hit++;
+        }
+        else {
+            phmap_miss++;
+        }
+    }
+
+    auto phmap_since_epoch = phmap_time.time_since_epoch(); // get the duration since epoch
+
+    // I don't know what system_clock returns
+    // I think it's uint64_t nanoseconds since epoch
+    // Either way this duration_cast will do the right thing
+    auto phmap_millis = sc::duration_cast<sc::milliseconds>(phmap_since_epoch);
+
+    LOG_ALL("hits:", phmap_hit, "miss:", phmap_miss);
+    LOG_ALL("Time duration for phmap:", phmap_millis.count());
+
+    LOG_ALL("Start timing of BCHT");
+    auto BCHT_time = sc::system_clock::now(); // get the current time
+ 
+    size_t BCHT_hit = 0;
+    size_t BCHT_miss = 0;
+    for (const State& state : random_positions) {
+        if (BCHTSetContains(bcht_tb, state)) {
+            BCHT_hit++;
+        }
+        else {
+            BCHT_miss++;
+        }
+    }
+
+    auto BCHT_since_epoch = BCHT_time.time_since_epoch(); // get the duration since epoch
+
+    // I don't know what system_clock returns
+    // I think it's uint64_t nanoseconds since epoch
+    // Either way this duration_cast will do the right thing
+    auto BCHT_millis = sc::duration_cast<sc::milliseconds>(BCHT_since_epoch);
+
+    LOG_ALL("hits:", BCHT_hit, "miss:", BCHT_miss);
+    LOG_ALL("Time duration for BCHT:", BCHT_millis.count());
 }
 
 
