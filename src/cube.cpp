@@ -1,3 +1,4 @@
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
@@ -128,17 +129,14 @@ void Cube::TablebaseInitialization() {
         std::swap(random_positions[i], random_positions[rand()%random_positions.size()]);
     }
 
-
     // Time them
     LOG_ALL("Start timing of phmap");
-    namespace sc = std::chrono;
-
-    auto phmap_time = sc::system_clock::now(); // get the current time
+    auto phmap_time = std::chrono::high_resolution_clock::now(); // get the current time
  
     size_t phmap_hit = 0;
     size_t phmap_miss = 0;
     for (const State& state : random_positions) {
-        if (tablebase[7].contains(state)) {
+        if (tablebase[6].contains(state)) {
             phmap_hit++;
         }
         else {
@@ -146,19 +144,19 @@ void Cube::TablebaseInitialization() {
         }
     }
 
-    auto phmap_since_epoch = phmap_time.time_since_epoch(); // get the duration since epoch
+    auto phmap_since_epoch = std::chrono::high_resolution_clock::now(); // get the duration since epoch
 
     // I don't know what system_clock returns
     // I think it's uint64_t nanoseconds since epoch
     // Either way this duration_cast will do the right thing
-    auto phmap_millis = sc::duration_cast<sc::milliseconds>(phmap_since_epoch);
+    auto phmap_millis = std::chrono::duration_cast<std::chrono::milliseconds>(phmap_since_epoch - phmap_time);
 
     LOG_ALL("hits:", phmap_hit, "miss:", phmap_miss);
     LOG_ALL("Time duration for phmap:", phmap_millis.count());
 
     LOG_ALL("Start timing of BCHT");
-    auto BCHT_time = sc::system_clock::now(); // get the current time
- 
+    auto BCHT_time = std::chrono::high_resolution_clock::now(); // get the current time 
+
     size_t BCHT_hit = 0;
     size_t BCHT_miss = 0;
     for (const State& state : random_positions) {
@@ -170,12 +168,12 @@ void Cube::TablebaseInitialization() {
         }
     }
 
-    auto BCHT_since_epoch = BCHT_time.time_since_epoch(); // get the duration since epoch
+    auto BCHT_since_epoch = std::chrono::high_resolution_clock::now(); // get the current time 
 
     // I don't know what system_clock returns
     // I think it's uint64_t nanoseconds since epoch
     // Either way this duration_cast will do the right thing
-    auto BCHT_millis = sc::duration_cast<sc::milliseconds>(BCHT_since_epoch);
+    auto BCHT_millis = std::chrono::duration_cast<std::chrono::milliseconds>(BCHT_since_epoch - BCHT_time);
 
     LOG_ALL("hits:", BCHT_hit, "miss:", BCHT_miss);
     LOG_ALL("Time duration for BCHT:", BCHT_millis.count());

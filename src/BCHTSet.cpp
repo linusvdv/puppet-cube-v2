@@ -94,6 +94,7 @@ bool BfsInsert(std::vector<Cube::State>& table, uint32_t num_buckets, const Cube
         for (int i = 0; i < kBucketSize; i++) {
             if (table[(bucket*kBucketSize) + i] == Cube::State()) {
                 table[(bucket*kBucketSize) + i] = key;
+                GetBucketIndex(table[(bucket*kBucketSize) + i], bucket, num_buckets);
                 return true;
             }
         }
@@ -132,6 +133,7 @@ bool BfsInsert(std::vector<Cube::State>& table, uint32_t num_buckets, const Cube
                         final_hash_idx = final_parent;
                         final_parent = parents[final_parent];
                     }
+                    table[final_hash_idx] = key;
                     return true;
                 }
 
@@ -149,7 +151,7 @@ bool BfsInsert(std::vector<Cube::State>& table, uint32_t num_buckets, const Cube
 
 std::vector<Cube::State> BuildBCHTSet(const Cube::Tablebase& tablebase) {
     uint32_t num_buckets = std::ceil(double(tablebase.size()) / kBucketSize / kLoadFacor);
-    std::vector<Cube::State> table(num_buckets*kBucketSize);
+    std::vector<Cube::State> table(num_buckets*kBucketSize, Cube::State());
     LOG_ALL("TB load factor:", tablebase.size() / double(table.size()) * 100);
 
     uint32_t cnt = 0;
@@ -171,6 +173,20 @@ std::vector<Cube::State> BuildBCHTSet(const Cube::Tablebase& tablebase) {
 
     LOG_INFO("Build of the BCHT set");
 
+    std::set<Cube::State> check_dublicates;
+    int cnt1 = 0;
+    for (int i = 0; i < table.size(); i++) {
+        if (table[i] != Cube::State()) {
+            cnt1++;
+            GetBucketIndex(table[i], i / kBucketSize, num_buckets);
+            if (check_dublicates.contains(table[i])) {
+                LOG_INFO("dublicate");
+            }
+            check_dublicates.insert(table[i]);
+        }
+    }
+    LOG_ALL("BCHT cnt:", cnt1);
+
     return table;
 }
 
@@ -183,9 +199,9 @@ bool BCHTSetContains(const std::vector<Cube::State>& table, const Cube::State& k
             if (table[(start_buckets[i] * kBucketSize) + j] == key) {
                 return true;
             }
-            if (table[(start_buckets[i] * kBucketSize) + j] == Cube::State()) {
-                return false;
-            }
+            //if (table[(start_buckets[i] * kBucketSize) + j] == Cube::State()) {
+            //    return false;
+            //}
         }
     }
     return false;
