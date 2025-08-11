@@ -3,7 +3,7 @@
 
 #include "cube.hpp"
 
-constexpr int kBucketSize = 16;
+constexpr int kBucketSize = 1;
 constexpr float kLoadFacor = 0.9;
 
 
