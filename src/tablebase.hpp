@@ -1,4 +1,11 @@
 #include "cube.hpp"
 
 
-void TablebasePrecomputation (const Cube::Tablebase& previous, const Cube::Tablebase& current, Cube::Tablebase& next, int thread_idx, int num_threads);
+using TablebasePrecomputation = phmap::parallel_flat_hash_set<Cube::State,
+    phmap::priv::hash_default_hash<Cube::State>,
+    phmap::priv::hash_default_eq<Cube::State>,
+    phmap::priv::Allocator<Cube::State>,
+    12, std::mutex>;
+
+
+std::vector<std::vector<Cube::State>> TablebaseInitialization();

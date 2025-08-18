@@ -1,6 +1,6 @@
 #pragma once
+#include <compare>
 #include <cstdint>
-#include <tuple>
 #include <vector>
 #include <parallel_hashmap/phmap.h>
 
@@ -54,15 +54,7 @@ public:
         uint32_t edge_position_1 = -1;    // 20 bits
         uint32_t edge_position_2 = -1;    // 20 bits
 
-        bool operator==(const State& other) const {
-            return std::tie(corner_orientation, corner_position, edge_orientation, edge_position_1, edge_position_2) ==
-                std::tie(other.corner_orientation, other.corner_position, other.edge_orientation, other.edge_position_1, other.edge_position_2);
-        }
-
-        bool operator<(const State& other) const {
-            return std::tie(corner_orientation, corner_position, edge_orientation, edge_position_1, edge_position_2) <
-                std::tie(other.corner_orientation, other.corner_position, other.edge_orientation, other.edge_position_1, other.edge_position_2);
-        }
+        std::strong_ordering operator<=>(const State&) const = default;
 
         bool Rotate(uint8_t rotation);
 
@@ -86,16 +78,9 @@ public:
     };
     #pragma pack(pop)
 
-    using Tablebase = phmap::parallel_flat_hash_set<State,
-        phmap::priv::hash_default_hash<State>,
-        phmap::priv::hash_default_eq<State>,
-        phmap::priv::Allocator<State>,
-        12, std::mutex>;
-
-
     // corner and edge precomputation
     static void Initialize();
-    static void TablebaseInitialization();
+    static void TablebaseInitialize();
 
     static void UploadComputationToDevice();
 
@@ -111,7 +96,7 @@ private:
     static std::vector<uint32_t> edge_positions;
     static std::vector<uint8_t> edge_heuristics;
 
-    static std::vector<Tablebase> tablebase;
+    static std::vector<std::vector<State>> tablebase;
 
     State cube_;
 };

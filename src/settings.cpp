@@ -6,7 +6,10 @@
 
 
 std::string Settings::root_path;
+bool Settings::should_peformance_test = true;
 int Settings::num_threads = 1;
+int Settings::tb_depth = 8;  // NOLINT
+int Settings::tb_depth_gpu = 8;  // NOLINT
 
 
 Settings::Settings (int argc, char *argv[]) {
@@ -25,4 +28,9 @@ Settings::Settings (int argc, char *argv[]) {
     }
     temp_root_path.append("/../../");
     root_path.append(temp_root_path);
+
+
+    // tb_depth
+    tb_depth_gpu = std::min(tb_depth, tb_depth_gpu);
+
 }

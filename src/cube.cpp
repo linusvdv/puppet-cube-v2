@@ -28,7 +28,7 @@ std::vector<uint16_t> Cube::edge_orientations;
 std::vector<uint32_t> Cube::edge_positions;
 std::vector<uint8_t> Cube::edge_heuristics;
 
-std::vector<Cube::Tablebase> Cube::tablebase;
+std::vector<std::vector<Cube::State>> Cube::tablebase;
 
 
 std::string GetFilePath (std::string file_name) {
@@ -96,87 +96,8 @@ void Cube::Initialize() {
 }
 
 
-void Cube::TablebaseInitialization() {
-    tablebase = {{}};
-    Cube::Tablebase starting_set;
-    starting_set.insert(State(0, 0, 0, 0, kNumEdgePositions-1));
-    tablebase.push_back(starting_set);
-    for (int i = 1; i <= 8; i++) {
-        tablebase.push_back({});
-        // start multiple threads
-        {
-            std::vector<std::jthread> threads;
-            for (int j = 0; j < Settings::num_threads; j++) {
-                threads.push_back(std::jthread(TablebasePrecomputation, std::ref(tablebase[i-1]), std::ref(tablebase[i]), std::ref(tablebase[i+1]), j, Settings::num_threads));
-            }
-        }
-        LOG_ALL("Tablebase depth", i, ":", tablebase.back().size());
-    }
-    LOG_MEMORY();
-
-    // only second last tb
-    std::vector<State> bcht_tb = BuildBCHTSet(tablebase[6]);
-
-    std::vector<State> random_positions;
-    for (const State& state : tablebase[6]) {
-        random_positions.push_back(state);
-    }
-    for (const State& state : tablebase[7]) {
-        random_positions.push_back(state);
-    }
-
-    for (int i = 0; i < random_positions.size(); i++) {
-        std::swap(random_positions[i], random_positions[rand()%random_positions.size()]);
-    }
-
-    // Time them
-    LOG_ALL("Start timing of phmap");
-    auto phmap_time = std::chrono::high_resolution_clock::now(); // get the current time
- 
-    size_t phmap_hit = 0;
-    size_t phmap_miss = 0;
-    for (const State& state : random_positions) {
-        if (tablebase[6].contains(state)) {
-            phmap_hit++;
-        }
-        else {
-            phmap_miss++;
-        }
-    }
-
-    auto phmap_since_epoch = std::chrono::high_resolution_clock::now(); // get the duration since epoch
-
-    // I don't know what system_clock returns
-    // I think it's uint64_t nanoseconds since epoch
-    // Either way this duration_cast will do the right thing
-    auto phmap_millis = std::chrono::duration_cast<std::chrono::milliseconds>(phmap_since_epoch - phmap_time);
-
-    LOG_ALL("hits:", phmap_hit, "miss:", phmap_miss);
-    LOG_ALL("Time duration for phmap:", phmap_millis.count());
-
-    LOG_ALL("Start timing of BCHT");
-    auto BCHT_time = std::chrono::high_resolution_clock::now(); // get the current time 
-
-    size_t BCHT_hit = 0;
-    size_t BCHT_miss = 0;
-    for (const State& state : random_positions) {
-        if (BCHTSetContains(bcht_tb, state)) {
-            BCHT_hit++;
-        }
-        else {
-            BCHT_miss++;
-        }
-    }
-
-    auto BCHT_since_epoch = std::chrono::high_resolution_clock::now(); // get the current time 
-
-    // I don't know what system_clock returns
-    // I think it's uint64_t nanoseconds since epoch
-    // Either way this duration_cast will do the right thing
-    auto BCHT_millis = std::chrono::duration_cast<std::chrono::milliseconds>(BCHT_since_epoch - BCHT_time);
-
-    LOG_ALL("hits:", BCHT_hit, "miss:", BCHT_miss);
-    LOG_ALL("Time duration for BCHT:", BCHT_millis.count());
+void Cube::TablebaseInitialize() {
+    std::vector<std::vector<Cube::State>> tablebase = TablebaseInitialization();
 }
 
 
