@@ -2,6 +2,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
+#include <filesystem>
 #include <string>
 #include <vector>
 
@@ -30,7 +31,7 @@ std::vector<uint8_t> Cube::edge_heuristics;
 std::string GetFilePath (std::string file_name) {
     // path/to/puppet-cube-v2/precomputation/file_name
     file_name.insert(0, "precomputation/");
-    file_name.insert(0, Settings::root_path);
+    file_name.insert(0, Settings::GetRootPath());
     return file_name;
 }
 
@@ -78,6 +79,15 @@ void LoadOrGenerate(const std::string file_name, std::vector<T>& target, size_t 
 
 
 void Cube::Initialize() {
+    if (!std::filesystem::exists(GetFilePath(""))) {
+        if (std::filesystem::create_directories(GetFilePath(""))) {
+            LOG_ALL("Create precomputation folder for binaries");
+        }
+        else {
+            LOG_ERROR("Failed to create folder for binaries");
+        }
+    }
+
     LoadOrGenerate("corner_orientations.bin", corner_orientations, kCornerOrientationSize,
         [](){return CornerOrientationInitialization();}, "[1/6] Corner Orientations");
 
@@ -110,6 +120,7 @@ constexpr std::array<uint8_t, kNumRotations> kLegalMoveIndex = {
 
 
 bool Cube::State::Rotate(uint8_t rotation) {
+    LOG_ALL("PRE");
     if (kLegalMoveIndex[rotation] != 0 && ((corner_heuristics[(corner_orientation*kNumCornerPositions) + corner_position] >> kLegalMoveIndex[rotation]) & 1) == 0) {
         return false;
     }
@@ -118,6 +129,7 @@ bool Cube::State::Rotate(uint8_t rotation) {
     edge_orientation = edge_orientations[(edge_orientation*kNumRotations) + rotation];
     edge_position_1 = edge_positions[(edge_position_1*kNumRotations) + rotation];
     edge_position_2 = edge_positions[(edge_position_2*kNumRotations) + rotation];
+    LOG_ALL("POST");
     return true;
 }
 

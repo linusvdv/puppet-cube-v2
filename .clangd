@@ -17,6 +17,7 @@ If:
   PathMatch: \.(cpp|cc|cxx|c|h)$
 CompileFlags:
   Add:
+    - -std=c++20
     - Ibuild/_dep/cuco-src/include
   Remove:
     - -forward-unknown-to-host-compiler

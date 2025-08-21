@@ -170,11 +170,11 @@ std::vector<uint16_t> CornerHeuristicInitialization(const std::vector<uint16_t>&
     do {
         {
             std::vector<std::jthread> threads;
-            for (int j = 0; j < Settings::num_threads; j++) {
+            for (int j = 0; j < Settings::GetNumThreads(); j++) {
                 threads.push_back(std::jthread(
                     ParallelCornerHeuristic, std::ref(corner_orientation), std::ref(corner_position),
                     std::ref(legal_map), std::ref(last), std::ref(current), std::ref(next),
-                    std::ref(corner_heuristic), std::ref(cnt), depth, j, Settings::num_threads
+                    std::ref(corner_heuristic), std::ref(cnt), depth, j, Settings::GetNumThreads()
                 ));
             }
         }

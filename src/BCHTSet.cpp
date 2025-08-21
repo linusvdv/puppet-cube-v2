@@ -165,12 +165,14 @@ std::vector<Cube::State> BuildBCHTSet(const TablebasePrecomputation& tablebase) 
             LOG_CRITICAL("Build of the BCHT set fail! Try decrease the load factor!");
         }
     }
+    LOG_ERROR("EXITING");
     return table;
 }
 
 
 bool BCHTSetContains(const std::vector<Cube::State>& table, const Cube::State& key) {
     uint32_t num_buckets = table.size() / kBucketSize;
+    LOG_INFO("num buckets", num_buckets);
     std::array<uint32_t, 3> start_buckets = GetStartBuckets(key, num_buckets);
     for (int i = 0; i < 3; i++) {
         for (int j = 0; j < kBucketSize; j++) {
