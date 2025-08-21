@@ -80,7 +80,6 @@ public:
 
     // corner and edge precomputation
     static void Initialize();
-    static void TablebaseInitialize();
 
     static void UploadComputationToDevice();
 
@@ -95,8 +94,6 @@ private:
     static std::vector<uint16_t> edge_orientations;
     static std::vector<uint32_t> edge_positions;
     static std::vector<uint8_t> edge_heuristics;
-
-    static std::vector<std::vector<State>> tablebase;
 
     State cube_;
 };

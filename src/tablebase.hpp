@@ -1,3 +1,4 @@
+#pragma once
 #include "cube.hpp"
 
 
@@ -8,4 +9,10 @@ using TablebasePrecomputation = phmap::parallel_flat_hash_set<Cube::State,
     12, std::mutex>;
 
 
-std::vector<std::vector<Cube::State>> TablebaseInitialization();
+struct Tablebase {
+    static void Initialize();
+
+
+private:
+    static std::vector<std::vector<Cube::State>> tablebase;
+};

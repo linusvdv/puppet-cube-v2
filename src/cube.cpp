@@ -1,10 +1,8 @@
-#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <string>
-#include <thread>
 #include <vector>
 
 #include "BCHTSet.hpp"
@@ -17,7 +15,6 @@
 #include "edge_position.hpp"
 #include "logger.hpp"
 #include "settings.hpp"
-#include "tablebase.hpp"
 
 
 std::vector<uint16_t> Cube::corner_orientations;
@@ -28,20 +25,23 @@ std::vector<uint16_t> Cube::edge_orientations;
 std::vector<uint32_t> Cube::edge_positions;
 std::vector<uint8_t> Cube::edge_heuristics;
 
-std::vector<std::vector<Cube::State>> Cube::tablebase;
 
-
+// place where the precomputation is stored
 std::string GetFilePath (std::string file_name) {
+    // path/to/puppet-cube-v2/precomputation/file_name
+    file_name.insert(0, "precomputation/");
     file_name.insert(0, Settings::root_path);
     return file_name;
 }
 
 
+// if there is no file storing the precomputation run the precomutation
 template<typename T, typename Generator>
 void LoadOrGenerate(const std::string file_name, std::vector<T>& target, size_t expected_size,
                     Generator&& generate_func, const std::string& step_tag) {
     const std::string path = GetFilePath(file_name);
     if (std::FILE* file = std::fopen(path.c_str(), "rb")) {
+        // read content of file
         target.resize(expected_size);
         if (std::fread(target.data(), sizeof(T), expected_size, file) == expected_size) {
             LOG_ALL(step_tag, "read from file");
@@ -52,7 +52,9 @@ void LoadOrGenerate(const std::string file_name, std::vector<T>& target, size_t 
         }
         std::fclose(file);
     }
+    // opening of the file failed
     else {
+        // do the precomutation
         LOG_ALL(step_tag, "precompute ...");
         target = generate_func();
         LOG_MEMORY();
@@ -61,6 +63,7 @@ void LoadOrGenerate(const std::string file_name, std::vector<T>& target, size_t 
             LOG_CRITICAL(step_tag, "Wrong precomputation size:", target.size(), "/", expected_size);
         }
 
+        // save to file
         if (std::FILE* file = std::fopen(path.c_str(), "wb")) {
             if (fwrite(target.data(), sizeof(T), expected_size, file) != expected_size) {
                 LOG_ERROR(step_tag, "failed to write full file");
@@ -94,12 +97,6 @@ void Cube::Initialize() {
     LoadOrGenerate("edge_heuristics.bin", edge_heuristics, kNumEdgeHeuristic,
         [](){return EdgeHeuristicInitialization(edge_orientations, edge_positions, 0, 0);}, "[6/6] Edge Heuristics");
 }
-
-
-void Cube::TablebaseInitialize() {
-    std::vector<std::vector<Cube::State>> tablebase = TablebaseInitialization();
-}
-
 
 
 Cube::Cube() {
