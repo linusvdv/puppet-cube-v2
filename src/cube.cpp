@@ -120,7 +120,6 @@ constexpr std::array<uint8_t, kNumRotations> kLegalMoveIndex = {
 
 
 bool Cube::State::Rotate(uint8_t rotation) {
-    LOG_ALL("PRE");
     if (kLegalMoveIndex[rotation] != 0 && ((corner_heuristics[(corner_orientation*kNumCornerPositions) + corner_position] >> kLegalMoveIndex[rotation]) & 1) == 0) {
         return false;
     }
@@ -129,7 +128,6 @@ bool Cube::State::Rotate(uint8_t rotation) {
     edge_orientation = edge_orientations[(edge_orientation*kNumRotations) + rotation];
     edge_position_1 = edge_positions[(edge_position_1*kNumRotations) + rotation];
     edge_position_2 = edge_positions[(edge_position_2*kNumRotations) + rotation];
-    LOG_ALL("POST");
     return true;
 }
 

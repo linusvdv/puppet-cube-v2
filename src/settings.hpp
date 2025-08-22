@@ -15,7 +15,6 @@ public:
     }
 
     static int GetNumThreads() {
-        return 1;
         return num_threads;
     }
 

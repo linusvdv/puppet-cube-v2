@@ -15,20 +15,19 @@ std::vector<std::vector<Cube::State>> Tablebase::tablebase = {};
 
 void TablebaseSearch (const std::vector<Cube::State>& previous, const std::vector<Cube::State>& current, TablebasePrecomputation& next, int thread_idx, int num_threads) {
     int count = 0;
-    LOG_ERROR(thread_idx, "start");
     for (const Cube::State& position : current) {
         count++;
         if (count%num_threads != thread_idx) {
             continue;
         }
-        LOG_ERROR(thread_idx, "TEST", "1");
+        if (position == Cube::State()) {
+            continue;
+        }
         for (uint8_t rotation = 0; rotation < kNumRotations; rotation++) {
             Cube::State next_position = position;
-            LOG_ERROR(thread_idx, "TEST", "2");
             if (!next_position.Rotate(rotation)) {
                 continue;
             }
-            LOG_ERROR(thread_idx, "TEST", "3");
 
             if (BCHTSetContains(previous, next_position) || BCHTSetContains(current, next_position)) {
                 continue;
@@ -45,9 +44,15 @@ std::vector<Cube::State> TimeTablebaseCPU(std::vector<std::vector<Cube::State>>&
     LOG_ALL("Create test date for timing tablebase CPU");
     std::vector<Cube::State> random_positions;
     for (const Cube::State& state : tablebase[Settings::GetTBDepth()]) {
+        if (state == Cube::State()) {
+            continue;
+        }
         random_positions.push_back(state);
     }
-    for (const Cube::State& state : tablebase[Settings::GetTBDepth()+1]) {
+    for (const Cube::State& state : tablebase[Settings::GetTBDepth()-1]) {
+        if (state == Cube::State()) {
+            continue;
+        }
         random_positions.push_back(state);
     }
 
@@ -82,7 +87,7 @@ std::vector<Cube::State> TimeTablebaseCPU(std::vector<std::vector<Cube::State>>&
     size_t BCHT_hit = 0;
     size_t BCHT_miss = 0;
     for (const Cube::State& state : random_positions) {
-        if (BCHTSetContains(tablebase[Settings::GetTBDepth()-1], state)) {
+        if (BCHTSetContains(tablebase[Settings::GetTBDepth()], state)) {
             BCHT_hit++;
         }
         else {
@@ -104,19 +109,18 @@ void Tablebase::Initialize() {
     std::vector<Cube::State> empty_tb_pre = BuildBCHTSet(TablebasePrecomputation({}));
     std::vector<Cube::State> starting_position_tb = BuildBCHTSet(TablebasePrecomputation({Cube::State(0, 0, 0, 0, kNumEdgePositions-1)}));
 
+    tablebase.reserve(Settings::GetTBDepth()+1);
     tablebase.push_back(starting_position_tb);
     std::pair<std::reference_wrapper<std::vector<Cube::State>>, std::reference_wrapper<std::vector<Cube::State>>> previous_tables = {empty_tb_pre, starting_position_tb};
 
     TablebasePrecomputation tablebase_layer;
     for (int i = 1; i <= Settings::GetTBDepth(); i++) {
-        tablebase_layer = {};
+        tablebase_layer.clear();
         // start multiple threads
         {
             std::vector<std::jthread> threads;
             for (int j = 0; j < Settings::GetNumThreads(); j++) {
-                LOG_WARNING("Start", j);
                 threads.push_back(std::jthread(TablebaseSearch, previous_tables.first, previous_tables.second, std::ref(tablebase_layer), j, Settings::GetNumThreads()));
-                LOG_WARNING("Pushed", j);
             }
         }
         LOG_ALL("Tablebase depth", i, "precomuted:", tablebase_layer.size(), "positions");

@@ -154,25 +154,25 @@ std::vector<Cube::State> BuildBCHTSet(const TablebasePrecomputation& tablebase) 
     size_t num_buckets = std::max(size_t(std::ceil(double(tablebase.size()) / kBucketSize / kLoadFacor)), kMinBuckets);
     std::vector<Cube::State> table(num_buckets*kBucketSize, Cube::State());
     LOG_ALL("TB load factor:", tablebase.size() / double(table.size()) * 100);
+    LOG_ALL("tb size:", table.size(), "elements", tablebase.size());
 
     size_t cnt = 0;
     for (const Cube::State& key : tablebase) {
         cnt++;
         if (cnt % (num_buckets * kBucketSize / 100) == 0) {
-            LOG_ALL("Building of the BCHT set:", cnt / (num_buckets * kBucketSize / 100), "% full");
+            LOG_ALL("Building of the BCHT set:", cnt / (double(num_buckets) * kBucketSize / 100), "% full");
+            LOG_ALL(cnt);
         }
         if (!BfsInsert(table, num_buckets, key)) {
             LOG_CRITICAL("Build of the BCHT set fail! Try decrease the load factor!");
         }
     }
-    LOG_ERROR("EXITING");
     return table;
 }
 
 
 bool BCHTSetContains(const std::vector<Cube::State>& table, const Cube::State& key) {
     uint32_t num_buckets = table.size() / kBucketSize;
-    LOG_INFO("num buckets", num_buckets);
     std::array<uint32_t, 3> start_buckets = GetStartBuckets(key, num_buckets);
     for (int i = 0; i < 3; i++) {
         for (int j = 0; j < kBucketSize; j++) {
