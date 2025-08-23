@@ -1,4 +1,5 @@
 #include <chrono>
+#include <cstddef>
 #include <functional>
 #include <string>
 #include <thread>
@@ -39,10 +40,50 @@ void TablebaseSearch (const std::vector<Cube::State>& previous, const std::vecto
 }
 
 
+void PhmapTiming(const TablebasePrecomputation& tablebase_precomputation, const std::vector<Cube::State>& random_positions, size_t thread_idx, size_t num_threads) {
+    size_t hit = 0;
+    size_t miss = 0;
+    size_t cnt = 0;
+    for (const Cube::State& state : random_positions) {
+        cnt++;
+        if (cnt % num_threads != thread_idx) {
+            continue;
+        }
+        if (tablebase_precomputation.contains(state)) {
+            hit++;
+        }
+        else {
+            miss++;
+        }
+    }
+    LOG_EXTRA("thread", thread_idx, "hits:", hit, "miss:", miss);
+}
+
+
+void BCHTTiming(const std::vector<Cube::State>& tablebase_layer, const std::vector<Cube::State>& random_positions, size_t thread_idx, size_t num_threads) {
+    size_t hit = 0;
+    size_t miss = 0;
+    size_t cnt = 0;
+    for (const Cube::State& state : random_positions) {
+        cnt++;
+        if (cnt % num_threads != thread_idx) {
+            continue;
+        }
+        if (BCHTSetContains(tablebase_layer, state)) {
+            hit++;
+        }
+        else {
+            miss++;
+        }
+    }
+    LOG_EXTRA("thread", thread_idx, "hits:", hit, "miss:", miss);
+}
+
+
 std::vector<Cube::State> TimeTablebaseCPU(std::vector<std::vector<Cube::State>>& tablebase, TablebasePrecomputation& tablebase_precomputation) {
     // only time largest tb_depth
 
-    LOG_ALL("Create test date for timing tablebase CPU");
+    LOG_EXTRA("Create test date for timing tablebase CPU");
     std::vector<Cube::State> random_positions;
     for (const Cube::State& state : tablebase[Settings::GetTBDepth()]) {
         if (state == Cube::State()) {
@@ -62,45 +103,55 @@ std::vector<Cube::State> TimeTablebaseCPU(std::vector<std::vector<Cube::State>>&
     }
 
     // Time phmap
-    LOG_ALL("Start timing of phmap");
+    LOG_EXTRA("Start timing of phmap");
     std::chrono::time_point phmap_time = std::chrono::high_resolution_clock::now(); // get the current time
- 
-    size_t phmap_hit = 0;
-    size_t phmap_miss = 0;
-    for (const Cube::State& state : random_positions) {
-        if (tablebase_precomputation.contains(state)) {
-            phmap_hit++;
-        }
-        else {
-            phmap_miss++;
-        }
-    }
+
+    PhmapTiming(tablebase_precomputation, random_positions, 0, 1);
 
     std::chrono::time_point phmap_since_epoch = std::chrono::high_resolution_clock::now(); // get the duration since epoch
     std::chrono::milliseconds phmap_millis = std::chrono::duration_cast<std::chrono::milliseconds>(phmap_since_epoch - phmap_time);
-
-    LOG_ALL("hits:", phmap_hit, "miss:", phmap_miss);
     LOG_ALL("Time duration for phmap:", phmap_millis.count());
 
-    LOG_ALL("Start timing of BCHT");
-    std::chrono::time_point BCHT_time = std::chrono::high_resolution_clock::now(); // get the current time
+    // Time phmap multithreads
+    LOG_EXTRA("Start timing of phmap multithreads");
+    std::chrono::time_point phmap_time_multi = std::chrono::high_resolution_clock::now(); // get the current time
 
-    size_t BCHT_hit = 0;
-    size_t BCHT_miss = 0;
-    for (const Cube::State& state : random_positions) {
-        if (BCHTSetContains(tablebase[Settings::GetTBDepth()], state)) {
-            BCHT_hit++;
-        }
-        else {
-            BCHT_miss++;
+    {
+        std::vector<std::jthread> threads;
+        for (int j = 0; j < Settings::GetNumThreads(); j++) {
+            threads.push_back(std::jthread(PhmapTiming, std::ref(tablebase_precomputation), std::ref(random_positions), j, Settings::GetNumThreads()));
         }
     }
 
-    std::chrono::time_point BCHT_since_epoch = std::chrono::high_resolution_clock::now(); // get the current time
-    std::chrono::milliseconds BCHT_millis = std::chrono::duration_cast<std::chrono::milliseconds>(BCHT_since_epoch - BCHT_time);
+    std::chrono::time_point phmap_since_epoch_multi = std::chrono::high_resolution_clock::now(); // get the duration since epoch
+    std::chrono::milliseconds phmap_millis_multi = std::chrono::duration_cast<std::chrono::milliseconds>(phmap_since_epoch_multi - phmap_time_multi);
+    LOG_ALL("Time duration for phmap multithreads:", phmap_millis_multi.count());
 
-    LOG_ALL("hits:", BCHT_hit, "miss:", BCHT_miss);
-    LOG_ALL("Time duration for BCHT:", BCHT_millis.count());
+    // Time BCHT
+    LOG_EXTRA("Start timing of BCHT");
+    std::chrono::time_point bcht_time = std::chrono::high_resolution_clock::now(); // get the current time
+
+    BCHTTiming(tablebase[Settings::GetTBDepth()], random_positions, 0, 1);
+
+    std::chrono::time_point bcht_since_epoch = std::chrono::high_resolution_clock::now(); // get the current time
+    std::chrono::milliseconds bcht_millis = std::chrono::duration_cast<std::chrono::milliseconds>(bcht_since_epoch - bcht_time);
+    LOG_ALL("Time duration for BCHT:", bcht_millis.count());
+
+    // Time BCHT multithreads
+    LOG_EXTRA("Start timing of BCHT multithreads");
+    std::chrono::time_point bcht_time_multi = std::chrono::high_resolution_clock::now(); // get the current time
+
+    {
+        std::vector<std::jthread> threads;
+        for (int j = 0; j < Settings::GetNumThreads(); j++) {
+            threads.push_back(std::jthread(PhmapTiming, std::ref(tablebase_precomputation), std::ref(random_positions), j, Settings::GetNumThreads()));
+        }
+    }
+
+    std::chrono::time_point bcht_since_epoch_multi = std::chrono::high_resolution_clock::now(); // get the current time
+    std::chrono::milliseconds bcht_millis_multi = std::chrono::duration_cast<std::chrono::milliseconds>(bcht_since_epoch_multi - bcht_time_multi);
+    LOG_ALL("Time duration for BCHT multithreads:", bcht_millis_multi.count());
+
     LOG_MEMORY();
     return random_positions;
 }
@@ -192,6 +243,7 @@ void Tablebase::Initialize() {
     }
 
     if (Settings::GetShouldPerformanceTest()) {
+        LOG_EXTRA("Needs to generate phmap");
         if (tablebase_layer.empty()) {
             for (const Cube::State& state : tablebase.back()) {
                 if (state != Cube::State()) {
