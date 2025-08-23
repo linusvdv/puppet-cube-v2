@@ -30,9 +30,7 @@ std::vector<uint8_t> Cube::edge_heuristics;
 // place where the precomputation is stored
 std::string GetFilePath (std::string file_name) {
     // path/to/puppet-cube-v2/precomputation/file_name
-    file_name.insert(0, "precomputation/");
-    file_name.insert(0, Settings::GetRootPath());
-    return file_name;
+    return Settings::GetRootPath() + "precomputation/" + file_name;
 }
 
 
@@ -66,7 +64,7 @@ void LoadOrGenerate(const std::string file_name, std::vector<T>& target, size_t 
 
         // save to file
         if (std::FILE* file = std::fopen(path.c_str(), "wb")) {
-            if (fwrite(target.data(), sizeof(T), expected_size, file) != expected_size) {
+            if (std::fwrite(target.data(), sizeof(T), expected_size, file) != expected_size) {
                 LOG_ERROR(step_tag, "failed to write full file");
             }
             std::fclose(file);

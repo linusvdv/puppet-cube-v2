@@ -1,5 +1,6 @@
 #include <chrono>
 #include <functional>
+#include <string>
 #include <thread>
 #include <vector>
 
@@ -105,6 +106,57 @@ std::vector<Cube::State> TimeTablebaseCPU(std::vector<std::vector<Cube::State>>&
 }
 
 
+// place where the precomputation is stored
+std::string GetFilePath (std::string file_name, int depth) {
+    // path/to/puppet-cube-v2/precomputation/file_name
+    return Settings::GetRootPath() + "precomputation/" + file_name + "_" + std::to_string(depth) + ".bin";
+}
+
+bool ExistsPrecomutation(std::vector<std::vector<Cube::State>>& tablebase, int depth) {
+    std::string file_path = GetFilePath("tablebase", depth);
+    if (std::FILE* file = std::fopen(file_path.c_str(), "rb")) {
+        size_t size = 0;
+        if (std::fread(&size, sizeof(size), 1, file) != 1) {
+            LOG_CRITICAL("Tablebase depth", depth, "was not able to read file", file_path);
+        }
+        tablebase.push_back({});
+        tablebase.back().resize(size);
+
+        if (std::fread(tablebase.back().data(), sizeof(Cube::State), size, file) == size) {
+            LOG_ALL("Tablebase depth", depth, "read from file");
+            LOG_MEMORY();
+        }
+        else {
+            LOG_CRITICAL("Tablebase depth", depth, "was not able to read file", file_path);
+        }
+        std::fclose(file);
+        return true;
+    }
+    LOG_ALL("Precomute tablebase depth", depth, "...");
+    return false;
+}
+
+
+void SavePrecomutation(std::vector<Cube::State>& tablebase_layer, int depth) {
+    std::string file_path = GetFilePath("tablebase", depth);
+    if (std::FILE* file = std::fopen(file_path.c_str(), "wb")) {
+        size_t size = tablebase_layer.size();
+        if (std::fwrite(&size, sizeof(size), 1, file) != 1) {
+            LOG_ERROR("Tablebase depth", depth, "failed to write to file");
+            return;
+        }
+        if (std::fwrite(tablebase_layer.data(), sizeof(Cube::State), size, file) != size) {
+            LOG_ERROR("Tablebase depth", depth, "failed to write full file");
+            return;
+        }
+        std::fclose(file);
+    }
+    else {
+        LOG_ERROR("Tablebase depth", depth, "not able to save precomputation to file");
+    }
+}
+
+
 void Tablebase::Initialize() {
     std::vector<Cube::State> empty_tb_pre = BuildBCHTSet(TablebasePrecomputation({}));
     std::vector<Cube::State> starting_position_tb = BuildBCHTSet(TablebasePrecomputation({Cube::State(0, 0, 0, 0, kNumEdgePositions-1)}));
@@ -116,6 +168,13 @@ void Tablebase::Initialize() {
     TablebasePrecomputation tablebase_layer;
     for (int i = 1; i <= Settings::GetTBDepth(); i++) {
         tablebase_layer.clear();
+
+        if (ExistsPrecomutation(tablebase, i)) {
+            std::swap(previous_tables.first, previous_tables.second);
+            previous_tables.second = tablebase.back();
+            continue;
+        }
+
         // start multiple threads
         {
             std::vector<std::jthread> threads;
@@ -128,10 +187,18 @@ void Tablebase::Initialize() {
         tablebase.push_back(BuildBCHTSet(tablebase_layer));
         std::swap(previous_tables.first, previous_tables.second);
         previous_tables.second = tablebase.back();
+        SavePrecomutation(tablebase.back(), i);
         LOG_MEMORY();
     }
 
     if (Settings::GetShouldPerformanceTest()) {
+        if (tablebase_layer.empty()) {
+            for (const Cube::State& state : tablebase.back()) {
+                if (state != Cube::State()) {
+                    tablebase_layer.insert(state);
+                }
+            }
+        }
         std::vector<Cube::State> random_positions = TimeTablebaseCPU(tablebase, tablebase_layer);
     }
 }
