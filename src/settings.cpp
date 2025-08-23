@@ -6,7 +6,7 @@
 
 
 std::string Settings::root_path;
-bool Settings::should_performance_test = true;
+bool Settings::should_performance_test = false;
 int Settings::num_threads = 1;
 int Settings::tb_depth = 8;  // NOLINT
 int Settings::tb_depth_gpu = 8;  // NOLINT

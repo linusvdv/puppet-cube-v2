@@ -7,11 +7,13 @@
 
 
 void UploadCubeComputationToDevice(
-    std::vector<uint16_t>& corner_orientations,
-    std::vector<uint16_t>& corner_positions,
-    std::vector<uint16_t>& corner_heuristics,
+    const std::vector<uint16_t>& corner_orientations,
+    const std::vector<uint16_t>& corner_positions,
+    const std::vector<uint16_t>& corner_heuristics,
 
-    std::vector<uint16_t>& edge_orientations,
-    std::vector<uint32_t>& edge_positions,
-    std::vector<uint8_t>& edge_heuristics
+    const std::vector<uint16_t>& edge_orientations,
+    const std::vector<uint32_t>& edge_positions,
+    const std::vector<uint8_t>& edge_heuristics
     );
+
+void UplaodTablebaseToDevice(const std::vector<Cube::State>& tablebebase);

@@ -17,6 +17,7 @@ int main (int argc, char *argv[]) {
 
     Cube::Initialize();
     LOG_INFO("Cube Initialized");
+    Cube::UploadComputationToDevice();
 
     Tablebase::Initialize();
     LOG_INFO("Tablebase Initialized");

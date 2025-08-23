@@ -1,6 +1,7 @@
 #include <cstdio>
 #include <cuda.h>
 #include <cuda_device_runtime_api.h>
+#include <driver_types.h>
 #include <vector>
 
 #include "cube.hpp"
@@ -16,6 +17,8 @@ public:
     static uint16_t* d_edge_orientations;
     static uint32_t* d_edge_positions;
     static uint8_t* d_edge_heuristics;
+
+    static Cube::State* d_tablebase;  // outer_layer
 };
 
 
@@ -27,24 +30,28 @@ uint16_t* CudaSearch::d_edge_orientations = nullptr;
 uint32_t* CudaSearch::d_edge_positions = nullptr;
 uint8_t* CudaSearch::d_edge_heuristics = nullptr;
 
+Cube::State* CudaSearch::d_tablebase = nullptr;
+
 
 __global__ void PrintTest() {
     printf("Hi from GPU\n");
 }
+
 
 void Search () {
     PrintTest<<<2,2>>>();
     cudaDeviceSynchronize();
 }
 
-void UploadCubeComputationToDevice(
-    std::vector<uint16_t>& corner_orientations,
-    std::vector<uint16_t>& corner_positions,
-    std::vector<uint16_t>& corner_heuristics,
 
-    std::vector<uint16_t>& edge_orientations,
-    std::vector<uint32_t>& edge_positions,
-    std::vector<uint8_t>& edge_heuristics
+void UploadCubeComputationToDevice(
+    const std::vector<uint16_t>& corner_orientations,
+    const std::vector<uint16_t>& corner_positions,
+    const std::vector<uint16_t>& corner_heuristics,
+
+    const std::vector<uint16_t>& edge_orientations,
+    const std::vector<uint32_t>& edge_positions,
+    const std::vector<uint8_t>& edge_heuristics
     ) {
 
     // corner orientation
@@ -70,4 +77,10 @@ void UploadCubeComputationToDevice(
     // edge heuristics
     cudaMalloc((void **)&CudaSearch::d_edge_heuristics, sizeof(uint16_t)*edge_heuristics.size());
     cudaMemcpy(CudaSearch::d_edge_heuristics, edge_heuristics.data(), sizeof(uint16_t)*edge_heuristics.size(), cudaMemcpyHostToDevice);
+}
+
+
+void UplaodTablebaseToDevice(const std::vector<Cube::State>& tablebebase) {
+    cudaMalloc((void **)&CudaSearch::d_tablebase, sizeof(Cube::State)*tablebebase.size());
+    cudaMemcpy(CudaSearch::d_tablebase, tablebebase.data(), sizeof(Cube::State)*tablebebase.size(), cudaMemcpyHostToDevice);
 }

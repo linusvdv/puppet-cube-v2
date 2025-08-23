@@ -1,5 +1,7 @@
 #pragma once
 #include "cube.hpp"
+#include "cuda_search.cuh"
+#include "logger.hpp"
 
 
 using TablebasePrecomputation = phmap::parallel_flat_hash_set<Cube::State,
@@ -12,6 +14,13 @@ using TablebasePrecomputation = phmap::parallel_flat_hash_set<Cube::State,
 struct Tablebase {
     static void Initialize();
 
+    static void UploadComputationToDevice() {
+        #ifdef USE_CUDA
+        LOG_EXTRA("Start Tablebase Uploading Precomutation to Device");
+        UplaodTablebaseToDevice(tablebase.back());
+        LOG_INFO("Tablebase Precomutation Uploaded to Device");
+        #endif // USE_CUDA
+    }
 
 private:
     static std::vector<std::vector<Cube::State>> tablebase;

@@ -11,6 +11,7 @@
 #include "corner_orientation.hpp"
 #include "corner_position.hpp"
 #include "cube.hpp"
+#include "cuda_search.cuh"
 #include "edge_heuristic.hpp"
 #include "edge_orientation.hpp"
 #include "edge_position.hpp"
@@ -131,6 +132,8 @@ bool Cube::State::Rotate(uint8_t rotation) {
 
 void Cube::UploadComputationToDevice() {
     #ifdef USE_CUDA
-    
+    LOG_EXTRA("Start Cube Uploading Precomutation to Device");
+    UploadCubeComputationToDevice(corner_orientations, corner_positions, corner_heuristics, edge_orientations, edge_positions, edge_heuristics);
+    LOG_INFO("Cube Precomutation Uploaded to Device");
     #endif // USE_CUDA
 }
