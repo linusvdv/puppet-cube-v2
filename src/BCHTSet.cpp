@@ -153,7 +153,7 @@ constexpr size_t kMinBuckets = 100;
 std::vector<Cube::State> BuildBCHTSet(const TablebasePrecomputation& tablebase) {
     size_t num_buckets = std::max(size_t(std::ceil(double(tablebase.size()) / kBucketSize / kLoadFacor)), kMinBuckets);
     std::vector<Cube::State> table(num_buckets*kBucketSize, Cube::State());
-    LOG_EXTRA("TB load factor:", tablebase.size() / double(table.size()) * 100);
+    LOG_EXTRA("Creating BCHT with load factor:", tablebase.size() / double(table.size()) * 100, "%");
 
     size_t cnt = 0;
     for (const Cube::State& key : tablebase) {

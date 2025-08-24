@@ -50,6 +50,8 @@ if(USE_CUDA)
     if(CMAKE_CUDA_COMPILER AND NOT EXISTS ${CMAKE_CUDA_COMPILER})
         message(FATAL_ERROR "CUDA compiler not found at: ${CMAKE_CUDA_COMPILER}")
     endif()
+ 
+    set(CMAKE_CUDA_SEPARABLE_COMPILATION ON)
 
     # cuda
     enable_language(CUDA)

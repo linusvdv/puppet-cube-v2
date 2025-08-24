@@ -17,7 +17,7 @@ struct Tablebase {
     static void UploadComputationToDevice() {
         #ifdef USE_CUDA
         LOG_EXTRA("Start Tablebase Uploading Precomutation to Device");
-        UplaodTablebaseToDevice(tablebase.back());
+        UploadTablebaseToDevice(tablebase.back());
         LOG_INFO("Tablebase Precomutation Uploaded to Device");
         #endif // USE_CUDA
     }

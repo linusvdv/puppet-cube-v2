@@ -16,4 +16,11 @@ void UploadCubeComputationToDevice(
     const std::vector<uint8_t>& edge_heuristics
     );
 
-void UplaodTablebaseToDevice(const std::vector<Cube::State>& tablebebase);
+
+void UploadTablebaseToDevice(const std::vector<Cube::State>& tablebebase);
+
+
+void UploadRandomPositionsToDevice(const std::vector<Cube::State>& random_positions);
+
+
+void TimeBCHTtable();

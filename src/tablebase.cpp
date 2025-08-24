@@ -11,6 +11,10 @@
 #include "settings.hpp"
 #include "tablebase.hpp"
 
+#ifdef USE_CUDA
+#include "cuda_search.cuh"
+#endif // USE_CUDA
+
 
 std::vector<std::vector<Cube::State>> Tablebase::tablebase = {};
 
@@ -252,5 +256,10 @@ void Tablebase::Initialize() {
             }
         }
         std::vector<Cube::State> random_positions = TimeTablebaseCPU(tablebase, tablebase_layer);
+        #ifdef USE_CUDA
+        LOG_EXTRA("Start Tablebase Timing Uploading Precomutation to Device");
+        UploadRandomPositionsToDevice(random_positions);
+        LOG_INFO("Tablebase Timing Uploaded to Device");
+        #endif // USE_CUDA
     }
 }

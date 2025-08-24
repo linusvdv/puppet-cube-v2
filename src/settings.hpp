@@ -2,6 +2,9 @@
 #include <string>
 
 
+constexpr size_t kBlockDim = 128;
+
+
 class Settings {
 public:
     Settings(int argc, char *argv[]);
