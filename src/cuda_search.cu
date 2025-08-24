@@ -45,6 +45,20 @@ size_t CudaSearch::d_random_positions_size = 0;
 
 
 
+template<typename T>
+void UploadToDevice(const std::vector<T>& data, T*& d_pointer) {
+    cudaError_t err = cudaMalloc((void **)&d_pointer, sizeof(T)*data.size());
+    if (err != cudaSuccess) {
+        LOG_CRITICAL(cudaGetErrorString(err));
+    }
+    err = cudaMemcpy(d_pointer, data.data(), sizeof(T)*data.size(), cudaMemcpyHostToDevice);
+    if (err != cudaSuccess) {
+        LOG_CRITICAL(cudaGetErrorString(err));
+    }
+}
+
+
+
 void UploadCubeComputationToDevice(
     const std::vector<uint16_t>& corner_orientations,
     const std::vector<uint16_t>& corner_positions,
@@ -55,78 +69,26 @@ void UploadCubeComputationToDevice(
     const std::vector<uint8_t>& edge_heuristics
     ) {
 
-    // corner orientation
-    cudaError_t err = cudaMalloc((void **)&CudaSearch::d_corner_orientations, sizeof(uint16_t)*corner_orientations.size());
-    if (err != cudaSuccess) {
-        LOG_CRITICAL(cudaGetErrorString(err));
-    }
-    err = cudaMemcpy(CudaSearch::d_corner_orientations, corner_orientations.data(), sizeof(uint16_t)*corner_orientations.size(), cudaMemcpyHostToDevice);
-    if (err != cudaSuccess) {
-        LOG_CRITICAL(cudaGetErrorString(err));
-    }
+    // corner precomutation
+    UploadToDevice(corner_orientations, CudaSearch::d_corner_orientations);
+    UploadToDevice(corner_positions, CudaSearch::d_corner_positions);
+    UploadToDevice(corner_heuristics, CudaSearch::d_corner_heuristics);
 
-    // corner positions
-    err = cudaMalloc((void **)&CudaSearch::d_corner_positions, sizeof(uint16_t)*corner_positions.size());
-    if (err != cudaSuccess) {
-        LOG_CRITICAL(cudaGetErrorString(err));
-    }
-    err = cudaMemcpy(CudaSearch::d_corner_positions, corner_positions.data(), sizeof(uint16_t)*corner_positions.size(), cudaMemcpyHostToDevice);
-    if (err != cudaSuccess) {
-        LOG_CRITICAL(cudaGetErrorString(err));
-    }
-
-    // corner heuristics
-    err = cudaMalloc((void **)&CudaSearch::d_corner_heuristics, sizeof(uint16_t)*corner_heuristics.size());
-    if (err != cudaSuccess) {
-        LOG_CRITICAL(cudaGetErrorString(err));
-    }
-    err = cudaMemcpy(CudaSearch::d_corner_heuristics, corner_heuristics.data(), sizeof(uint16_t)*corner_heuristics.size(), cudaMemcpyHostToDevice);
-    if (err != cudaSuccess) {
-        LOG_CRITICAL(cudaGetErrorString(err));
-    }
-
-    // edge orientation
-    err = cudaMalloc((void **)&CudaSearch::d_edge_orientations, sizeof(uint16_t)*edge_orientations.size());
-    if (err != cudaSuccess) {
-        LOG_CRITICAL(cudaGetErrorString(err));
-    }
-    err = cudaMemcpy(CudaSearch::d_edge_orientations, edge_orientations.data(), sizeof(uint16_t)*edge_orientations.size(), cudaMemcpyHostToDevice);
-    if (err != cudaSuccess) {
-        LOG_CRITICAL(cudaGetErrorString(err));
-    }
-
-    // edge positions
-    err = cudaMalloc((void **)&CudaSearch::d_edge_positions, sizeof(uint32_t)*edge_positions.size());
-    if (err != cudaSuccess) {
-        LOG_CRITICAL(cudaGetErrorString(err));
-    }
-    err = cudaMemcpy(CudaSearch::d_edge_positions, edge_positions.data(), sizeof(uint32_t)*edge_positions.size(), cudaMemcpyHostToDevice);
-    if (err != cudaSuccess) {
-        LOG_CRITICAL(cudaGetErrorString(err));
-    }
-
-    // edge heuristics
-    err = cudaMalloc((void **)&CudaSearch::d_edge_heuristics, sizeof(uint8_t)*edge_heuristics.size());
-    if (err != cudaSuccess) {
-        LOG_CRITICAL(cudaGetErrorString(err));
-    }
-    err = cudaMemcpy(CudaSearch::d_edge_heuristics, edge_heuristics.data(), sizeof(uint8_t)*edge_heuristics.size(), cudaMemcpyHostToDevice);
-    if (err != cudaSuccess) {
-        LOG_CRITICAL(cudaGetErrorString(err));
-    }
+    // edge precomutation
+    UploadToDevice(edge_orientations, CudaSearch::d_edge_orientations);
+    UploadToDevice(edge_positions, CudaSearch::d_edge_positions);
+    UploadToDevice(edge_heuristics, CudaSearch::d_edge_heuristics);
 }
 
 
 void UploadTablebaseToDevice(const std::vector<Cube::State>& tablebebase) {
-    cudaMalloc((void **)&CudaSearch::d_tablebase, sizeof(Cube::State)*tablebebase.size());
-    cudaMemcpy(CudaSearch::d_tablebase, tablebebase.data(), sizeof(Cube::State)*tablebebase.size(), cudaMemcpyHostToDevice);
+    UploadToDevice(tablebebase, CudaSearch::d_tablebase);
     CudaSearch::d_tablebebase_size = tablebebase.size();
 }
 
 
 void UploadRandomPositionsToDevice(const std::vector<Cube::State>& random_positions) {
-    cudaMalloc((void **)&CudaSearch::d_random_positions, sizeof(Cube::State)*random_positions.size());
-    cudaMemcpy(CudaSearch::d_random_positions, random_positions.data(), sizeof(Cube::State)*random_positions.size(), cudaMemcpyHostToDevice);
+    UploadToDevice(random_positions, CudaSearch::d_random_positions);
     CudaSearch::d_random_positions_size = random_positions.size();
 }
 
@@ -159,7 +121,7 @@ void TimeBCHTtable() {
         DTimeBCHTtable<<<((CudaSearch::d_random_positions_size-1) / kBlockDim+1), kBlockDim>>>(CudaSearch::d_tablebase, CudaSearch::d_tablebebase_size, CudaSearch::d_random_positions, CudaSearch::d_random_positions_size, d_hit, d_miss);
         cudaError_t err = cudaGetLastError();
         if (err != cudaSuccess) {
-            printf("CUDA error: %s\n", cudaGetErrorString(err));
+            LOG_CRITICAL("CUDA error:", cudaGetErrorString(err));
         }
 
         cudaMemcpy(&h_hit, d_hit, sizeof(unsigned long long), cudaMemcpyDeviceToHost);

@@ -56,7 +56,13 @@ if(USE_CUDA)
     # cuda
     enable_language(CUDA)
     set(CMAKE_CUDA_USE_RESPONSE_FILE_FOR_INCLUDES OFF)
-    set(CMAKE_CUDA_ARCHITECTURES 89)
+
+    # ========================
+    # Architecture compilation
+    # ========================
+    set(CUDA_ARCH 89 CACHE STRING "Cuda architecture")
+    set(CMAKE_CUDA_ARCHITECTURES ${CUDA_ARCH})
+
     set(CMAKE_CUDA_STANDARD 20)
     set(CMAKE_CUDA_STANDARD_REQUIRED ON)
 endif()
