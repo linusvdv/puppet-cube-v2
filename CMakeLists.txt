@@ -37,7 +37,7 @@ include_directories(${parallel-hashmap_SOURCE_DIR})
 option(USE_CUDA "Build with CUDA support" ON)
 
 if(USE_CUDA)
-    find_package(CUDAToolkit 12.0 REQUIRED)
+    find_package(CUDAToolkit 12.8 REQUIRED)
 
     # Ensure the CUDA compiler matches the found toolkit version
     if(CUDAToolkit_FOUND AND NOT CMAKE_CUDA_COMPILER)
