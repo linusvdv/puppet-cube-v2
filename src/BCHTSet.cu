@@ -40,17 +40,15 @@ struct SplitMix128 {
 // 3 independent hashers with different seeds
 __device__ constexpr SplitMix128 hasher1(0x123456789abcdef0ULL, 0xfedcba9876543210ULL);  // NOLINT
 __device__ constexpr SplitMix128 hasher2(0x0f1e2d3c4b5a6978ULL, 0x87654321abcdef09ULL);  // NOLINT
-__device__ constexpr SplitMix128 hasher3(0xabcdef0123456789ULL, 0x0123456789abcdefULL);  // NOLINT
 
 
 __device__ bool DBCHTSetContains(const Cube::State* d_tablebase, const size_t& d_tablebase_size, const Cube::State& key) {
     uint32_t num_buckets = d_tablebase_size / kBucketSize;
-    uint32_t start_buckets[3] = {
+    uint32_t start_buckets[2] = {
         hasher1.MixInput(key, num_buckets),
         hasher2.MixInput(key, num_buckets),
-        hasher3.MixInput(key, num_buckets)
     };
-    for (int i = 0; i < 3; i++) {
+    for (int i = 0; i < 2; i++) {
         for (int j = 0; j < kBucketSize; j++) {
             if (d_tablebase[(start_buckets[i] * kBucketSize) + j] == key) {
                 return true;
