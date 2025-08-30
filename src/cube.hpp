@@ -45,35 +45,35 @@ enum Rotations : uint8_t {
 
 class Cube {
 public:
-    // 18 bits
+    // 10 bytes
     #pragma pack(push, 1)
     struct State {
-        uint16_t corner_orientation = -1; // 12 bits
-        uint16_t corner_position = -1;    // 16 bits
-        uint16_t edge_orientation = -1;   // 11 bits
-        uint32_t edge_position_1 = -1;    // 20 bits
-        uint32_t edge_position_2 = -1;    // 20 bits
+        uint64_t hash_1 = -1;
+        uint16_t hash_2 = -1;
+
+        State(uint16_t corner_orientation, uint16_t corner_position, uint16_t edge_orientation, uint32_t edge_position_1, uint32_t edge_position_2) {
+            hash_1 = 0;
+            hash_1 = uint64_t(corner_orientation); // 12 bytes
+            hash_1 <<= 11; // NOLINT
+            hash_1 |= uint64_t(edge_orientation); // 11 bytes
+            hash_1 <<= 20; // NOLINT
+            hash_1 |= uint64_t(edge_position_1); // 20 bytes
+            hash_1 <<= 20; // NOLINT
+            hash_1 |= uint64_t(edge_position_2); // 20 bytes
+            hash_2 = corner_position; // 16 bytes
+        }
+
+        State() {}
 
         std::strong_ordering operator<=>(const State&) const = default;
 
         bool Rotate(uint8_t rotation);
 
-        friend std::size_t hash_value(const Cube::State& s) {
-            constexpr int kMagicVal = 0x9e3779b9;
-            std::size_t h1 = std::hash<uint16_t>{}(s.corner_orientation);
-            std::size_t h2 = std::hash<uint16_t>{}(s.corner_position);
-            std::size_t h3 = std::hash<uint16_t>{}(s.edge_orientation);
-            std::size_t h4 = std::hash<uint32_t>{}(s.edge_position_1);
-            std::size_t h5 = std::hash<uint32_t>{}(s.edge_position_2);
+        friend std::size_t hash_value(const State& state) {  // NOLINT
+            std::size_t h1 = std::hash<uint64_t>{}(state.hash_1 ^ 0x123456789abcdef0ULL); // NOLINT
+            std::size_t h2 = std::hash<uint64_t>{}(uint64_t(state.hash_2) ^ 0xfedcba9876543210ULL); // NOLINT
 
-            // Combine hashes (standard method)
-            std::size_t seed = h1;
-            seed ^= h2 + kMagicVal + (seed << 6) + (seed >> 2);
-            seed ^= h3 + kMagicVal + (seed << 6) + (seed >> 2);
-            seed ^= h4 + kMagicVal + (seed << 6) + (seed >> 2);
-            seed ^= h5 + kMagicVal + (seed << 6) + (seed >> 2);
-
-            return seed;
+            return h1 ^ h2;
         }
     };
     #pragma pack(pop)

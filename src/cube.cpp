@@ -119,6 +119,18 @@ constexpr std::array<uint8_t, kNumRotations> kLegalMoveIndex = {
 
 
 bool Cube::State::Rotate(uint8_t rotation) {
+    uint16_t corner_orientation; // 12 bytes
+    uint16_t corner_position = hash_2; // 16 bytes
+    uint16_t edge_orientation; // 11 bytes
+    uint32_t edge_position_1; // 20 bytes
+    uint32_t edge_position_2; // 20 bytes
+    edge_position_2 = hash_1 & ((1ULL << 20) - 1ULL); // NOLINT
+    hash_1 >>= 20; // NOLINT
+    edge_position_1 = hash_1 & ((1ULL << 20) - 1ULL); // NOLINT
+    hash_1 >>= 20; // NOLINT
+    edge_orientation = hash_1 & ((1ULL << 11) - 1ULL); // NOLINT
+    hash_1 >>= 11; // NOLINT
+    corner_orientation = hash_1;
     if (kLegalMoveIndex[rotation] != 0 && ((corner_heuristics[(corner_orientation*kNumCornerPositions) + corner_position] >> kLegalMoveIndex[rotation]) & 1) == 0) {
         return false;
     }
@@ -127,6 +139,15 @@ bool Cube::State::Rotate(uint8_t rotation) {
     edge_orientation = edge_orientations[(edge_orientation*kNumRotations) + rotation];
     edge_position_1 = edge_positions[(edge_position_1*kNumRotations) + rotation];
     edge_position_2 = edge_positions[(edge_position_2*kNumRotations) + rotation];
+    hash_1 = 0;
+    hash_1 = uint64_t(corner_orientation); // 12 bytes
+    hash_1 <<= 11; // NOLINT
+    hash_1 |= uint64_t(edge_orientation); // 11 bytes
+    hash_1 <<= 20; // NOLINT
+    hash_1 |= uint64_t(edge_position_1); // 20 bytes
+    hash_1 <<= 20; // NOLINT
+    hash_1 |= uint64_t(edge_position_2); // 20 bytes
+    hash_2 = corner_position; // 16 bytes
     return true;
 }
 

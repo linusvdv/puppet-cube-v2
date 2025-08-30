@@ -10,22 +10,6 @@
 #include "logger.hpp"
 
 
-std::pair<uint64_t, u_int64_t> PackState(const Cube::State& state) {
-    uint64_t low = 0;
-    uint64_t high = 0;
-    low |= uint64_t(state.corner_orientation);
-    low <<= 16;  // NOLINT
-    low |= uint64_t(state.corner_position);
-    low <<= 16;  // NOLINT
-    low |= uint64_t(state.edge_orientation);
-    high |= uint64_t(state.edge_position_1);
-    high <<= 32;  // NOLINT
-    high |= uint64_t(state.edge_position_2);
-
-    return {low, high};
-}
-
-
 struct SplitMix128 {
     uint64_t state_low;
     uint64_t state_high;
@@ -44,48 +28,51 @@ struct SplitMix128 {
         return num;
     }
 
-    std::pair<uint64_t, uint64_t> MixInput(uint64_t low, uint64_t high) const {
-        return {Mix64(high ^ state_high), (low ^ state_low)};
+    uint32_t MixInput(const Cube::State& state, const uint32_t& num_buckets) const {
+        uint64_t combined = Mix64(state.hash_1 ^ state_high) ^ (state.hash_2 ^ state_low);
+        return uint32_t(combined % num_buckets);
     }
 };
 
-uint32_t ComputeBucket(std::pair<uint64_t, uint64_t> pack_state, uint32_t num_buckets) {
-    uint64_t combined = pack_state.first ^ pack_state.second;
-    return uint32_t(combined % num_buckets);
-}
 
-
-// 3 independent hashers with different seeds
+// 2 independent hashers with different seeds
 constexpr SplitMix128 hasher1(0x123456789abcdef0ULL, 0xfedcba9876543210ULL);  // NOLINT
 constexpr SplitMix128 hasher2(0x0f1e2d3c4b5a6978ULL, 0x87654321abcdef09ULL);  // NOLINT
 
 
-std::array<uint32_t, 2> GetStartBuckets(const Cube::State& key, uint32_t num_buckets) {
-
-    std::pair<uint64_t, uint64_t> pack_state = PackState(key);
-
-    return {
-        ComputeBucket(hasher1.MixInput(pack_state.first, pack_state.second), num_buckets),
-        ComputeBucket(hasher2.MixInput(pack_state.first, pack_state.second), num_buckets),
-    };
+bool BCHTSetContains(const std::vector<Cube::State>& table, const Cube::State& key) {
+    uint32_t num_buckets = table.size() / kBucketSize;
+    for (int j = 0; j < kBucketSize; j++) {
+        if (table[(hasher1.MixInput(key, num_buckets) * kBucketSize) + j] == key) {
+            return true;
+        }
+    }
+    for (int j = 0; j < kBucketSize; j++) {
+        if (table[(hasher2.MixInput(key, num_buckets) * kBucketSize) + j] == key) {
+            return true;
+        }
+    }
+    return false;
 }
 
 
 int GetBucketIndex(const Cube::State& cube, uint32_t hash, uint32_t num_buckets) {
-    std::array<uint32_t, 2> start_buckets = GetStartBuckets(cube, num_buckets);
-    for (int i = 0; i < 2; i++) {
-        if (start_buckets[i] == hash) {
-            return i;
-        }
+    if (hasher1.MixInput(cube, num_buckets) == hash) {
+        return 0;
     }
-    LOG_ERROR(hash, "!=", start_buckets[0], start_buckets[1], start_buckets[2]);
+    if (hasher2.MixInput(cube, num_buckets) == hash) {
+        return 1;
+    }
     LOG_CRITICAL("hash and bucket do not fit");
     return -1;
 }
 
 
 bool BfsInsert(std::vector<Cube::State>& table, uint32_t num_buckets, const Cube::State& key) {
-    std::array<uint32_t, 2> start_buckets = GetStartBuckets(key, num_buckets);
+    std::array<uint32_t, 2> start_buckets = {
+        hasher1.MixInput(key, num_buckets),
+        hasher2.MixInput(key, num_buckets)
+    };
 
     // Layer 0: try direct insert
     for (uint32_t bucket : start_buckets) {
@@ -112,7 +99,10 @@ bool BfsInsert(std::vector<Cube::State>& table, uint32_t num_buckets, const Cube
         p_q.pop();
 
 
-        std::array<uint32_t, 2> current_buckets = GetStartBuckets(current.second.first, num_buckets);
+        std::array<uint32_t, 2> current_buckets = {
+        hasher1.MixInput(current.second.first, num_buckets),
+        hasher2.MixInput(current.second.first, num_buckets)
+        };
         for (int j = 0; j < 2; j++) {
             for (int i = 0; i < kBucketSize; i++) {
                 uint32_t hash_idx = (current_buckets[j]*kBucketSize) + i;
@@ -164,18 +154,4 @@ std::vector<Cube::State> BuildBCHTSet(const TablebasePrecomputation& tablebase) 
         }
     }
     return table;
-}
-
-
-bool BCHTSetContains(const std::vector<Cube::State>& table, const Cube::State& key) {
-    uint32_t num_buckets = table.size() / kBucketSize;
-    std::array<uint32_t, 2> start_buckets = GetStartBuckets(key, num_buckets);
-    for (int i = 0; i < 2; i++) {
-        for (int j = 0; j < kBucketSize; j++) {
-            if (table[(start_buckets[i] * kBucketSize) + j] == key) {
-                return true;
-            }
-        }
-    }
-    return false;
 }
