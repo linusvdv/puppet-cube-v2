@@ -42,14 +42,24 @@ constexpr SplitMix128 hasher2(0x0f1e2d3c4b5a6978ULL, 0x87654321abcdef09ULL);  //
 
 bool BCHTSetContains(const std::vector<Cube::State>& table, const Cube::State& key) {
     uint32_t num_buckets = table.size() / kBucketSize;
+    uint64_t h_1 = hasher1.MixInput(key, num_buckets);
     for (int j = 0; j < kBucketSize; j++) {
-        if (table[(hasher1.MixInput(key, num_buckets) * kBucketSize) + j] == key) {
+        Cube::State tb_data = table[(h_1*kBucketSize) + j];
+        if (tb_data == key) {
             return true;
         }
+        if (tb_data.hash_1 == uint64_t(-1) && tb_data.hash_2 == uint16_t(-1)) {
+            return false;
+        }
     }
+    uint64_t h_2 = hasher2.MixInput(key, num_buckets);
     for (int j = 0; j < kBucketSize; j++) {
-        if (table[(hasher2.MixInput(key, num_buckets) * kBucketSize) + j] == key) {
+        Cube::State tb_data = table[(h_2*kBucketSize) + j];
+        if (tb_data == key) {
             return true;
+        }
+        if (tb_data.hash_1 == uint64_t(-1) && tb_data.hash_2 == uint16_t(-1)) {
+            return false;
         }
     }
     return false;

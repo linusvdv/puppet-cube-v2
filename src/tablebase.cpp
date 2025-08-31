@@ -62,7 +62,8 @@ void PhmapTiming(const TablebasePrecomputation& tablebase_precomputation, const 
 void BCHTTiming(const std::vector<Cube::State>& tablebase_layer, const std::vector<Cube::State>& random_positions, size_t thread_idx, size_t num_threads) {
     size_t hit = 0;
     size_t miss = 0;
-    for (size_t i = thread_idx; i < random_positions.size(); i+=num_threads) {
+    size_t rp_size = random_positions.size();
+    for (size_t i = thread_idx; i < rp_size; i+=num_threads) {
         if (BCHTSetContains(tablebase_layer, random_positions[i])) {
             hit++;
         }
@@ -138,7 +139,7 @@ std::vector<Cube::State> TimeTablebaseCPU(std::vector<std::vector<Cube::State>>&
     {
         std::vector<std::jthread> threads;
         for (int j = 0; j < Settings::GetNumThreads(); j++) {
-            threads.push_back(std::jthread(PhmapTiming, std::ref(tablebase_precomputation), std::ref(random_positions), j, Settings::GetNumThreads()));
+            threads.push_back(std::jthread(BCHTTiming, std::ref(tablebase[Settings::GetTBDepth()]), std::ref(random_positions), j, Settings::GetNumThreads()));
         }
     }
 

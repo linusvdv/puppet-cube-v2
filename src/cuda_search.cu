@@ -93,16 +93,16 @@ void UploadRandomPositionsToDevice(const std::vector<Cube::State>& random_positi
 }
 
 
+constexpr size_t kBatching = 10;
 __global__ void DTimeBCHTtable(Cube::State* d_tablebase, size_t d_tablebebase_size, Cube::State* d_random_positions, size_t d_random_positions_size, unsigned long long* hit, unsigned long long* miss) {
     size_t index = threadIdx.x + (blockIdx.x * blockDim.x);
-    if (index >= d_random_positions_size) {
-        return;
-    }
-    if (DBCHTSetContains(d_tablebase, d_tablebebase_size, d_random_positions[index])) {
-        atomicAdd(hit, size_t(1));
-    }
-    else {
-        atomicAdd(miss, size_t(1));
+    for (size_t i = index*kBatching; i < (index+1)*kBatching && i < d_random_positions_size; i++) {
+        if (DBCHTSetContains(d_tablebase, d_tablebebase_size, d_random_positions[i])) {
+            atomicAdd(hit, size_t(1));
+        }
+        else {
+            atomicAdd(miss, size_t(1));
+        }
     }
 }
 
@@ -118,7 +118,7 @@ void TimeBCHTtable() {
         cudaMemcpy(d_hit, &h_hit, sizeof(unsigned long long), cudaMemcpyHostToDevice);
         cudaMemcpy(d_miss, &h_miss, sizeof(unsigned long long), cudaMemcpyHostToDevice);
 
-        DTimeBCHTtable<<<((CudaSearch::d_random_positions_size-1) / kBlockDim+1), kBlockDim>>>(CudaSearch::d_tablebase, CudaSearch::d_tablebebase_size, CudaSearch::d_random_positions, CudaSearch::d_random_positions_size, d_hit, d_miss);
+        DTimeBCHTtable<<<(((CudaSearch::d_random_positions_size/kBatching+1)-1) / kBlockDim+1), kBlockDim>>>(CudaSearch::d_tablebase, CudaSearch::d_tablebebase_size, CudaSearch::d_random_positions, CudaSearch::d_random_positions_size, d_hit, d_miss);
         cudaError_t err = cudaGetLastError();
         if (err != cudaSuccess) {
             LOG_CRITICAL("CUDA error:", cudaGetErrorString(err));

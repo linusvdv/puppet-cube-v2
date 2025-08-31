@@ -35,14 +35,24 @@ __device__ constexpr SplitMix128 hasher2(0x0f1e2d3c4b5a6978ULL, 0x87654321abcdef
 
 __device__ bool DBCHTSetContains(const Cube::State* d_tablebase, const size_t& d_tablebase_size, const Cube::State& key) {
     uint32_t num_buckets = d_tablebase_size / kBucketSize;
+    uint64_t h_1 = hasher1.MixInput(key, num_buckets);
     for (int j = 0; j < kBucketSize; j++) {
-        if (d_tablebase[(hasher1.MixInput(key, num_buckets) * kBucketSize) + j] == key) {
+        Cube::State tb_data = d_tablebase[(h_1*kBucketSize) + j];
+        if (tb_data == key) {
             return true;
         }
+        if (tb_data.hash_1 == uint64_t(-1) && tb_data.hash_2 == uint16_t(-1)) {
+            return false;
+        }
     }
+    uint64_t h_2 = hasher2.MixInput(key, num_buckets);
     for (int j = 0; j < kBucketSize; j++) {
-        if (d_tablebase[(hasher2.MixInput(key, num_buckets) * kBucketSize) + j] == key) {
+        Cube::State tb_data = d_tablebase[(h_2*kBucketSize) + j];
+        if (tb_data == key) {
             return true;
+        }
+        if (tb_data.hash_1 == uint64_t(-1) && tb_data.hash_2 == uint16_t(-1)) {
+            return false;
         }
     }
     return false;
