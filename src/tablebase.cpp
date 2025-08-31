@@ -47,13 +47,8 @@ void TablebaseSearch (const std::vector<Cube::State>& previous, const std::vecto
 void PhmapTiming(const TablebasePrecomputation& tablebase_precomputation, const std::vector<Cube::State>& random_positions, size_t thread_idx, size_t num_threads) {
     size_t hit = 0;
     size_t miss = 0;
-    size_t cnt = 0;
-    for (const Cube::State& state : random_positions) {
-        cnt++;
-        if (cnt % num_threads != thread_idx) {
-            continue;
-        }
-        if (tablebase_precomputation.contains(state)) {
+    for (size_t i = thread_idx; i < random_positions.size(); i+=num_threads) {
+        if (tablebase_precomputation.contains(random_positions[i])) {
             hit++;
         }
         else {
@@ -67,13 +62,8 @@ void PhmapTiming(const TablebasePrecomputation& tablebase_precomputation, const 
 void BCHTTiming(const std::vector<Cube::State>& tablebase_layer, const std::vector<Cube::State>& random_positions, size_t thread_idx, size_t num_threads) {
     size_t hit = 0;
     size_t miss = 0;
-    size_t cnt = 0;
-    for (const Cube::State& state : random_positions) {
-        cnt++;
-        if (cnt % num_threads != thread_idx) {
-            continue;
-        }
-        if (BCHTSetContains(tablebase_layer, state)) {
+    for (size_t i = thread_idx; i < random_positions.size(); i+=num_threads) {
+        if (BCHTSetContains(tablebase_layer, random_positions[i])) {
             hit++;
         }
         else {
