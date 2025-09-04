@@ -11,7 +11,8 @@ using TablebasePrecomputation = phmap::parallel_flat_hash_set<Cube::State,
     12, std::mutex>;
 
 
-struct Tablebase {
+class Tablebase {
+public:
     static void Initialize();
 
     static void UploadComputationToDevice() {
@@ -22,6 +23,5 @@ struct Tablebase {
         #endif // USE_CUDA
     }
 
-private:
     static std::vector<std::vector<Cube::State>> tablebase;
 };
