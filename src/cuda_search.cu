@@ -27,6 +27,7 @@ __device__ size_t d_tablebebase_size = 0;
 
 __device__ Cube::State* d_random_positions = nullptr;
 __device__ size_t d_random_positions_size = 0;
+size_t random_positions_size = 0;
 
 
 __device__ static bool Rotate(Cube::State& state, const uint8_t& rotation) {
@@ -76,7 +77,7 @@ void UploadToDevice(const std::vector<T>& data, T*& d_pointer) {
     if (err != cudaSuccess) {
         LOG_CRITICAL(cudaGetErrorString(err));
     }
-    err = cudaMemcpyToSymbol(d_pointer, temp_pointer, sizeof(T*));
+    err = cudaMemcpyToSymbol(d_pointer, &temp_pointer, sizeof(T*));
     if (err != cudaSuccess) {
         LOG_CRITICAL(cudaGetErrorString(err));
     }
@@ -119,10 +120,11 @@ void UploadTablebaseToDevice(const std::vector<Cube::State>& tablebebase) {
 void UploadRandomPositionsToDevice(const std::vector<Cube::State>& random_positions) {
     UploadToDevice(random_positions, d_random_positions);
     size_t temp_size = random_positions.size();
-    cudaError_t err = cudaMemcpyToSymbol(d_random_positions_size, &temp_size, sizeof(d_tablebebase_size));
+    cudaError_t err = cudaMemcpyToSymbol(d_random_positions_size, &temp_size, sizeof(temp_size));
     if (err != cudaSuccess) {
         LOG_CRITICAL(cudaGetErrorString(err));
     }
+    random_positions_size = temp_size;
 }
 
 
@@ -142,16 +144,28 @@ __global__ void DTimeBCHTtable(unsigned long long* hit, unsigned long long* miss
 void TimeBCHTtable() {
     unsigned long long *d_hit;
     unsigned long long *d_miss;
-    cudaMalloc(&d_hit, sizeof(unsigned long long));
-    cudaMalloc(&d_miss, sizeof(unsigned long long));
+    cudaError_t err = cudaMalloc(&d_hit, sizeof(unsigned long long));
+    if (err != cudaSuccess) {
+        LOG_CRITICAL(cudaGetErrorString(err));
+    }
+    err = cudaMalloc(&d_miss, sizeof(unsigned long long));
+    if (err != cudaSuccess) {
+        LOG_CRITICAL(cudaGetErrorString(err));
+    }
 
     for (int i = 0; i < 10; i++) {
         unsigned long long h_hit = 0;
         unsigned long long h_miss = 0;
-        cudaMemcpy(d_hit, &h_hit, sizeof(unsigned long long), cudaMemcpyHostToDevice);
-        cudaMemcpy(d_miss, &h_miss, sizeof(unsigned long long), cudaMemcpyHostToDevice);
+        err = cudaMemcpy(d_hit, &h_hit, sizeof(unsigned long long), cudaMemcpyHostToDevice);
+        if (err != cudaSuccess) {
+            LOG_CRITICAL(cudaGetErrorString(err));
+        }
+        err = cudaMemcpy(d_miss, &h_miss, sizeof(unsigned long long), cudaMemcpyHostToDevice);
+        if (err != cudaSuccess) {
+            LOG_CRITICAL(cudaGetErrorString(err));
+        }
 
-        DTimeBCHTtable<<<(((Tablebase::tablebase.size()/kBatching+1)-1) / kBlockDim+1), kBlockDim>>>(d_hit, d_miss);
+        DTimeBCHTtable<<<(((random_positions_size/kBatching+1)-1) / kBlockDim+1), kBlockDim>>>(d_hit, d_miss);
         cudaError_t err = cudaGetLastError();
         if (err != cudaSuccess) {
             LOG_CRITICAL("CUDA error:", cudaGetErrorString(err));
