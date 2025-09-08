@@ -23,4 +23,4 @@ void UploadTablebaseToDevice(const std::vector<Cube::State>& tablebebase);
 void UploadRandomPositionsToDevice(const std::vector<Cube::State>& random_positions);
 
 
-void TimeBCHTtable();
+void TimeBCHTGPU();

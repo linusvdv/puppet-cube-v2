@@ -1,15 +1,57 @@
+#include <stdexcept>
 #include <string>
 #include <thread>
 #include <vector>
+#include <getopt.h>
 
 #include "settings.hpp"
+#include "logger.hpp"
 
 
 std::string Settings::root_path;
-bool Settings::should_performance_test = true;
+bool Settings::test_BCHT = false;
 int Settings::num_threads = 1;
-int Settings::tb_depth = 8;  // NOLINT
+int Settings::tb_depth = 6;  // NOLINT
 int Settings::tb_depth_gpu = 8;  // NOLINT
+
+
+static struct option long_options[] = {
+    {"help", no_argument, NULL, 'h'},
+    {"BCHT", no_argument, NULL, 'B'},
+    {"threads", required_argument, NULL, 't'},
+    {"tb_depth", required_argument, NULL, 0},
+    {"tb_depth_gpu", required_argument, NULL, 0},
+    {NULL, 0, NULL, 0}
+};
+
+
+bool GetIntFromOptarg (int& num, int low, int upper, const std::string& option) {
+    try {
+        if (optarg == NULL) {
+            LOG_WARNING(option, "No argument passed to the option");
+            return false;
+        }
+        int new_num = std::stoi(optarg);
+        if (new_num > upper) {
+            LOG_WARNING(option, "Value out of expected range got", new_num, "max", upper);
+            return false;
+        }
+        if (new_num < low) {
+            LOG_WARNING(option, "Value out of expected range got", new_num, "min", low);
+            return false;
+        }
+        num = new_num;
+        return true;
+    }
+    catch (const std::invalid_argument& e) {
+        LOG_ERROR(option, "invalid argument", e.what());
+        return false;
+    }
+    catch (const std::out_of_range& e) {
+        LOG_ERROR(option, "out of range", e.what());
+        return false;
+    }
+}
 
 
 Settings::Settings (int argc, char *argv[]) {
@@ -29,6 +71,41 @@ Settings::Settings (int argc, char *argv[]) {
     temp_root_path.append("/../../");
     root_path.append(temp_root_path);
 
+    const char* short_options = "hBt:";
+    opterr = 0; // supress error messages from getopt_long
+    int option_index;
+    char cop;
+
+    while ((cop = getopt_long(argc, argv, short_options, long_options, &option_index)) != -1) {
+        switch (cop) {
+            case 'h':
+                // --help
+                exit(0);
+            case 'B':
+                test_BCHT = true;
+                break;
+            case 't':
+                GetIntFromOptarg(num_threads, 1, num_threads, "THREADS");
+                break;
+            case 0:
+                if (std::string(long_options[option_index].name) == "tb_depth") {
+                    GetIntFromOptarg(tb_depth, 1, 9, "TB DEPTH");
+                }
+                if (std::string(long_options[option_index].name) == "tb_depth_gpu") {
+                    GetIntFromOptarg(tb_depth_gpu, 1, 9, "TB DEPTH GPU");
+                }
+                break;
+            case '?':
+                LOG_WARNING("Unrecognized option");
+                break;
+            case ':':
+                LOG_WARNING("Missing argument for an option.");
+                break;
+            default:
+                LOG_WARNING("not expected argument");
+                break;
+        }
+    }
 
     // tb_depth
     tb_depth_gpu = std::min(tb_depth, tb_depth_gpu);

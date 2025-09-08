@@ -13,8 +13,8 @@ public:
         return root_path;
     }
 
-    static bool GetShouldPerformanceTest() {
-        return should_performance_test;
+    static bool GetTestBCHT() {
+        return test_BCHT;
     }
 
     static int GetNumThreads() {
@@ -34,7 +34,7 @@ private:
     static std::string root_path;
 
     // performance testing for optimisation purposes
-    static bool should_performance_test;
+    static bool test_BCHT;
 
     // search
     static int num_threads;

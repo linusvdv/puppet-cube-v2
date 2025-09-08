@@ -141,38 +141,47 @@ __global__ void DTimeBCHTtable(unsigned long long* hit, unsigned long long* miss
     }
 }
 
-void TimeBCHTtable() {
-    unsigned long long *d_hit;
-    unsigned long long *d_miss;
-    cudaError_t err = cudaMalloc(&d_hit, sizeof(unsigned long long));
-    if (err != cudaSuccess) {
-        LOG_CRITICAL(cudaGetErrorString(err));
-    }
-    err = cudaMalloc(&d_miss, sizeof(unsigned long long));
-    if (err != cudaSuccess) {
-        LOG_CRITICAL(cudaGetErrorString(err));
-    }
+void TimeBCHTGPU() {
+    if (Settings::GetTestBCHT()) {
+        LOG_EXTRA("Start timing on GPU");
+        std::chrono::time_point gpu_time = std::chrono::high_resolution_clock::now(); // get the current time
 
-    for (int i = 0; i < 10; i++) {
-        unsigned long long h_hit = 0;
-        unsigned long long h_miss = 0;
-        err = cudaMemcpy(d_hit, &h_hit, sizeof(unsigned long long), cudaMemcpyHostToDevice);
+        unsigned long long *d_hit;
+        unsigned long long *d_miss;
+        cudaError_t err = cudaMalloc(&d_hit, sizeof(unsigned long long));
         if (err != cudaSuccess) {
             LOG_CRITICAL(cudaGetErrorString(err));
         }
-        err = cudaMemcpy(d_miss, &h_miss, sizeof(unsigned long long), cudaMemcpyHostToDevice);
+        err = cudaMalloc(&d_miss, sizeof(unsigned long long));
         if (err != cudaSuccess) {
             LOG_CRITICAL(cudaGetErrorString(err));
         }
 
-        DTimeBCHTtable<<<(((random_positions_size/kBatching+1)-1) / kBlockDim+1), kBlockDim>>>(d_hit, d_miss);
-        cudaError_t err = cudaGetLastError();
-        if (err != cudaSuccess) {
-            LOG_CRITICAL("CUDA error:", cudaGetErrorString(err));
+        for (int i = 0; i < 10; i++) {
+            unsigned long long h_hit = 0;
+            unsigned long long h_miss = 0;
+            err = cudaMemcpy(d_hit, &h_hit, sizeof(unsigned long long), cudaMemcpyHostToDevice);
+            if (err != cudaSuccess) {
+                LOG_CRITICAL(cudaGetErrorString(err));
+            }
+            err = cudaMemcpy(d_miss, &h_miss, sizeof(unsigned long long), cudaMemcpyHostToDevice);
+            if (err != cudaSuccess) {
+                LOG_CRITICAL(cudaGetErrorString(err));
+            }
+
+            DTimeBCHTtable<<<(((random_positions_size/kBatching+1)-1) / kBlockDim+1), kBlockDim>>>(d_hit, d_miss);
+            cudaError_t err = cudaGetLastError();
+            if (err != cudaSuccess) {
+                LOG_CRITICAL("CUDA error:", cudaGetErrorString(err));
+            }
+
+            cudaMemcpy(&h_hit, d_hit, sizeof(unsigned long long), cudaMemcpyDeviceToHost);
+            cudaMemcpy(&h_miss, d_miss, sizeof(unsigned long long), cudaMemcpyDeviceToHost);
+            LOG_EXTRA("run", i, ":", h_hit, "hits", h_miss, "misses");
         }
 
-        cudaMemcpy(&h_hit, d_hit, sizeof(unsigned long long), cudaMemcpyDeviceToHost);
-        cudaMemcpy(&h_miss, d_miss, sizeof(unsigned long long), cudaMemcpyDeviceToHost);
-        LOG_ALL(h_hit, "hits", h_miss, "misses");
+        std::chrono::time_point gpu_since_epoch = std::chrono::high_resolution_clock::now(); // get the duration since epoch
+        std::chrono::milliseconds gpu_millis = std::chrono::duration_cast<std::chrono::milliseconds>(gpu_since_epoch - gpu_time);
+        LOG_ALL("Time duration on GPU:", gpu_millis.count());
     }
 }

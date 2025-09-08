@@ -237,7 +237,7 @@ void Tablebase::Initialize() {
         LOG_MEMORY();
     }
 
-    if (Settings::GetShouldPerformanceTest()) {
+    if (Settings::GetTestBCHT()) {
         LOG_EXTRA("Needs to generate phmap");
         if (tablebase_layer.empty()) {
             for (const Cube::State& state : tablebase.back()) {
