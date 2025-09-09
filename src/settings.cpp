@@ -1,4 +1,3 @@
-#include <stdexcept>
 #include <string>
 #include <thread>
 #include <vector>
@@ -9,7 +8,10 @@
 
 
 std::string Settings::root_path;
-bool Settings::test_BCHT = false;
+bool Settings::test_bcht = false;
+bool Settings::test_bfs = false;
+int Settings::bfs_depth = 4;
+int Settings::scrambling_depth = 1000;  // NOLINT
 int Settings::num_threads = 1;
 int Settings::tb_depth = 6;  // NOLINT
 int Settings::tb_depth_gpu = 8;  // NOLINT
@@ -21,6 +23,10 @@ static struct option long_options[] = {
     {"threads", required_argument, NULL, 't'},
     {"tb_depth", required_argument, NULL, 0},
     {"tb_depth_gpu", required_argument, NULL, 0},
+    {"BFS", no_argument, NULL, 'b'},
+    {"BFS_depth", required_argument, NULL, 0},
+    {"root_path", required_argument, NULL, 0},
+    {"scrambling_depth", required_argument, NULL, 0},
     {NULL, 0, NULL, 0}
 };
 
@@ -82,10 +88,13 @@ Settings::Settings (int argc, char *argv[]) {
                 // --help
                 exit(0);
             case 'B':
-                test_BCHT = true;
+                test_bcht = true;
                 break;
             case 't':
                 GetIntFromOptarg(num_threads, 1, num_threads, "THREADS");
+                break;
+            case 'b':
+                test_bfs = true;
                 break;
             case 0:
                 if (std::string(long_options[option_index].name) == "tb_depth") {
@@ -93,6 +102,15 @@ Settings::Settings (int argc, char *argv[]) {
                 }
                 if (std::string(long_options[option_index].name) == "tb_depth_gpu") {
                     GetIntFromOptarg(tb_depth_gpu, 1, 9, "TB DEPTH GPU");
+                }
+                if (std::string(long_options[option_index].name) == "BFS_depth") {
+                    GetIntFromOptarg(bfs_depth, 1, 6, "BFS DEPTH");
+                }
+                if (std::string(long_options[option_index].name) == "root_path") {
+                    root_path = std::string(optarg);
+                }
+                if (std::string(long_options[option_index].name) == "scrambling_depth") {
+                    GetIntFromOptarg(scrambling_depth, 1, 1000000, "SCRAMBLING DEPTH");
                 }
                 break;
             case '?':
@@ -109,5 +127,4 @@ Settings::Settings (int argc, char *argv[]) {
 
     // tb_depth
     tb_depth_gpu = std::min(tb_depth, tb_depth_gpu);
-
 }

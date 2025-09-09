@@ -82,6 +82,7 @@ add_executable(PuppetCubeV2
     src/edge_heuristic.cpp
     src/tablebase.cpp
     src/BCHTSet.cpp
+    src/random_position.cpp
 )
 
 if(USE_CUDA)

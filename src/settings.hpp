@@ -14,7 +14,19 @@ public:
     }
 
     static bool GetTestBCHT() {
-        return test_BCHT;
+        return test_bcht;
+    }
+
+    static bool GetTestBFS() {
+        return test_bfs;
+    }
+
+    static int GetBFSDepth() {
+        return bfs_depth;
+    }
+
+    static int GetScramblingDepth() {
+        return scrambling_depth;
     }
 
     static int GetNumThreads() {
@@ -34,7 +46,11 @@ private:
     static std::string root_path;
 
     // performance testing for optimisation purposes
-    static bool test_BCHT;
+    static bool test_bcht;
+    static bool test_bfs;
+
+    static int bfs_depth;
+    static int scrambling_depth;
 
     // search
     static int num_threads;
