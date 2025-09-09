@@ -1,4 +1,5 @@
 #include "cube.hpp"
+#include "DFS.hpp"
 #include "logger.hpp"
 #include "settings.hpp"
 #include "tablebase.hpp"
@@ -27,6 +28,8 @@ int main (int argc, char *argv[]) {
     #ifdef USE_CUDA
     TimeBCHTGPU();
     #endif
+
+    TimeDFS();
 
     return 0;
 }

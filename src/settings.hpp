@@ -17,12 +17,12 @@ public:
         return test_bcht;
     }
 
-    static bool GetTestBFS() {
-        return test_bfs;
+    static bool GetTestDFS() {
+        return test_dfs;
     }
 
-    static int GetBFSDepth() {
-        return bfs_depth;
+    static int GetDFSDepth() {
+        return dfs_depth;
     }
 
     static int GetScramblingDepth() {
@@ -47,9 +47,9 @@ private:
 
     // performance testing for optimisation purposes
     static bool test_bcht;
-    static bool test_bfs;
+    static bool test_dfs;
 
-    static int bfs_depth;
+    static int dfs_depth;
     static int scrambling_depth;
 
     // search
