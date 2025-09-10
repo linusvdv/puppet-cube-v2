@@ -12,7 +12,7 @@
 #endif
 
 
-constexpr size_t kNumRandomPositions = 1000;
+constexpr size_t kNumRandomPositions = 1000000;
 
 
 void DFS(Cube::State current, size_t& cnt, int depth) {
