@@ -8,6 +8,25 @@
 #include "settings.hpp"
 #include "tablebase.hpp"
 
+
+template<typename T>
+void UploadToDevice(const std::vector<T>& data, T*& d_pointer) {
+    T* temp_pointer = nullptr;
+    cudaError_t err = cudaMalloc((void **)&temp_pointer, sizeof(T)*data.size());
+    if (err != cudaSuccess) {
+        LOG_CRITICAL(cudaGetErrorString(err));
+    }
+    err = cudaMemcpy(temp_pointer, data.data(), sizeof(T)*data.size(), cudaMemcpyHostToDevice);
+    if (err != cudaSuccess) {
+        LOG_CRITICAL(cudaGetErrorString(err));
+    }
+    err = cudaMemcpyToSymbol(d_pointer, &temp_pointer, sizeof(T*));
+    if (err != cudaSuccess) {
+        LOG_CRITICAL(cudaGetErrorString(err));
+    }
+}
+
+
 __device__ constexpr uint8_t kLegalMoveIndex [kNumRotations] = {
     8, 9, 8, 9, 10, 11, 10, 11, 12, 13, 12, 13, 0, 0, 0, 0, 0, 0
 };
@@ -30,7 +49,7 @@ __device__ size_t d_random_positions_size = 0;
 size_t random_positions_size = 0;
 
 
-__device__ static bool Rotate(Cube::State& state, const uint8_t& rotation) {
+__device__ bool Rotate(Cube::State& state, const uint8_t& rotation) {
     uint16_t corner_orientation; // 12 bytes
     uint16_t corner_position = state.hash_2; // 16 bytes
     uint16_t edge_orientation; // 11 bytes
@@ -62,27 +81,6 @@ __device__ static bool Rotate(Cube::State& state, const uint8_t& rotation) {
     state.hash_2 = corner_position; // 16 bytes
     return true;
 }
-
-
-
-
-template<typename T>
-void UploadToDevice(const std::vector<T>& data, T*& d_pointer) {
-    T* temp_pointer = nullptr;
-    cudaError_t err = cudaMalloc((void **)&temp_pointer, sizeof(T)*data.size());
-    if (err != cudaSuccess) {
-        LOG_CRITICAL(cudaGetErrorString(err));
-    }
-    err = cudaMemcpy(temp_pointer, data.data(), sizeof(T)*data.size(), cudaMemcpyHostToDevice);
-    if (err != cudaSuccess) {
-        LOG_CRITICAL(cudaGetErrorString(err));
-    }
-    err = cudaMemcpyToSymbol(d_pointer, &temp_pointer, sizeof(T*));
-    if (err != cudaSuccess) {
-        LOG_CRITICAL(cudaGetErrorString(err));
-    }
-}
-
 
 
 void UploadCubeComputationToDevice(
@@ -175,8 +173,14 @@ void TimeBCHTGPU() {
                 LOG_CRITICAL("CUDA error:", cudaGetErrorString(err));
             }
 
-            cudaMemcpy(&h_hit, d_hit, sizeof(unsigned long long), cudaMemcpyDeviceToHost);
-            cudaMemcpy(&h_miss, d_miss, sizeof(unsigned long long), cudaMemcpyDeviceToHost);
+            err = cudaMemcpy(&h_hit, d_hit, sizeof(unsigned long long), cudaMemcpyDeviceToHost);
+            if (err != cudaSuccess) {
+                LOG_CRITICAL(cudaGetErrorString(err));
+            }
+            err = cudaMemcpy(&h_miss, d_miss, sizeof(unsigned long long), cudaMemcpyDeviceToHost);
+            if (err != cudaSuccess) {
+                LOG_CRITICAL(cudaGetErrorString(err));
+            }
             LOG_EXTRA("run", i, ":", h_hit, "hits", h_miss, "misses");
         }
 

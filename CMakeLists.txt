@@ -92,6 +92,7 @@ if(USE_CUDA)
     target_sources(PuppetCubeV2 PRIVATE
         src/cuda_search.cu
         src/BCHTSet.cu
+        src/DFS.cu
     )
 
     target_link_libraries(PuppetCubeV2 PRIVATE Threads::Threads)

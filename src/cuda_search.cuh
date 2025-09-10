@@ -4,6 +4,7 @@
 #include <parallel_hashmap/phmap.h>
 
 #include "cube.hpp"
+#include "logger.hpp"
 
 
 void UploadCubeComputationToDevice(
