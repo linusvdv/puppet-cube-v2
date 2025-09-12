@@ -71,4 +71,11 @@ void TimeDFS() {
     std::chrono::milliseconds dfs_time_multi_gpu = std::chrono::duration_cast<std::chrono::milliseconds>(dfs_end_time_gpu - dfs_start_time_gpu);
     LOG_ALL("Time duration for DFS GPU:", dfs_time_multi_gpu.count());
     #endif // USE_CUDA
+
+    if (num_nodes_cpu == num_nodes_gpu) {
+        LOG_INFO("Correct DFS");
+    }
+    else {
+        LOG_ERROR("Not the same elements");
+    }
 }
