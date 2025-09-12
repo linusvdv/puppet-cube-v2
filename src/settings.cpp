@@ -131,7 +131,7 @@ Settings::Settings (int argc, char *argv[]) {
                 }
                 break;
             case '?':
-                LOG_WARNING("Unrecognized option");
+                LOG_WARNING("Unrecognized option:", argv[optind-1]);
                 break;
             case ':':
                 LOG_WARNING("Missing argument for an option.");
