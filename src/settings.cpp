@@ -94,7 +94,7 @@ Settings::Settings (int argc, char *argv[]) {
     const char* short_options = "hBt:D";
     opterr = 0; // supress error messages from getopt_long
     int option_index;
-    char cop;
+    signed char cop;
 
     while ((cop = getopt_long(argc, argv, short_options, long_options, &option_index)) != -1) {
         switch (cop) {
