@@ -1,4 +1,5 @@
 #pragma once
+#include <cstddef>
 #include <string>
 
 
@@ -41,6 +42,10 @@ public:
         return tb_depth_gpu;
     }
 
+    static size_t GetNumTBPositions() {
+        return num_tb_positions;
+    }
+
 private:
     // this path should be equivalent to path/to/puppet-cube-v2/
     static std::string root_path;
@@ -59,4 +64,5 @@ private:
     // tb_depth_gpu
     static int tb_depth;
     static int tb_depth_gpu;
+    static size_t num_tb_positions;
 };

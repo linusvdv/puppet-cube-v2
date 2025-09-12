@@ -1,5 +1,7 @@
+#include <cstddef>
 #include <string>
 #include <thread>
+#include <type_traits>
 #include <vector>
 #include <getopt.h>
 
@@ -15,6 +17,7 @@ int Settings::scrambling_depth = 1000;  // NOLINT
 int Settings::num_threads = 1;
 int Settings::tb_depth = 6;  // NOLINT
 int Settings::tb_depth_gpu = 8;  // NOLINT
+size_t Settings::num_tb_positions = 1000000;
 
 
 static struct option long_options[] = {
@@ -27,17 +30,28 @@ static struct option long_options[] = {
     {"DFS_depth", required_argument, NULL, 0},
     {"root_path", required_argument, NULL, 0},
     {"scrambling_depth", required_argument, NULL, 0},
+    {"num_tb_positions", required_argument, NULL, 0},
     {NULL, 0, NULL, 0}
 };
 
 
-bool GetIntFromOptarg (int& num, int low, int upper, const std::string& option) {
+template<typename T>
+bool GetTFromOptarg (T& num, T low, T upper, const std::string& option) {
     try {
         if (optarg == NULL) {
             LOG_WARNING(option, "No argument passed to the option");
             return false;
         }
-        int new_num = std::stoi(optarg);
+        T new_num;
+        if constexpr (std::is_same_v<T, int>) {
+            new_num = std::stoi(optarg);
+        }
+        else if constexpr (std::is_same_v<T, size_t>) {
+            new_num = std::stoull(optarg);
+        }
+        else {
+            static_assert(std::false_type::value, "unsupported type");
+        }
         if (new_num > upper) {
             LOG_WARNING(option, "Value out of expected range got", new_num, "max", upper);
             return false;
@@ -91,26 +105,29 @@ Settings::Settings (int argc, char *argv[]) {
                 test_bcht = true;
                 break;
             case 't':
-                GetIntFromOptarg(num_threads, 1, num_threads, "THREADS");
+                GetTFromOptarg(num_threads, 1, num_threads, "THREADS");
                 break;
             case 'D':
                 test_dfs = true;
                 break;
             case 0:
                 if (std::string(long_options[option_index].name) == "tb_depth") {
-                    GetIntFromOptarg(tb_depth, 1, 9, "TB DEPTH");
+                    GetTFromOptarg(tb_depth, 1, 9, "TB DEPTH");
                 }
                 if (std::string(long_options[option_index].name) == "tb_depth_gpu") {
-                    GetIntFromOptarg(tb_depth_gpu, 1, 9, "TB DEPTH GPU");
+                    GetTFromOptarg(tb_depth_gpu, 1, 9, "TB DEPTH GPU");
                 }
                 if (std::string(long_options[option_index].name) == "DFS_depth") {
-                    GetIntFromOptarg(dfs_depth, 1, 6, "DFS DEPTH");
+                    GetTFromOptarg(dfs_depth, 1, 6, "DFS DEPTH");
                 }
                 if (std::string(long_options[option_index].name) == "root_path") {
                     root_path = std::string(optarg);
                 }
                 if (std::string(long_options[option_index].name) == "scrambling_depth") {
-                    GetIntFromOptarg(scrambling_depth, 1, 1000000, "SCRAMBLING DEPTH");
+                    GetTFromOptarg(scrambling_depth, 1, 1000000, "SCRAMBLING DEPTH");
+                }
+                if (std::string(long_options[option_index].name) == "num_tb_positions") {
+                    GetTFromOptarg(num_tb_positions, size_t(1), size_t(1e18), "NUM TB POSITIONS");
                 }
                 break;
             case '?':

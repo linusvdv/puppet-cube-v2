@@ -12,9 +12,6 @@
 #endif
 
 
-constexpr size_t kNumRandomPositions = 10000000;
-
-
 void DFS(Cube::State current, size_t& cnt, int depth) {
     cnt++;
     if (depth == 0) {
@@ -40,7 +37,7 @@ void TimeDFS() {
     if (!Settings::GetTestDFS()) {
         return;
     }
-    std::vector<Cube::State> random_positions = RandomPositions(kNumRandomPositions); 
+    std::vector<Cube::State> random_positions = RandomPositions(Settings::GetNumTBPositions()); 
 
     std::vector<size_t> num_nodes_cpu(random_positions.size(), 0);
 
