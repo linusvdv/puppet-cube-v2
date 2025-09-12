@@ -104,7 +104,7 @@ Settings::Settings (int argc, char *argv[]) {
                     GetIntFromOptarg(tb_depth_gpu, 1, 9, "TB DEPTH GPU");
                 }
                 if (std::string(long_options[option_index].name) == "DFS_depth") {
-                    GetIntFromOptarg(dfs_depth, 0, 6, "DFS DEPTH");
+                    GetIntFromOptarg(dfs_depth, 1, 6, "DFS DEPTH");
                 }
                 if (std::string(long_options[option_index].name) == "root_path") {
                     root_path = std::string(optarg);

@@ -12,7 +12,7 @@
 #endif
 
 
-constexpr size_t kNumRandomPositions = 1000000;
+constexpr size_t kNumRandomPositions = 10000000;
 
 
 void DFS(Cube::State current, size_t& cnt, int depth) {
@@ -60,7 +60,7 @@ void TimeDFS() {
     LOG_ALL("Time duration for DFS multithreads:", dfs_time_multi.count());
 
     #ifdef USE_CUDA
-    std::vector<size_t> num_nodes_gpu(random_positions.size(), 0);
+    std::vector<size_t> num_nodes_gpu(random_positions.size(), 1e9);
     // Time phmap multithreads
     LOG_EXTRA("Start timing of DFS GPU");
     std::chrono::time_point dfs_start_time_gpu = std::chrono::high_resolution_clock::now(); // get the current time
@@ -77,5 +77,8 @@ void TimeDFS() {
     }
     else {
         LOG_ERROR("Not the same elements");
+        for (size_t i = 0; i < num_nodes_cpu.size(); i++) {
+            LOG_EXTRA("#", i, "CPU:", num_nodes_cpu[i], "GPU:", num_nodes_gpu[i]);
+        }
     }
 }

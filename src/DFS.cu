@@ -32,7 +32,7 @@ struct DFSStack {
 // definded in cuda_search.cu
 __device__ bool Rotate(Cube::State& state, const uint8_t& rotation);
 
-__device__ constexpr size_t kDNumRotations = 18;
+__device__ constexpr int kDNumRotations = 18;
 
 
 constexpr size_t kBatching = 10;
@@ -50,20 +50,21 @@ __global__ void DFSGlobal(Cube::State* d_random_position, size_t* d_num_nodes_gp
     if (upper_start >= num_random_position) {
         upper_start = num_random_position - 1;
     }
-    for (int64_t i = upper_start;  i >= int64_t(index*kBatching); i--) {
+    for (int64_t i = upper_start; i >= int64_t(index*kBatching); i--) {
         d_dfs_stack[(++dfs_stack_idx) + (index*dfs_stack_size)] = {d_random_position[i], 0, depth};
     }
 
     int64_t batch_idx = 0;
     size_t currcnt = 0;
     while (dfs_stack_idx >= 0) {
-        currcnt++;
-        DFSStack& current = d_dfs_stack[dfs_stack_idx + (index*kBatching)];
+        DFSStack& current = d_dfs_stack[dfs_stack_idx + (index*dfs_stack_size)];
         if (current.depth == 0) {
+            currcnt++;
             dfs_stack_idx--;
             continue;
         }
         if (current.rotation >= kDNumRotations) {
+            currcnt++;
             dfs_stack_idx--;
             if (current.depth == depth) {
                 d_num_nodes_gpu[(index*kBatching)+batch_idx] = currcnt;
@@ -74,7 +75,7 @@ __global__ void DFSGlobal(Cube::State* d_random_position, size_t* d_num_nodes_gp
         }
         Cube::State next = current.state;
         if (Rotate(next, current.rotation++)) {
-            d_dfs_stack[(++dfs_stack_idx) + (index*kBatching)] = {next, 0, current.depth-1};
+            d_dfs_stack[(++dfs_stack_idx) + (index*dfs_stack_size)] = {next, 0, current.depth-1};
         }
     }
 
