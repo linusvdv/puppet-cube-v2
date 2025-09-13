@@ -6,15 +6,15 @@ If:
   PathMatch: .*\.(cu|cuh)$
 CompileFlags:
   Add:
-    - -std=c++17
     - Ibuild/_dep/cuco-src/include
   Remove:
     - -forward-unknown-to-host-compiler
     - --generate-code=arch=compute_89,code=[compute_89,sm_89]
     - --expt-extended-lambda
+    - -rdc=true
 
 If:
-  PathMatch: \.(cpp|cc|cxx|c|h)$
+  PathMatch: \.(cpp|cc|cxx|c|h|hpp)$
 CompileFlags:
   Add:
     - -std=c++20
