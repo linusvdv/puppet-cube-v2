@@ -7,9 +7,8 @@
 #include "settings.hpp"
 
 
-std::vector<Cube::State> RandomPositions (const size_t& num_elements) {
-    std::random_device rand_d;
-    std::mt19937 gen(rand_d());
+std::vector<Cube::State> RandomPositions (const size_t& num_elements, size_t seed) {
+    std::mt19937 gen(seed);
     std::uniform_int_distribution<int> dist(0, kNumRotations);
     std::vector<Cube::State> random_positions;
 

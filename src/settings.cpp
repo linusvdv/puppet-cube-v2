@@ -12,12 +12,12 @@
 std::string Settings::root_path;
 bool Settings::test_bcht = false;
 bool Settings::test_dfs = false;
-int Settings::dfs_depth = 5;
+int Settings::dfs_depth = 4;
+size_t Settings::num_dfs_positions = 1000000; // NOLINT
 int Settings::scrambling_depth = 1000;  // NOLINT
 int Settings::num_threads = 1;
 int Settings::tb_depth = 6;  // NOLINT
 int Settings::tb_depth_gpu = 8;  // NOLINT
-size_t Settings::num_dfs_positions = 1000000;
 
 
 static struct option long_options[] = {
@@ -111,23 +111,23 @@ Settings::Settings (int argc, char *argv[]) {
                 test_dfs = true;
                 break;
             case 's':
-                GetTFromOptarg(scrambling_depth, 1, 1000000, "SCRAMBLING DEPTH");
+                GetTFromOptarg(scrambling_depth, 0, 1000000, "SCRAMBLING DEPTH"); // NOLINT
                 break;
             case 0:
                 if (std::string(long_options[option_index].name) == "tb_depth") {
-                    GetTFromOptarg(tb_depth, 1, 9, "TB DEPTH");
+                    GetTFromOptarg(tb_depth, 0, 9, "TB DEPTH"); // NOLINT
                 }
                 if (std::string(long_options[option_index].name) == "tb_depth_gpu") {
-                    GetTFromOptarg(tb_depth_gpu, 1, 9, "TB DEPTH GPU");
+                    GetTFromOptarg(tb_depth_gpu, 1, 9, "TB DEPTH GPU"); // NOLINT
                 }
                 if (std::string(long_options[option_index].name) == "dfs_depth") {
-                    GetTFromOptarg(dfs_depth, 1, 6, "DFS DEPTH");
+                    GetTFromOptarg(dfs_depth, 1, 6, "DFS DEPTH"); // NOLINT
                 }
                 if (std::string(long_options[option_index].name) == "root_path") {
                     root_path = std::string(optarg);
                 }
                 if (std::string(long_options[option_index].name) == "num_dfs_positions") {
-                    GetTFromOptarg(num_dfs_positions, size_t(1), size_t(1e18), "NUM DSF POSITIONS");
+                    GetTFromOptarg(num_dfs_positions, size_t(1), size_t(1e18), "NUM DSF POSITIONS"); // NOLINT
                 }
                 break;
             case '?':

@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <vector>
 
+#include "BCHTSet.cuh"
 #include "cube.hpp"
 #include "logger.hpp"
 #include "settings.hpp"
@@ -31,12 +32,15 @@ struct DFSStack {
 
 // definded in cuda_search.cu
 __device__ bool Rotate(Cube::State& state, const uint8_t& rotation);
+extern __device__ Cube::State* d_tablebase;
+extern __device__ size_t d_tablebebase_size;
+
 
 __device__ constexpr int kDNumRotations = 18;
 
 
 constexpr size_t kBatching = 10;
-__global__ void DFSGlobal(Cube::State* d_random_position, size_t* d_num_nodes_gpu, DFSStack* d_dfs_stack, size_t num_random_position, int depth) {
+__global__ void DFSGlobal(Cube::State* d_random_position, size_t* d_num_nodes_gpu, size_t* d_num_tb_hits_gpu, DFSStack* d_dfs_stack, size_t num_random_position, int depth) {
     size_t index = threadIdx.x + (size_t(blockIdx.x) * blockDim.x);
     if (index*kBatching >= num_random_position) {
         return;
@@ -59,11 +63,17 @@ __global__ void DFSGlobal(Cube::State* d_random_position, size_t* d_num_nodes_gp
     while (dfs_stack_idx >= 0) {
         DFSStack& current = d_dfs_stack[dfs_stack_idx + (index*dfs_stack_size)];
         if (current.depth == 0) {
+            if (DBCHTSetContains(d_tablebase, d_tablebebase_size, current.state)) {
+                d_num_tb_hits_gpu[(index*kBatching)+batch_idx]++;
+            }
             currcnt++;
             dfs_stack_idx--;
             continue;
         }
         if (current.rotation >= kDNumRotations) {
+            if (DBCHTSetContains(d_tablebase, d_tablebebase_size, current.state)) {
+                d_num_tb_hits_gpu[(index*kBatching)+batch_idx]++;
+            }
             currcnt++;
             dfs_stack_idx--;
             if (current.depth == depth) {
@@ -82,12 +92,14 @@ __global__ void DFSGlobal(Cube::State* d_random_position, size_t* d_num_nodes_gp
 }
 
 
-void GPUDFS(const std::vector<Cube::State>& random_position, std::vector<size_t>& num_nodes_gpu) {
+void GPUDFS(const std::vector<Cube::State>& random_position, std::vector<size_t>& num_nodes_gpu, std::vector<size_t>& num_tb_hits_gpu) {
     // upload random_position
     Cube::State* d_random_position = nullptr;
     size_t* d_num_nodes_gpu = nullptr;
+    size_t* d_num_tb_hits_gpu = nullptr;
     UploadToDeviceDFS(random_position, d_random_position);
     UploadToDeviceDFS(num_nodes_gpu, d_num_nodes_gpu);
+    UploadToDeviceDFS(num_tb_hits_gpu, d_num_tb_hits_gpu);
 
     // create d_dfs_stack
     size_t grid_dim = (random_position.size()/kBatching/kBlockDim)+1;
@@ -99,7 +111,7 @@ void GPUDFS(const std::vector<Cube::State>& random_position, std::vector<size_t>
     }
 
     // start kernal
-    DFSGlobal<<<grid_dim, kBlockDim>>>(d_random_position, d_num_nodes_gpu, d_dfs_stack, random_position.size(), Settings::GetDFSDepth());
+    DFSGlobal<<<grid_dim, kBlockDim>>>(d_random_position, d_num_nodes_gpu, d_num_tb_hits_gpu, d_dfs_stack, random_position.size(), Settings::GetDFSDepth());
     err = cudaDeviceSynchronize();
     if (err != cudaSuccess) {
         LOG_CRITICAL(cudaGetErrorString(err));
@@ -107,6 +119,11 @@ void GPUDFS(const std::vector<Cube::State>& random_position, std::vector<size_t>
 
     // get result
     err = cudaMemcpy(num_nodes_gpu.data(), d_num_nodes_gpu, sizeof(size_t)*num_nodes_gpu.size(), cudaMemcpyDeviceToHost);
+    if (err != cudaSuccess) {
+        LOG_CRITICAL(cudaGetErrorString(err));
+    }
+    // get result
+    err = cudaMemcpy(num_tb_hits_gpu.data(), d_num_tb_hits_gpu, sizeof(size_t)*num_tb_hits_gpu.size(), cudaMemcpyDeviceToHost);
     if (err != cudaSuccess) {
         LOG_CRITICAL(cudaGetErrorString(err));
     }
