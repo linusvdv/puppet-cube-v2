@@ -25,7 +25,6 @@ void UploadToDeviceDFS(const std::vector<T>& data, T*& d_pointer) {
 
 struct DFSStack {
     Cube::State state;
-    int rotation;
     int depth;
 };
 
@@ -39,56 +38,44 @@ extern __device__ size_t d_tablebebase_size;
 __device__ constexpr int kDNumRotations = 18;
 
 
-constexpr size_t kBatching = 10;
-__global__ void DFSGlobal(Cube::State* d_random_position, size_t* d_num_nodes_gpu, size_t* d_num_tb_hits_gpu, DFSStack* d_dfs_stack, size_t num_random_position, int depth) {
+constexpr size_t kBatching = 1;
+__global__ void DFSGlobal(Cube::State* d_random_position, size_t* d_num_nodes_gpu, size_t* d_num_tb_hits_gpu, DFSStack* d_dfs_stack, size_t num_random_position, int max_depth) {
     size_t index = threadIdx.x + (size_t(blockIdx.x) * blockDim.x);
-    if (index*kBatching >= num_random_position) {
-        return;
-    }
 
     // device fixed max size stack
-    size_t dfs_stack_size = depth + kBatching + 1;
+    size_t dfs_stack_size = (max_depth*kDNumRotations) + kBatching + 1;
     int64_t dfs_stack_idx = -1;
-
-    size_t upper_start = (index*kBatching)+kBatching - 1;
-    if (upper_start >= num_random_position) {
-        upper_start = num_random_position - 1;
-    }
-    for (int64_t i = upper_start; i >= int64_t(index*kBatching); i--) {
-        d_dfs_stack[(++dfs_stack_idx) + (index*dfs_stack_size)] = {d_random_position[i], 0, depth};
+    size_t end_element = (num_random_position < (1+index)*kBatching) ? num_random_position : ((1+index)*kBatching);
+    for (size_t i = index*kBatching; i < end_element; i++) { // aware that the dfs stack is the normal order so top is higher index
+        d_dfs_stack[(++dfs_stack_idx) + (index*dfs_stack_size)] = {d_random_position[i], 0};
     }
 
-    int64_t batch_idx = 0;
-    size_t currcnt = 0;
+    int64_t batch_idx = kBatching; // lowest dfs_stack_idx visited
     while (dfs_stack_idx >= 0) {
-        DFSStack& current = d_dfs_stack[dfs_stack_idx + (index*dfs_stack_size)];
-        if (current.depth == 0) {
-            if (DBCHTSetContains(d_tablebase, d_tablebebase_size, current.state)) {
-                d_num_tb_hits_gpu[(index*kBatching)+batch_idx]++;
-            }
-            currcnt++;
-            dfs_stack_idx--;
+        if (batch_idx > dfs_stack_idx) {
+            batch_idx = dfs_stack_idx;
+        }
+        d_num_nodes_gpu[batch_idx + (index*kBatching)]++;
+
+        int current_depth = d_dfs_stack[dfs_stack_idx + (index*dfs_stack_size)].depth;
+        Cube::State current = d_dfs_stack[dfs_stack_idx + (index*dfs_stack_size)].state;
+        dfs_stack_idx--; // remove current position
+
+        if (DBCHTSetContains(d_tablebase, d_tablebebase_size, current)) {
+            d_num_tb_hits_gpu[batch_idx + (index*kBatching)]++;
+        }
+
+        if (current_depth == max_depth) {
             continue;
         }
-        if (current.rotation >= kDNumRotations) {
-            if (DBCHTSetContains(d_tablebase, d_tablebebase_size, current.state)) {
-                d_num_tb_hits_gpu[(index*kBatching)+batch_idx]++;
+
+        for (uint8_t rotation = 0; rotation < kDNumRotations; rotation++) {
+            d_dfs_stack[(++dfs_stack_idx) + (index*dfs_stack_size)] = {current, current_depth+1};
+            if (!Rotate(d_dfs_stack[dfs_stack_idx + (index*dfs_stack_size)].state, rotation)) {
+                dfs_stack_idx--; // not a legal move
             }
-            currcnt++;
-            dfs_stack_idx--;
-            if (current.depth == depth) {
-                d_num_nodes_gpu[(index*kBatching)+batch_idx] = currcnt;
-                currcnt = 0;
-                batch_idx++;
-            }
-            continue;
-        }
-        Cube::State next = current.state;
-        if (Rotate(next, current.rotation++)) {
-            d_dfs_stack[(++dfs_stack_idx) + (index*dfs_stack_size)] = {next, 0, current.depth-1};
         }
     }
-
 }
 
 
@@ -103,7 +90,8 @@ void GPUDFS(const std::vector<Cube::State>& random_position, std::vector<size_t>
 
     // create d_dfs_stack
     size_t grid_dim = (random_position.size()/kBatching/kBlockDim)+1;
-    size_t dfs_stack_size = Settings::GetDFSDepth() + kBatching + 1;
+    LOG_EXTRA("grid dim:", grid_dim, "block dim", kBlockDim);
+    size_t dfs_stack_size = (Settings::GetDFSDepth()*kNumRotations) + kBatching + 1;
     DFSStack* d_dfs_stack = nullptr;
     cudaError err = cudaMalloc((void**)&d_dfs_stack, grid_dim * kBlockDim * dfs_stack_size * sizeof(DFSStack));
     if (err != cudaSuccess) {
