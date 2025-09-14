@@ -17,7 +17,7 @@ int Settings::scrambling_depth = 1000;  // NOLINT
 int Settings::num_threads = 1;
 int Settings::tb_depth = 6;  // NOLINT
 int Settings::tb_depth_gpu = 8;  // NOLINT
-size_t Settings::num_tb_positions = 1000000;
+size_t Settings::num_dfs_positions = 1000000;
 
 
 static struct option long_options[] = {
@@ -26,11 +26,11 @@ static struct option long_options[] = {
     {"threads", required_argument, NULL, 't'},
     {"tb_depth", required_argument, NULL, 0},
     {"tb_depth_gpu", required_argument, NULL, 0},
-    {"DFS", no_argument, NULL, 'D'},
-    {"DFS_depth", required_argument, NULL, 0},
+    {"dfs", no_argument, NULL, 'D'},
+    {"dfs_depth", required_argument, NULL, 0},
     {"root_path", required_argument, NULL, 0},
-    {"scrambling_depth", required_argument, NULL, 0},
-    {"num_tb_positions", required_argument, NULL, 0},
+    {"scrambling_depth", required_argument, NULL, 's'},
+    {"num_dfs_positions", required_argument, NULL, 0},
     {NULL, 0, NULL, 0}
 };
 
@@ -91,7 +91,7 @@ Settings::Settings (int argc, char *argv[]) {
     temp_root_path.append("/../../");
     root_path.append(temp_root_path);
 
-    const char* short_options = "hBt:D";
+    const char* short_options = "hBt:Ds:";
     opterr = 0; // supress error messages from getopt_long
     int option_index;
     signed char cop;
@@ -110,6 +110,9 @@ Settings::Settings (int argc, char *argv[]) {
             case 'D':
                 test_dfs = true;
                 break;
+            case 's':
+                GetTFromOptarg(scrambling_depth, 1, 1000000, "SCRAMBLING DEPTH");
+                break;
             case 0:
                 if (std::string(long_options[option_index].name) == "tb_depth") {
                     GetTFromOptarg(tb_depth, 1, 9, "TB DEPTH");
@@ -117,17 +120,14 @@ Settings::Settings (int argc, char *argv[]) {
                 if (std::string(long_options[option_index].name) == "tb_depth_gpu") {
                     GetTFromOptarg(tb_depth_gpu, 1, 9, "TB DEPTH GPU");
                 }
-                if (std::string(long_options[option_index].name) == "DFS_depth") {
+                if (std::string(long_options[option_index].name) == "dfs_depth") {
                     GetTFromOptarg(dfs_depth, 1, 6, "DFS DEPTH");
                 }
                 if (std::string(long_options[option_index].name) == "root_path") {
                     root_path = std::string(optarg);
                 }
-                if (std::string(long_options[option_index].name) == "scrambling_depth") {
-                    GetTFromOptarg(scrambling_depth, 1, 1000000, "SCRAMBLING DEPTH");
-                }
-                if (std::string(long_options[option_index].name) == "num_tb_positions") {
-                    GetTFromOptarg(num_tb_positions, size_t(1), size_t(1e18), "NUM TB POSITIONS");
+                if (std::string(long_options[option_index].name) == "num_dfs_positions") {
+                    GetTFromOptarg(num_dfs_positions, size_t(1), size_t(1e18), "NUM DSF POSITIONS");
                 }
                 break;
             case '?':

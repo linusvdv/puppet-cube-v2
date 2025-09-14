@@ -37,7 +37,7 @@ void TimeDFS() {
     if (!Settings::GetTestDFS()) {
         return;
     }
-    std::vector<Cube::State> random_positions = RandomPositions(Settings::GetNumTBPositions()); 
+    std::vector<Cube::State> random_positions = RandomPositions(Settings::GetNumDFSPositions()); 
 
     std::vector<size_t> num_nodes_cpu(random_positions.size(), 0);
 
@@ -57,7 +57,7 @@ void TimeDFS() {
     LOG_ALL("Time duration for DFS multithreads:", dfs_time_multi.count());
 
     #ifdef USE_CUDA
-    std::vector<size_t> num_nodes_gpu(random_positions.size(), 1e9);
+    std::vector<size_t> num_nodes_gpu(random_positions.size(), 0);
     // Time phmap multithreads
     LOG_EXTRA("Start timing of DFS GPU");
     std::chrono::time_point dfs_start_time_gpu = std::chrono::high_resolution_clock::now(); // get the current time
@@ -71,6 +71,15 @@ void TimeDFS() {
 
     if (num_nodes_cpu == num_nodes_gpu) {
         LOG_INFO("Correct DFS");
+        size_t total_num_positions = 0;
+        for (size_t i = 0; i < num_nodes_cpu.size(); i++) {
+            total_num_positions += num_nodes_cpu[i];
+        }
+        LOG_EXTRA("CPU Total num positions:", total_num_positions);
+        LOG_EXTRA("CPU Positions per seconds:", total_num_positions*1000/dfs_time_multi.count());
+
+        LOG_EXTRA("GPU Total num positions:", total_num_positions);
+        LOG_EXTRA("GPU Positions per seconds:", total_num_positions*1000/dfs_time_multi_gpu.count());
     }
     else {
         LOG_ERROR("Not the same elements");

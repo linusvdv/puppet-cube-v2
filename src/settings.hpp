@@ -42,8 +42,8 @@ public:
         return tb_depth_gpu;
     }
 
-    static size_t GetNumTBPositions() {
-        return num_tb_positions;
+    static size_t GetNumDFSPositions() {
+        return num_dfs_positions;
     }
 
 private:
@@ -64,5 +64,5 @@ private:
     // tb_depth_gpu
     static int tb_depth;
     static int tb_depth_gpu;
-    static size_t num_tb_positions;
+    static size_t num_dfs_positions;
 };
