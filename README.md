@@ -5,21 +5,13 @@
 <!--toc:start-->
 - [puppet-cube-v2](#puppet-cube-v2)
   - [Abstract](#abstract)
-  - [Requirements](#requirements)
   - [Compilation](#compilation)
-  - [Run](#run)
+  - [Help](#help)
 <!--toc:end-->
 
 ## Abstract
 
 In this thesis, the Puppet Cube V2, a shapeshifting variant of the classic Rubik’s Cube, is investigated in two parts, namely its 3D rendering and its solution finding with the help of a search. The interactive visualization of this cube incorporates features such as lighting and transparency. The primary focus of this study was the search. The Puppet Cube V2, represented as a graph, is used to investigate five different graph algorithms. The resulting program is able to find short solutions to randomly scrambled cubes quickly and improves the found solution with additional search time. A comprehensive description of the final implementation is provided, which is able to prove an optimal solution, although there exist $5 \cdot 10^{18}$ positions of the Puppet Cube V2. The algorithm runs in parallel to enhance computational efficiency. Additionally, the thesis presents key properties of the Puppet Cube V2 and the employed algorithm. Notably, a lower bound for God’s Number is established, which shows that there exist positions where 30 moves are required to solve the cube. Furthermore, the research highlights improvements in the average depth when searching for longer. Finally, a comparison to a state-of-the-art Rubik’s Cube solver further proves the effectiveness of the proposed approach.
-
-## Requirements
-
-- cuda >= 12
-
-- Nvidia GPU > XXX GB RAM
-- XXX RAM
 
 ## Compilation
 
@@ -42,8 +34,27 @@ cmake -B build -DUSE_CUDA=OFF
 cmake --build build -j
 ```
 
-## Run
+## Help
 
 ```bash
-./build/bin/PuppetCubeV2
+usage: ./build/bin/PuppetCubeV2 [options]
+    --option=value
+    --option value
+    -ovalue
+    -o value
+
+list of options
+    -h --help              show this message
+    --root_path            path to root folder puppet-cube-v2            [./PathToPuppetCubeV2/../../]
+
+    -t --threads           number of threads used in the program         [MAX_THREADS]  (1, MAX_THREADS)
+    --tb_depth             depth of the tablebase (9 uses 40 GB RAM)     [6]            (0, 9)
+    --tb_depth_gpu         how much get sent to GPU (<= CPU)             [8]            (0, 9)
+    -s --scrambling_depth  how many moves to scramble                    [100]          (0, 1000000)
+
+    -B --BCHT              time BCHT with comparison to phmap
+
+    -D --dfs               time dfs on CPU [and GPU]
+    --dfs_depth            depth searched from the dfs                   [4]            (1, 6)
+    --num_dfs_positions    number of different dfs positions searched    [1000000]      (1, 1e18)
 ```

@@ -14,7 +14,7 @@ bool Settings::test_bcht = false;
 bool Settings::test_dfs = false;
 int Settings::dfs_depth = 4;
 size_t Settings::num_dfs_positions = 1000000; // NOLINT
-int Settings::scrambling_depth = 1000;  // NOLINT
+int Settings::scrambling_depth = 100;  // NOLINT
 int Settings::num_threads = 1;
 int Settings::tb_depth = 6;  // NOLINT
 int Settings::tb_depth_gpu = 8;  // NOLINT
@@ -22,17 +22,45 @@ int Settings::tb_depth_gpu = 8;  // NOLINT
 
 static struct option long_options[] = {
     {"help", no_argument, NULL, 'h'},
-    {"BCHT", no_argument, NULL, 'B'},
+    {"root_path", required_argument, NULL, 0},
+
     {"threads", required_argument, NULL, 't'},
     {"tb_depth", required_argument, NULL, 0},
     {"tb_depth_gpu", required_argument, NULL, 0},
+    {"scrambling_depth", required_argument, NULL, 's'},
+
+    {"BCHT", no_argument, NULL, 'B'},
+
     {"dfs", no_argument, NULL, 'D'},
     {"dfs_depth", required_argument, NULL, 0},
-    {"root_path", required_argument, NULL, 0},
-    {"scrambling_depth", required_argument, NULL, 's'},
     {"num_dfs_positions", required_argument, NULL, 0},
+
     {NULL, 0, NULL, 0}
 };
+
+
+std::string help_msg = R"(
+usage: ./build/bin/PuppetCubeV2 [options]
+    --option=value
+    --option value
+    -ovalue
+    -o value
+
+list of options
+    -h --help              show this message
+    --root_path            path to root folder puppet-cube-v2            [./PathToPuppetCubeV2/../../]
+
+    -t --threads           number of threads used in the program         [MAX_THREADS]  (1, MAX_THREADS)
+    --tb_depth             depth of the tablebase (9 uses 40 GB RAM)     [6]            (0, 9)
+    --tb_depth_gpu         how much get sent to GPU (<= CPU)             [8]            (0, 9)
+    -s --scrambling_depth  how many moves to scramble                    [100]          (0, 1000000)
+
+    -B --BCHT              time BCHT with comparison to phmap
+
+    -D --dfs               time dfs on CPU [and GPU]
+    --dfs_depth            depth searched from the dfs                   [4]            (1, 6)
+    --num_dfs_positions    number of different dfs positions searched    [1000000]      (1, 1e18)
+)";
 
 
 template<typename T>
@@ -99,6 +127,7 @@ Settings::Settings (int argc, char *argv[]) {
     while ((cop = getopt_long(argc, argv, short_options, long_options, &option_index)) != -1) {
         switch (cop) {
             case 'h':
+                LOG_ALL(help_msg);
                 // --help
                 exit(0);
             case 'B':
@@ -118,7 +147,7 @@ Settings::Settings (int argc, char *argv[]) {
                     GetTFromOptarg(tb_depth, 0, 9, "TB DEPTH"); // NOLINT
                 }
                 if (std::string(long_options[option_index].name) == "tb_depth_gpu") {
-                    GetTFromOptarg(tb_depth_gpu, 1, 9, "TB DEPTH GPU"); // NOLINT
+                    GetTFromOptarg(tb_depth_gpu, 0, 9, "TB DEPTH GPU"); // NOLINT
                 }
                 if (std::string(long_options[option_index].name) == "dfs_depth") {
                     GetTFromOptarg(dfs_depth, 1, 6, "DFS DEPTH"); // NOLINT
