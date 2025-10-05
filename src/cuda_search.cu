@@ -42,7 +42,7 @@ __device__ uint32_t* d_edge_positions = nullptr;
 __device__ uint8_t* d_edge_heuristics = nullptr;
 
 __device__ Cube::State* d_tablebase = nullptr;
-__device__ size_t d_tablebebase_size = 0;
+__device__ size_t d_tablebase_size = 0;
 
 __device__ Cube::State* d_random_positions = nullptr;
 __device__ size_t d_random_positions_size = 0;
@@ -108,7 +108,7 @@ void UploadCubeComputationToDevice(
 void UploadTablebaseToDevice(const std::vector<Cube::State>& tablebebase) {
     UploadToDevice(tablebebase, d_tablebase);
     size_t temp_size = tablebebase.size();
-    cudaError_t err = cudaMemcpyToSymbol(d_tablebebase_size, &temp_size, sizeof(temp_size));
+    cudaError_t err = cudaMemcpyToSymbol(d_tablebase_size, &temp_size, sizeof(temp_size));
     if (err != cudaSuccess) {
         LOG_CRITICAL(cudaGetErrorString(err));
     }
@@ -130,7 +130,7 @@ constexpr size_t kBatching = 10;
 __global__ void DTimeBCHTtable(unsigned long long* hit, unsigned long long* miss) {
     size_t index = threadIdx.x + (blockIdx.x * blockDim.x);
     for (size_t i = index*kBatching; i < (index+1)*kBatching && i < d_random_positions_size; i++) {
-        if (DBCHTSetContains(d_tablebase, d_tablebebase_size, d_random_positions[i])) {
+        if (DBCHTSetContains(d_tablebase, d_tablebase_size, d_random_positions[i])) {
             atomicAdd(hit, size_t(1));
         }
         else {
@@ -187,5 +187,6 @@ void TimeBCHTGPU() {
         std::chrono::time_point gpu_since_epoch = std::chrono::high_resolution_clock::now(); // get the duration since epoch
         std::chrono::milliseconds gpu_millis = std::chrono::duration_cast<std::chrono::milliseconds>(gpu_since_epoch - gpu_time);
         LOG_ALL("Time duration on GPU:", gpu_millis.count());
+        LOG_MEMORY();
     }
 }

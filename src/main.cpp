@@ -23,6 +23,7 @@ int main (int argc, char *argv[]) {
     Tablebase::Initialize();
     LOG_INFO("Tablebase Initialized");
     Tablebase::UploadComputationToDevice();
+    LOG_MEMORY();
 
     // time BCHT on GPU
     #ifdef USE_CUDA
@@ -30,6 +31,7 @@ int main (int argc, char *argv[]) {
     #endif
 
     TimeDFS();
+    LOG_MEMORY();
 
     return 0;
 }

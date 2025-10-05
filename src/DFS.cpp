@@ -46,6 +46,7 @@ void TimeDFS() {
 
     std::vector<size_t> num_nodes_cpu(random_positions.size(), 0);
     std::vector<size_t> num_tb_hits_cpu(random_positions.size(), 0);
+    LOG_MEMORY();
 
     // Time phmap multithreads
     LOG_EXTRA("Start timing of DFS multithreads");
@@ -87,6 +88,18 @@ void TimeDFS() {
 
         LOG_EXTRA("GPU Total num positions:", total_num_positions);
         LOG_EXTRA("GPU Positions per seconds:", int64_t(total_num_positions*1000/(dfs_time_multi_gpu.count()+1e-3)));
+
+        size_t total_real_positions = 0;
+        size_t max = 0;
+        for (size_t i = 0; i < num_nodes_cpu.size(); i++) {
+            max = std::max(max, num_nodes_gpu[i]);
+            if ((i+1)%kBlockDim == 0) {
+                total_real_positions += max*kBlockDim;
+                max = 0;
+            }
+        }
+        total_real_positions += max*kBlockDim;
+        LOG_EXTRA("Real GPU tablebase lookups: ", total_real_positions);
     }
     else {
         LOG_ERROR("Not the same elements");

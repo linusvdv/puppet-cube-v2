@@ -32,7 +32,7 @@ struct DFSStack {
 // definded in cuda_search.cu
 __device__ bool Rotate(Cube::State& state, const uint8_t& rotation);
 extern __device__ Cube::State* d_tablebase;
-extern __device__ size_t d_tablebebase_size;
+extern __device__ size_t d_tablebase_size;
 
 
 __device__ constexpr int kDNumRotations = 18;
@@ -61,7 +61,7 @@ __global__ void DFSGlobal(Cube::State* d_random_position, size_t* d_num_nodes_gp
         Cube::State current = d_dfs_stack[dfs_stack_idx + (index*dfs_stack_size)].state;
         dfs_stack_idx--; // remove current position
 
-        if (DBCHTSetContains(d_tablebase, d_tablebebase_size, current)) {
+        if (DBCHTSetContains(d_tablebase, d_tablebase_size, current)) {
             d_num_tb_hits_gpu[batch_idx + (index*kBatching)]++;
         }
 
@@ -84,19 +84,24 @@ void GPUDFS(const std::vector<Cube::State>& random_position, std::vector<size_t>
     Cube::State* d_random_position = nullptr;
     size_t* d_num_nodes_gpu = nullptr;
     size_t* d_num_tb_hits_gpu = nullptr;
+    LOG_MEMORY();
     UploadToDeviceDFS(random_position, d_random_position);
     UploadToDeviceDFS(num_nodes_gpu, d_num_nodes_gpu);
     UploadToDeviceDFS(num_tb_hits_gpu, d_num_tb_hits_gpu);
+    LOG_MEMORY();
 
     // create d_dfs_stack
     size_t grid_dim = (random_position.size()/kBatching/kBlockDim)+1;
     LOG_EXTRA("grid dim:", grid_dim, "block dim", kBlockDim);
     size_t dfs_stack_size = (Settings::GetDFSDepth()*kNumRotations) + kBatching + 1;
     DFSStack* d_dfs_stack = nullptr;
+    LOG_EXTRA("Memory size:", grid_dim * kBlockDim * dfs_stack_size * sizeof(DFSStack));
+    LOG_EXTRA("grid_dim:", grid_dim, "blockDim:", kBlockDim, "dfs_stack_size:", dfs_stack_size, "sizeof(DFSStack):", sizeof(DFSStack));
     cudaError err = cudaMalloc((void**)&d_dfs_stack, grid_dim * kBlockDim * dfs_stack_size * sizeof(DFSStack));
     if (err != cudaSuccess) {
         LOG_CRITICAL(cudaGetErrorString(err));
     }
+    LOG_MEMORY();
 
     // start kernal
     DFSGlobal<<<grid_dim, kBlockDim>>>(d_random_position, d_num_nodes_gpu, d_num_tb_hits_gpu, d_dfs_stack, random_position.size(), Settings::GetDFSDepth());
