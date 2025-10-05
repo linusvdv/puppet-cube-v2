@@ -11,7 +11,7 @@
 #include "corner_orientation.hpp"
 #include "corner_position.hpp"
 #include "cube.hpp"
-#include "cuda_search.cuh"
+#include "search.cuh"
 #include "edge_heuristic.hpp"
 #include "edge_orientation.hpp"
 #include "edge_position.hpp"
@@ -150,6 +150,7 @@ bool Cube::State::Rotate(uint8_t rotation) {
     hash_2 = corner_position; // 16 bytes
     return true;
 }
+
 
 void Cube::UploadComputationToDevice() {
     #ifdef USE_CUDA

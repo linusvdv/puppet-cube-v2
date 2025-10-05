@@ -12,7 +12,7 @@
 #include "tablebase.hpp"
 
 #ifdef USE_CUDA
-#include "cuda_search.cuh"
+#include "search.cuh"
 #endif // USE_CUDA
 
 

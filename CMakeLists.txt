@@ -90,7 +90,7 @@ if(USE_CUDA)
     add_compile_definitions(USE_CUDA)
 
     target_sources(PuppetCubeV2 PRIVATE
-        src/cuda_search.cu
+        src/search.cu
         src/BCHTSet.cu
         src/DFS.cu
     )

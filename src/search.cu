@@ -3,7 +3,7 @@
 
 #include "BCHTSet.cuh"
 #include "cube.hpp"
-#include "cuda_search.cuh"
+#include "search.cuh"
 #include "logger.hpp"
 #include "settings.hpp"
 #include "tablebase.hpp"
