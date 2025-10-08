@@ -1,5 +1,5 @@
 #pragma once
-#include "cube.hpp"
+#include "cube.cuh"
 
 
-__device__ bool DBCHTSetContains(const Cube::State* d_tablebase, const size_t& d_tablebase_size, const Cube::State& key);
+__device__ bool DBCHTSetContains(const DState* d_tablebase, const size_t& d_tablebase_size, const DState& key);

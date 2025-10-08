@@ -4,10 +4,10 @@
 #include "logger.hpp"
 
 
-using TablebasePrecomputation = phmap::parallel_flat_hash_set<Cube::State,
-    phmap::priv::hash_default_hash<Cube::State>,
-    phmap::priv::hash_default_eq<Cube::State>,
-    phmap::priv::Allocator<Cube::State>,
+using TablebasePrecomputation = phmap::parallel_flat_hash_set<State,
+    phmap::priv::hash_default_hash<State>,
+    phmap::priv::hash_default_eq<State>,
+    phmap::priv::Allocator<State>,
     12, std::mutex>;
 
 
@@ -23,5 +23,5 @@ public:
         #endif // USE_CUDA
     }
 
-    static std::vector<std::vector<Cube::State>> tablebase;
+    static std::vector<std::vector<State>> tablebase;
 };

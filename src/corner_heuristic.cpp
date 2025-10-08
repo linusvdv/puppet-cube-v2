@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <thread>
 #include <vector>
+#include <parallel_hashmap/phmap.h>
 
 #include "corner_orientation.hpp"
 #include "cube.hpp"

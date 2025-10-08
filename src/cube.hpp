@@ -1,8 +1,8 @@
 #pragma once
 #include <compare>
+#include <cstddef>
 #include <cstdint>
 #include <vector>
-#include <parallel_hashmap/phmap.h>
 
 
 constexpr int kNumCorners = 8;
@@ -43,47 +43,74 @@ enum Rotations : uint8_t {
     kSc
 };
 
+
+// 10 bytes
+#pragma pack(push, 1)
+struct State {
+    uint16_t hash_1 = -1;
+    uint32_t hash_2 = -1;
+    uint32_t hash_3 = -1;
+
+    constexpr State(const uint16_t& corner_orientation,  // 12 bites
+                    const uint16_t& corner_position,     // 16 bites
+                    const uint16_t& edge_orientation,    // 11 bites
+                    const uint32_t& edge_position_1,     // 20 bites
+                    const uint32_t& edge_position_2) {   // 20 bites
+        // hash 1
+        hash_1 = corner_position;    // 16 bites
+
+        // hash 2
+        hash_2 = corner_orientation; // 12 bites
+        hash_2 <<= 20; // NOLINT
+        hash_2 |= edge_position_1;   // 20 bites
+
+        // hash 3
+        hash_3 = edge_orientation;   // 11 bites
+        hash_3 <<= 20; // NOLINT
+        hash_3 |= edge_position_2;   // 20 bites
+    }
+
+    // Default not legal State
+    constexpr State() {}
+
+    std::strong_ordering operator<=>(const State&) const = default;
+
+    static constexpr uint64_t kMulA = 0x2545f4914f6cdd1dULL;
+    static constexpr uint64_t kMulB = 0x9e3779b97f4a7c15ULL;
+
+    static uint64_t Mix64(uint64_t num) {
+        num ^= num >> 31;  // NOLINT
+        num *= kMulA;
+        num ^= num >> 33;  // NOLINT
+        num *= kMulB;
+        num ^= num >> 28;  // NOLINT
+        return num;
+    }
+
+    template<uint64_t hash_low, uint64_t hash_high>
+    uint64_t SplitMix64() const {
+        return Mix64(uint64_t(hash_1) ^ hash_low) ^ Mix64(((uint64_t(hash_2) << 32) | uint64_t(hash_3)) ^ hash_high);
+    }
+
+    // Used for phmap
+    friend std::size_t hash_value(const State& state) {  // NOLINT
+        return state.SplitMix64<0x123456789abcdef0ULL, 0xfedcba9876543210ULL>(); // NOLINT
+    }
+};
+#pragma pack(pop)
+
+
+constexpr State kSolvedState = State(0, 0, 0, 0, kNumEdgePositions-1);
+
+
 class Cube {
 public:
-    // 10 bytes
-    #pragma pack(push, 1)
-    struct State {
-        uint64_t hash_1 = -1;
-        uint16_t hash_2 = -1;
-
-        State(uint16_t corner_orientation, uint16_t corner_position, uint16_t edge_orientation, uint32_t edge_position_1, uint32_t edge_position_2) {
-            hash_1 = 0;
-            hash_1 = uint64_t(corner_orientation); // 12 bytes
-            hash_1 <<= 11; // NOLINT
-            hash_1 |= uint64_t(edge_orientation); // 11 bytes
-            hash_1 <<= 20; // NOLINT
-            hash_1 |= uint64_t(edge_position_1); // 20 bytes
-            hash_1 <<= 20; // NOLINT
-            hash_1 |= uint64_t(edge_position_2); // 20 bytes
-            hash_2 = corner_position; // 16 bytes
-        }
-
-        State() {}
-
-        std::strong_ordering operator<=>(const State&) const = default;
-
-        bool Rotate(uint8_t rotation);
-
-        friend std::size_t hash_value(const State& state) {  // NOLINT
-            std::size_t h1 = std::hash<uint64_t>{}(state.hash_1 ^ 0x123456789abcdef0ULL); // NOLINT
-            std::size_t h2 = std::hash<uint64_t>{}(uint64_t(state.hash_2) ^ 0xfedcba9876543210ULL); // NOLINT
-
-            return h1 ^ h2;
-        }
-    };
-    #pragma pack(pop)
-
     // corner and edge precomputation
     static void Initialize();
 
     static void UploadComputationToDevice();
 
-    Cube();
+    static std::pair<bool, State> Rotate(const State& prev_state, const uint8_t& rotation);
 
 private:
     // precomputation
@@ -94,6 +121,4 @@ private:
     static std::vector<uint16_t> edge_orientations;
     static std::vector<uint32_t> edge_positions;
     static std::vector<uint8_t> edge_heuristics;
-
-    State cube_;
 };

@@ -6,12 +6,11 @@
 #include <string>
 #include <vector>
 
-#include "BCHTSet.hpp"
 #include "corner_heuristic.hpp"
 #include "corner_orientation.hpp"
 #include "corner_position.hpp"
 #include "cube.hpp"
-#include "search.cuh"
+#include "cube_bridge.hpp"
 #include "edge_heuristic.hpp"
 #include "edge_orientation.hpp"
 #include "edge_position.hpp"
@@ -108,47 +107,26 @@ void Cube::Initialize() {
 }
 
 
-Cube::Cube() {
-    cube_ = State(0, 0, 0, 0, kNumEdgePositions-1);
-}
-
-
 constexpr std::array<uint8_t, kNumRotations> kLegalMoveIndex = {
     8, 9, 8, 9, 10, 11, 10, 11, 12, 13, 12, 13, 0, 0, 0, 0, 0, 0
 };
 
 
-bool Cube::State::Rotate(uint8_t rotation) {
-    uint16_t corner_orientation; // 12 bytes
-    uint16_t corner_position = hash_2; // 16 bytes
-    uint16_t edge_orientation; // 11 bytes
-    uint32_t edge_position_1; // 20 bytes
-    uint32_t edge_position_2; // 20 bytes
-    edge_position_2 = hash_1 & ((1ULL << 20) - 1ULL); // NOLINT
-    hash_1 >>= 20; // NOLINT
-    edge_position_1 = hash_1 & ((1ULL << 20) - 1ULL); // NOLINT
-    hash_1 >>= 20; // NOLINT
-    edge_orientation = hash_1 & ((1ULL << 11) - 1ULL); // NOLINT
-    hash_1 >>= 11; // NOLINT
-    corner_orientation = hash_1;
+std::pair<bool, State> Cube::Rotate(const State& prev_state, const uint8_t& rotation) {
+    uint16_t corner_orientation = prev_state.hash_2 >> 20;      // 12 bites
+    uint16_t corner_position = prev_state.hash_1;               // 16 bites
+    uint16_t edge_orientation = prev_state.hash_3 >> 20;        // 11 bites
+    uint32_t edge_position_1 = prev_state.hash_2 & ((1<<20)-1); // 20 bites
+    uint32_t edge_position_2 = prev_state.hash_3 & ((1<<20)-1); // 20 bites
     if (kLegalMoveIndex[rotation] != 0 && ((corner_heuristics[(corner_orientation*kNumCornerPositions) + corner_position] >> kLegalMoveIndex[rotation]) & 1) == 0) {
-        return false;
+        return {false, prev_state};
     }
     corner_orientation = corner_orientations[(corner_orientation*kNumRotations) + rotation];
     corner_position = corner_positions[(corner_position*kNumRotations) + rotation];
     edge_orientation = edge_orientations[(edge_orientation*kNumRotations) + rotation];
     edge_position_1 = edge_positions[(edge_position_1*kNumRotations) + rotation];
     edge_position_2 = edge_positions[(edge_position_2*kNumRotations) + rotation];
-    hash_1 = 0;
-    hash_1 = uint64_t(corner_orientation); // 12 bytes
-    hash_1 <<= 11; // NOLINT
-    hash_1 |= uint64_t(edge_orientation); // 11 bytes
-    hash_1 <<= 20; // NOLINT
-    hash_1 |= uint64_t(edge_position_1); // 20 bytes
-    hash_1 <<= 20; // NOLINT
-    hash_1 |= uint64_t(edge_position_2); // 20 bytes
-    hash_2 = corner_position; // 16 bytes
-    return true;
+    return {true, State(corner_orientation, corner_position, edge_orientation, edge_position_1, edge_position_2)};
 }
 
 
@@ -157,5 +135,6 @@ void Cube::UploadComputationToDevice() {
     LOG_EXTRA("Start Cube Uploading Precomutation to Device");
     UploadCubeComputationToDevice(corner_orientations, corner_positions, corner_heuristics, edge_orientations, edge_positions, edge_heuristics);
     LOG_INFO("Cube Precomutation Uploaded to Device");
+    LOG_MEMORY();
     #endif // USE_CUDA
 }

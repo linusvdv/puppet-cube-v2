@@ -14,7 +14,7 @@
 #endif
 
 
-void DFS(const Cube::State& current, size_t& cnt, size_t& tb_cnt, int depth) {
+void DFS(const State& current, size_t& cnt, size_t& tb_cnt, int depth) {
     cnt++;
     if (BCHTSetContains(Tablebase::tablebase.back(), current)) {
         tb_cnt++;
@@ -23,15 +23,15 @@ void DFS(const Cube::State& current, size_t& cnt, size_t& tb_cnt, int depth) {
         return;
     }
     for (int rotation = 0; rotation < kNumRotations; rotation++) {
-        Cube::State next = current;
-        if (next.Rotate(rotation)) {
-            DFS(next, cnt, tb_cnt, depth-1);
+        std::pair<bool, State> next = Cube::Rotate(current, rotation);
+        if (next.first) {
+            DFS(next.second, cnt, tb_cnt, depth-1);
         }
     }
 }
 
 
-void MultiDFS(const std::vector<Cube::State>& random_position, std::vector<size_t>& num_nodes_cpu, std::vector<size_t>& num_tb_hits_cpu, int thread_idx, int num_threads) {
+void MultiDFS(const std::vector<State>& random_position, std::vector<size_t>& num_nodes_cpu, std::vector<size_t>& num_tb_hits_cpu, int thread_idx, int num_threads) {
     for (size_t i = thread_idx; i < random_position.size(); i += num_threads) {
         DFS(random_position[i], num_nodes_cpu[i], num_tb_hits_cpu[i], Settings::GetDFSDepth());
     }
@@ -42,7 +42,7 @@ void TimeDFS() {
     if (!Settings::GetTestDFS()) {
         return;
     }
-    std::vector<Cube::State> random_positions = RandomPositions(Settings::GetNumDFSPositions(), 0);
+    std::vector<State> random_positions = RandomPositions(Settings::GetNumDFSPositions(), 0);
 
     std::vector<size_t> num_nodes_cpu(random_positions.size(), 0);
     std::vector<size_t> num_tb_hits_cpu(random_positions.size(), 0);
