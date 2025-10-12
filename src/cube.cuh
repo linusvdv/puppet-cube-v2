@@ -50,7 +50,6 @@ __device__ constexpr uint64_t kDMulB = 0x9e3779b97f4a7c15ULL;
 
 
 // 10 bytes
-#pragma pack(push, 1)
 struct DState {
     uint16_t hash_1 = -1;
     uint32_t hash_2 = -1;
@@ -102,7 +101,6 @@ struct DState {
         return Mix64(uint64_t(hash_1) ^ hash_low) ^ Mix64(((uint64_t(hash_2) << 32) | uint64_t(hash_3)) ^ hash_high);
     }
 };
-#pragma pack(pop)
 
 
 __device__ constexpr DState kDSolvedState = DState(0, 0, 0, 0, kDNumEdgePositions-1);

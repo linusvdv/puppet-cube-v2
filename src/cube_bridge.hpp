@@ -1,6 +1,7 @@
 // This file is only a bridge between cube cpp and cube cuda code
 // This will reference the cube_bridge.cu file
 #pragma once
+#include <cstdint>
 #include <vector>
 
 void UploadCubeComputationToDevice(

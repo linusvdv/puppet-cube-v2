@@ -45,7 +45,6 @@ enum Rotations : uint8_t {
 
 
 // 10 bytes
-#pragma pack(push, 1)
 struct State {
     uint16_t hash_1 = -1;
     uint32_t hash_2 = -1;
@@ -97,7 +96,6 @@ struct State {
         return state.SplitMix64<0x123456789abcdef0ULL, 0xfedcba9876543210ULL>(); // NOLINT
     }
 };
-#pragma pack(pop)
 
 
 constexpr State kSolvedState = State(0, 0, 0, 0, kNumEdgePositions-1);
