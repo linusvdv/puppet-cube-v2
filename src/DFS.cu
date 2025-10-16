@@ -39,7 +39,7 @@ __global__ void DFSGlobal(DState* d_random_position, size_t num_random_position,
     }
 
     // device fixed max size stack in registes
-    DFSStack dfs_stack[kMaxDFSDepth];
+    DFSStack dfs_stack[kMaxDFSDepth+1];
     int8_t dfs_stack_idx = 0;
     dfs_stack[dfs_stack_idx] = {0, 0, d_random_position[index]};
 
@@ -47,19 +47,20 @@ __global__ void DFSGlobal(DState* d_random_position, size_t num_random_position,
     size_t cur_num_tb_hits_gpu = 0;
 
     while (dfs_stack_idx >= 0) {
-        cur_num_nodes_gpu++;
-
-        if (dfs_stack[dfs_stack_idx].rotation == 0 && DCube::DTablebaseContains(dfs_stack[dfs_stack_idx].state)) {
-            cur_num_tb_hits_gpu++;
+        if (dfs_stack[dfs_stack_idx].rotation == 0) {
+            cur_num_nodes_gpu++;
+            if (DCube::DTablebaseContains(dfs_stack[dfs_stack_idx].state)) {
+                cur_num_tb_hits_gpu++;
+            }
         }
-
 
         int8_t cur_depth = dfs_stack[dfs_stack_idx].depth;
         if (cur_depth == max_depth) {
+            dfs_stack_idx--;
             continue;
         }
 
-        DRotateReturn next = DCube::Rotate(dfs_stack[dfs_stack_idx].state, dfs_stack[dfs_stack_idx].rotation);
+        DRotateReturn next = DCube::Rotate(dfs_stack[dfs_stack_idx].state, dfs_stack[dfs_stack_idx].rotation++);
 
         if (dfs_stack[dfs_stack_idx].rotation >= kNumRotations) {
             dfs_stack_idx--;
