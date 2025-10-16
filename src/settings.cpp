@@ -18,11 +18,13 @@ int Settings::scrambling_depth = 100;  // NOLINT
 int Settings::num_threads = 1;
 int Settings::tb_depth = 6;  // NOLINT
 int Settings::tb_depth_gpu = 8;  // NOLINT
+bool Settings::log_info = false;
 
 
 static struct option long_options[] = {
     {"help", no_argument, NULL, 'h'},
     {"root_path", required_argument, NULL, 0},
+    {"info", no_argument, NULL, 'i'},
 
     {"threads", required_argument, NULL, 't'},
     {"tb_depth", required_argument, NULL, 0},
@@ -48,6 +50,7 @@ usage: ./build/bin/PuppetCubeV2 [options]
 
 list of options
     -h --help              show this message
+    -i --info              show additional hardware info
     --root_path            path to root folder puppet-cube-v2            [./PathToPuppetCubeV2/../../]
 
     -t --threads           number of threads used in the program         [MAX_THREADS]  (1, MAX_THREADS)
@@ -119,7 +122,7 @@ Settings::Settings (int argc, char *argv[]) {
     temp_root_path.append("/../../");
     root_path.append(temp_root_path);
 
-    const char* short_options = "hBt:Ds:";
+    const char* short_options = "hiBt:Ds:";
     opterr = 0; // supress error messages from getopt_long
     int option_index;
     signed char cop;
@@ -130,6 +133,9 @@ Settings::Settings (int argc, char *argv[]) {
                 LOG_ALL(help_msg);
                 // --help
                 exit(0);
+            case 'i':
+                log_info = true;
+                break;
             case 'B':
                 test_bcht = true;
                 break;

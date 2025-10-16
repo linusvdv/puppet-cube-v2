@@ -6,6 +6,7 @@
 
 #ifdef USE_CUDA
 #include "search.cuh"
+#include "info_bridge.hpp"
 #endif
 
 
@@ -15,6 +16,12 @@ int main (int argc, char *argv[]) {
 
     // settings initialization
     Settings(argc, argv);
+
+    #ifdef USE_CUDA
+    if (Settings::GetLogInfo()) {
+        GetDeviceInfo();
+    }
+    #endif // USE_CUDA
 
     Cube::Initialize();
     LOG_INFO("Cube Initialized");

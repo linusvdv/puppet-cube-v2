@@ -51,7 +51,7 @@ std::vector<uint8_t> EdgeHeuristicInitialization(const std::vector<uint16_t>& ed
         edge_heuristic[(current.orientation*kNumEdgePositions) + current.position] = depth;
         int current_cnt = cnt++;
         if (current_cnt % (kNumEdgeHeuristic / 100) == 0) {
-            LOG_EXTRA(current_cnt / (kNumEdgeHeuristic / 100), "%");
+            LOG_EXTRA(SkipSpace(current_cnt / (kNumEdgeHeuristic / 100)), "%");
             LOG_EXTRA(next_queue.size());
             LOG_MEMORY();
         }

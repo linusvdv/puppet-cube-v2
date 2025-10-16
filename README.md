@@ -45,6 +45,7 @@ usage: ./build/bin/PuppetCubeV2 [options]
 
 list of options
     -h --help              show this message
+    -i --info              show additional hardware info
     --root_path            path to root folder puppet-cube-v2            [./PathToPuppetCubeV2/../../]
 
     -t --threads           number of threads used in the program         [MAX_THREADS]  (1, MAX_THREADS)

@@ -149,7 +149,7 @@ void ParallelCornerHeuristic(const std::vector<uint16_t>& corner_orientation, co
         corner_heuristic[(corners.orientation*kNumCornerPositions) + corners.position] |= legal_moves << 8;
         int current_cnt = cnt++;
         if (current_cnt % (kNumLegalCornerConfigurations / 20) == 0) {
-            LOG_EXTRA(current_cnt / (kNumLegalCornerConfigurations / 100), "%");
+            LOG_EXTRA(SkipSpace(current_cnt / (kNumLegalCornerConfigurations / 100)), "%");
         }
     }
 }

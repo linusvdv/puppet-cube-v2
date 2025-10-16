@@ -46,9 +46,15 @@ public:
         return num_dfs_positions;
     }
 
+    static bool GetLogInfo() {
+        return log_info;
+    }
+
 private:
     // this path should be equivalent to path/to/puppet-cube-v2/
     static std::string root_path;
+
+    static bool log_info;
 
     // performance testing for optimisation purposes
     static bool test_bcht;

@@ -8,6 +8,7 @@
 #include <source_location>
 #include <sstream>
 #include <string_view>
+#include <type_traits>
 
 #include "nadeau.h"
 
@@ -52,6 +53,20 @@ class Logger {
         static std::mutex log_mutex;
 };
 
+template<typename T>
+struct SkipSpace {
+    T value;
+    constexpr explicit SkipSpace(T&& val) : value(std::forward<T>(val)) {}
+    constexpr explicit SkipSpace(const T& val) : value(val) {}
+};
+template<typename T>
+SkipSpace(T&&) -> SkipSpace<std::decay_t<T>>;
+template<typename T, size_t N>
+SkipSpace(T (&)[N]) -> SkipSpace<const T*>;
+template<typename T>
+inline constexpr bool kIsSkippedSpace = false;
+template<typename T>
+inline constexpr bool kIsSkippedSpace<SkipSpace<T>> = true;
 
 template<typename... Args>
 void Logger::Log (LoggerLevel level, const std::source_location& source_location, Args&&... args) {
@@ -90,7 +105,14 @@ void Logger::Log (LoggerLevel level, const std::source_location& source_location
         return;
     }
     else {
-        ((oss << args << ' '), ...);
+        (([&] {
+            if constexpr (kIsSkippedSpace<std::decay_t<Args>>) {
+                oss << args.value;
+            }
+            else {
+                oss << args << ' ';
+            }
+        }()), ...);
     }
     oss << "\033[0m" << "\n";
     std::cout << oss.str() << std::flush;
