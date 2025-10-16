@@ -58,5 +58,5 @@ list of options
 
     -D --dfs               time dfs on CPU [and GPU]
     --dfs_depth            depth searched from the dfs                   [4]            (1, 6)
-    --num_dfs_positions    number of different dfs positions searched    [100000]       (1, 1e18)
+    --num_dfs_positions    number of different dfs positions searched    [1000000]      (1, 1e18)
 ```

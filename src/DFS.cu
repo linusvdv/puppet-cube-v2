@@ -46,20 +46,12 @@ __global__ void DFSGlobal(DState* d_random_position, size_t num_random_position,
     size_t cur_num_nodes_gpu = 0;
     size_t cur_num_tb_hits_gpu = 0;
 
+    cur_num_nodes_gpu++;
+    if (DCube::DTablebaseContains(dfs_stack[dfs_stack_idx].state)) {
+        cur_num_tb_hits_gpu++;
+    }
     while (dfs_stack_idx >= 0) {
-        if (dfs_stack[dfs_stack_idx].rotation == 0) {
-            cur_num_nodes_gpu++;
-            if (DCube::DTablebaseContains(dfs_stack[dfs_stack_idx].state)) {
-                cur_num_tb_hits_gpu++;
-            }
-        }
-
         int8_t cur_depth = dfs_stack[dfs_stack_idx].depth;
-        if (cur_depth == max_depth) {
-            dfs_stack_idx--;
-            continue;
-        }
-
         DRotateReturn next = DCube::Rotate(dfs_stack[dfs_stack_idx].state, dfs_stack[dfs_stack_idx].rotation++);
 
         if (dfs_stack[dfs_stack_idx].rotation >= kNumRotations) {
@@ -67,7 +59,13 @@ __global__ void DFSGlobal(DState* d_random_position, size_t num_random_position,
         }
 
         if (next.isLegal) {
-            dfs_stack[++dfs_stack_idx] = {int8_t(cur_depth+1), 0, next.state};
+            cur_num_nodes_gpu++;
+            if (DCube::DTablebaseContains(next.state)) {
+                cur_num_tb_hits_gpu++;
+            }
+            if (cur_depth+1 < max_depth) {
+                dfs_stack[++dfs_stack_idx] = {int8_t(cur_depth+1), 0, next.state};
+            }
         }
     }
     d_num_nodes_gpu[index] = cur_num_nodes_gpu;
