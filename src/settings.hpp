@@ -3,7 +3,8 @@
 #include <string>
 
 
-constexpr size_t kBlockDim = 128;
+constexpr size_t kBlockDim = 32;
+constexpr int kMaxDFSDepth = 6;
 
 
 class Settings {

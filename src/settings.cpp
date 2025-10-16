@@ -189,7 +189,7 @@ Settings::Settings (int argc, char *argv[]) {
                     GetTFromOptarg(tb_depth_gpu, 0, 9, "TB DEPTH GPU"); // NOLINT
                 }
                 if (std::string(long_options[option_index].name) == "dfs_depth") {
-                    GetTFromOptarg(dfs_depth, 1, 6, "DFS DEPTH"); // NOLINT
+                    GetTFromOptarg(dfs_depth, 1, kMaxDFSDepth, "DFS DEPTH"); // NOLINT
                 }
                 if (std::string(long_options[option_index].name) == "num_dfs_positions") {
                     GetTFromOptarg(num_dfs_positions, size_t(1), size_t(1e18), "NUM DSF POSITIONS"); // NOLINT

@@ -2,6 +2,7 @@
 #include <vector>
 #include <cuda.h>
 
+#include "BCHTSet.cuh"
 #include "cube.cuh"
 #include "cube.hpp"
 #include "logger.hpp"
@@ -105,4 +106,9 @@ __device__ DRotateReturn DCube::Rotate(const DState& prev_state, const uint8_t& 
     edge_position_1 = d_edge_positions[(edge_position_1*kDNumRotations) + rotation];
     edge_position_2 = d_edge_positions[(edge_position_2*kDNumRotations) + rotation];
     return {true, DState(corner_orientation, corner_position, edge_orientation, edge_position_1, edge_position_2)};
+}
+
+
+__device__ bool DCube::DTablebaseContains(const DState& state) {
+    return DBCHTSetContains(d_tablebase, d_tablebase_size, state);
 }
