@@ -5,11 +5,18 @@
 
 void GetDeviceInfo() {
     int device_count;
-    cudaGetDeviceCount(&device_count);
+    cudaError_t err = cudaGetDeviceCount(&device_count);
+    if (err != cudaSuccess) {
+        LOG_CRITICAL(cudaGetErrorString(err));
+    }
+
     LOG_ALL("Device Count:", device_count);
     for (int dev = 0; dev < device_count; dev++) {
         cudaDeviceProp prop;
-        cudaGetDeviceProperties(&prop, dev);
+        cudaError_t err = cudaGetDeviceProperties(&prop, dev);
+        if (err != cudaSuccess) {
+            LOG_CRITICAL(cudaGetErrorString(err));
+        }
 
         LOG_ALL("Device Nr", SkipSpace(dev), ":", prop.name);
         LOG_EXTRA("Compute capability:", SkipSpace(prop.major), SkipSpace("."), prop.minor);
