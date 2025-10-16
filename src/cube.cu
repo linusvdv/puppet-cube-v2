@@ -48,12 +48,12 @@ void DCube::UploadComputationToDevice(
     const std::vector<uint8_t>& edge_heuristics
     ) {
 
-    // corner precomutation
+    // corner precomputation
     UploadToDevice(corner_orientations, d_corner_orientations);
     UploadToDevice(corner_positions, d_corner_positions);
     UploadToDevice(corner_heuristics, d_corner_heuristics);
 
-    // edge precomutation
+    // edge precomputation
     UploadToDevice(edge_orientations, d_edge_orientations);
     UploadToDevice(edge_positions, d_edge_positions);
     UploadToDevice(edge_heuristics, d_edge_heuristics);

@@ -78,7 +78,7 @@ void BCHTTiming(const std::vector<State>& tablebase_layer, const std::vector<Sta
 std::vector<State> TimeTablebaseCPU(std::vector<std::vector<State>>& tablebase, TablebasePrecomputation& tablebase_precomputation) {
     // only time largest tb_depth
 
-    LOG_EXTRA("Create test date for timing tablebase CPU");
+    LOG_EXTRA("Create test data for timing tablebase CPU");
     std::vector<State> random_positions;
     for (const State& state : tablebase[Settings::GetTBDepth()]) {
         if (state == State()) {
@@ -158,7 +158,7 @@ std::string GetFilePath (std::string file_name, int depth) {
     return Settings::GetRootPath() + "precomputation/" + file_name + "_" + std::to_string(depth) + ".bin";
 }
 
-bool ExistsPrecomutation(std::vector<std::vector<State>>& tablebase, int depth) {
+bool ExistsPrecomputation(std::vector<std::vector<State>>& tablebase, int depth) {
     std::string file_path = GetFilePath("tablebase", depth);
     if (std::FILE* file = std::fopen(file_path.c_str(), "rb")) {
         size_t size = 0;
@@ -178,12 +178,12 @@ bool ExistsPrecomutation(std::vector<std::vector<State>>& tablebase, int depth) 
         std::fclose(file);
         return true;
     }
-    LOG_ALL("Precomute tablebase depth", depth, "...");
+    LOG_ALL("Precompute tablebase depth", depth, "...");
     return false;
 }
 
 
-void SavePrecomutation(std::vector<State>& tablebase_layer, int depth) {
+void SavePrecomputation(std::vector<State>& tablebase_layer, int depth) {
     std::string file_path = GetFilePath("tablebase", depth);
     if (std::FILE* file = std::fopen(file_path.c_str(), "wb")) {
         size_t size = tablebase_layer.size();
@@ -215,7 +215,7 @@ void Tablebase::Initialize() {
     for (int i = 1; i <= Settings::GetTBDepth(); i++) {
         tablebase_layer.clear();
 
-        if (ExistsPrecomutation(tablebase, i)) {
+        if (ExistsPrecomputation(tablebase, i)) {
             std::swap(previous_tables.first, previous_tables.second);
             previous_tables.second = tablebase.back();
             continue;
@@ -228,12 +228,12 @@ void Tablebase::Initialize() {
                 threads.push_back(std::jthread(TablebaseSearch, previous_tables.first, previous_tables.second, std::ref(tablebase_layer), j, Settings::GetNumThreads()));
             }
         }
-        LOG_ALL(SkipSpace("Tablebase depth ["), SkipSpace(i), SkipSpace("/"), SkipSpace(Settings::GetTBDepth()), "] precomuted:", tablebase_layer.size(), "positions");
+        LOG_ALL(SkipSpace("Tablebase depth ["), SkipSpace(i), SkipSpace("/"), SkipSpace(Settings::GetTBDepth()), "] precomputed:", tablebase_layer.size(), "positions");
 
         tablebase.push_back(BuildBCHTSet(tablebase_layer));
         std::swap(previous_tables.first, previous_tables.second);
         previous_tables.second = tablebase.back();
-        SavePrecomutation(tablebase.back(), i);
+        SavePrecomputation(tablebase.back(), i);
         LOG_MEMORY();
     }
 
@@ -248,7 +248,7 @@ void Tablebase::Initialize() {
         }
         std::vector<State> random_positions = TimeTablebaseCPU(tablebase, tablebase_layer);
         #ifdef USE_CUDA
-        LOG_EXTRA("Start Tablebase Timing Uploading Precomutation to Device");
+        LOG_EXTRA("Start Tablebase Timing Uploading Precomputation to Device");
         UploadRandomPositionsToDevice(random_positions);
         LOG_INFO("Tablebase Timing Uploaded to Device");
         #endif // USE_CUDA

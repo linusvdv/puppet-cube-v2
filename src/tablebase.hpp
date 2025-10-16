@@ -17,9 +17,9 @@ public:
 
     static void UploadComputationToDevice() {
         #ifdef USE_CUDA
-        LOG_EXTRA("Start Tablebase Uploading Precomutation to Device");
+        LOG_EXTRA("Start Tablebase Uploading Precomputation to Device");
         UploadTablebaseToDevice(tablebase.back());
-        LOG_INFO("Tablebase Precomutation Uploaded to Device");
+        LOG_INFO("Tablebase Precomputation Uploaded to Device");
         #endif // USE_CUDA
     }
 

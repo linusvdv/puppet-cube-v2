@@ -34,7 +34,7 @@ std::string GetFilePath (std::string file_name) {
 }
 
 
-// if there is no file storing the precomputation run the precomutation
+// if there is no file storing the precomputation run the precomputation
 template<typename T, typename Generator>
 void LoadOrGenerate(const std::string file_name, std::vector<T>& target, size_t expected_size,
                     Generator&& generate_func, const std::string& step_tag) {
@@ -53,7 +53,7 @@ void LoadOrGenerate(const std::string file_name, std::vector<T>& target, size_t 
     }
     // opening of the file failed
     else {
-        // do the precomutation
+        // do the precomputation
         LOG_ALL(step_tag, "precompute ...");
         target = generate_func();
         LOG_MEMORY();
@@ -132,9 +132,9 @@ std::pair<bool, State> Cube::Rotate(const State& prev_state, const uint8_t& rota
 
 void Cube::UploadComputationToDevice() {
     #ifdef USE_CUDA
-    LOG_EXTRA("Start Cube Uploading Precomutation to Device");
+    LOG_EXTRA("Start Cube Uploading Precomputation to Device");
     UploadCubeComputationToDevice(corner_orientations, corner_positions, corner_heuristics, edge_orientations, edge_positions, edge_heuristics);
-    LOG_INFO("Cube Precomutation Uploaded to Device");
+    LOG_INFO("Cube Precomputation Uploaded to Device");
     LOG_MEMORY();
     #endif // USE_CUDA
 }
