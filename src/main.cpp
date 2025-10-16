@@ -11,11 +11,11 @@
 
 
 int main (int argc, char *argv[]) {
-    LOG_INFO("Puppet Cube V2 by Linus VandeVondele");
-    LOG_MEMORY();
-
     // settings initialization
     Settings(argc, argv);
+
+    LOG_INFO("Puppet Cube V2 by Linus VandeVondele");
+    LOG_MEMORY();
 
     #ifdef USE_CUDA
     if (Settings::GetLogInfo()) {

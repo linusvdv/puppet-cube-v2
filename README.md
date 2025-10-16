@@ -47,6 +47,7 @@ list of options
     -h --help              show this message
     -i --info              show additional hardware info
     --root_path            path to root folder puppet-cube-v2            [./PathToPuppetCubeV2/../../]
+    -e --error_level       logger/error level                            [memory]       (critical|error|warning|info|all|extra|memory)
 
     -t --threads           number of threads used in the program         [MAX_THREADS]  (1, MAX_THREADS)
     --tb_depth             depth of the tablebase (9 uses 40 GB RAM)     [6]            (0, 9)
@@ -57,5 +58,5 @@ list of options
 
     -D --dfs               time dfs on CPU [and GPU]
     --dfs_depth            depth searched from the dfs                   [4]            (1, 6)
-    --num_dfs_positions    number of different dfs positions searched    [1000000]      (1, 1e18)
+    --num_dfs_positions    number of different dfs positions searched    [100000]       (1, 1e18)
 ```

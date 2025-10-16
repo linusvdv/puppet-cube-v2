@@ -13,7 +13,7 @@ std::string Settings::root_path;
 bool Settings::test_bcht = false;
 bool Settings::test_dfs = false;
 int Settings::dfs_depth = 4;
-size_t Settings::num_dfs_positions = 1000000; // NOLINT
+size_t Settings::num_dfs_positions = 100000; // NOLINT
 int Settings::scrambling_depth = 100;  // NOLINT
 int Settings::num_threads = 1;
 int Settings::tb_depth = 6;  // NOLINT
@@ -25,6 +25,7 @@ static struct option long_options[] = {
     {"help", no_argument, NULL, 'h'},
     {"root_path", required_argument, NULL, 0},
     {"info", no_argument, NULL, 'i'},
+    {"log_level", required_argument, NULL, 'l'},
 
     {"threads", required_argument, NULL, 't'},
     {"tb_depth", required_argument, NULL, 0},
@@ -52,6 +53,7 @@ list of options
     -h --help              show this message
     -i --info              show additional hardware info
     --root_path            path to root folder puppet-cube-v2            [./PathToPuppetCubeV2/../../]
+    -l --log_level         logger/error level                            [memory]       (critical|error|warning|info|all|extra|memory)
 
     -t --threads           number of threads used in the program         [MAX_THREADS]  (1, MAX_THREADS)
     --tb_depth             depth of the tablebase (9 uses 40 GB RAM)     [6]            (0, 9)
@@ -62,7 +64,7 @@ list of options
 
     -D --dfs               time dfs on CPU [and GPU]
     --dfs_depth            depth searched from the dfs                   [4]            (1, 6)
-    --num_dfs_positions    number of different dfs positions searched    [1000000]      (1, 1e18)
+    --num_dfs_positions    number of different dfs positions searched    [100000]       (1, 1e18)
 )";
 
 
@@ -122,7 +124,7 @@ Settings::Settings (int argc, char *argv[]) {
     temp_root_path.append("/../../");
     root_path.append(temp_root_path);
 
-    const char* short_options = "hiBt:Ds:";
+    const char* short_options = "hiBt:Ds:l:";
     opterr = 0; // supress error messages from getopt_long
     int option_index;
     signed char cop;
@@ -136,6 +138,34 @@ Settings::Settings (int argc, char *argv[]) {
             case 'i':
                 log_info = true;
                 break;
+            case 'l': {
+                std::string log_level = std::string(optarg);
+                if (log_level == "critical") {
+                    Logger::SetLoggerLevel(LoggerLevel::kCriticalError);
+                }
+                else if (log_level == "error") {
+                    Logger::SetLoggerLevel(LoggerLevel::kError);
+                }
+                else if (log_level == "warning") {
+                    Logger::SetLoggerLevel(LoggerLevel::kWarning);
+                }
+                else if (log_level == "info") {
+                    Logger::SetLoggerLevel(LoggerLevel::kInfo);
+                }
+                else if (log_level == "all") {
+                    Logger::SetLoggerLevel(LoggerLevel::kAll);
+                }
+                else if (log_level == "extra") {
+                    Logger::SetLoggerLevel(LoggerLevel::kExtra);
+                }
+                else if (log_level == "memory") {
+                    Logger::SetLoggerLevel(LoggerLevel::kMemory);
+                }
+                else {
+                    LOG_WARNING("Not recognized log level:", log_level);
+                }
+                break;
+                }
             case 'B':
                 test_bcht = true;
                 break;
@@ -149,6 +179,9 @@ Settings::Settings (int argc, char *argv[]) {
                 GetTFromOptarg(scrambling_depth, 0, 1000000, "SCRAMBLING DEPTH"); // NOLINT
                 break;
             case 0:
+                if (std::string(long_options[option_index].name) == "error_level") {
+                    root_path = std::string(optarg);
+                }
                 if (std::string(long_options[option_index].name) == "tb_depth") {
                     GetTFromOptarg(tb_depth, 0, 9, "TB DEPTH"); // NOLINT
                 }
@@ -157,9 +190,6 @@ Settings::Settings (int argc, char *argv[]) {
                 }
                 if (std::string(long_options[option_index].name) == "dfs_depth") {
                     GetTFromOptarg(dfs_depth, 1, 6, "DFS DEPTH"); // NOLINT
-                }
-                if (std::string(long_options[option_index].name) == "root_path") {
-                    root_path = std::string(optarg);
                 }
                 if (std::string(long_options[option_index].name) == "num_dfs_positions") {
                     GetTFromOptarg(num_dfs_positions, size_t(1), size_t(1e18), "NUM DSF POSITIONS"); // NOLINT
