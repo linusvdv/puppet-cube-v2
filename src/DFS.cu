@@ -4,24 +4,11 @@
 #include <cstdint>
 #include <vector>
 
-#include "BCHTSet.cuh"
 #include "cube.cuh"
 #include "cube.hpp"
+#include "cuda_memory_transfer.cuh"
 #include "logger.hpp"
 #include "settings.hpp"
-
-
-template<typename T1, typename T2>
-void UploadToDeviceDFS(const std::vector<T1>& data, T2*& d_pointer) {
-    cudaError_t err = cudaMalloc((void **)&d_pointer, sizeof(T1)*data.size());
-    if (err != cudaSuccess) {
-        LOG_CRITICAL(cudaGetErrorString(err));
-    }
-    err = cudaMemcpy(d_pointer, data.data(), sizeof(T1)*data.size(), cudaMemcpyHostToDevice);
-    if (err != cudaSuccess) {
-        LOG_CRITICAL(cudaGetErrorString(err));
-    }
-}
 
 
 struct DFSStack {
@@ -79,9 +66,9 @@ void GPUDFS(const std::vector<State>& random_position, std::vector<size_t>& num_
     size_t* d_num_nodes_gpu = nullptr;
     size_t* d_num_tb_hits_gpu = nullptr;
     LOG_MEMORY();
-    UploadToDeviceDFS(random_position, d_random_position);
-    UploadToDeviceDFS(num_nodes_gpu, d_num_nodes_gpu);
-    UploadToDeviceDFS(num_tb_hits_gpu, d_num_tb_hits_gpu);
+    UploadToDevice(random_position, d_random_position);
+    UploadToDevice(num_nodes_gpu, d_num_nodes_gpu);
+    UploadToDevice(num_tb_hits_gpu, d_num_tb_hits_gpu);
     LOG_MEMORY();
 
     size_t grid_dim = (random_position.size()/kBlockDim)+1;

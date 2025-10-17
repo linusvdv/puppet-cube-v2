@@ -8,7 +8,7 @@
 #include "logger.hpp"
 
 
-int PositionToHash (std::array<uint8_t, kNumCorners>& positions) {
+int PositionToHash (const std::array<uint8_t, kNumCorners>& positions) {
     int hash = 0;
     std::array<bool, kNumCorners> visited;
     visited.fill(false);
@@ -77,10 +77,10 @@ std::vector<uint16_t> CornerPositionInitialization() {
     // 3 - -1 -1  1
     // ...
     // 7 - -1 -1 -1
-    std::array<uint8_t, kNumCorners> starting_positions = {0, 1, 2, 3, 4, 5, 6, 7};
+    constexpr std::array<uint8_t, kNumCorners> kStartingPositions = {0, 1, 2, 3, 4, 5, 6, 7};
     std::queue<std::array<uint8_t, kNumCorners>> next_queue;
-    next_queue.push(starting_positions);
-    visited[PositionToHash(starting_positions)] = true;
+    next_queue.push(kStartingPositions);
+    visited[PositionToHash(kStartingPositions)] = true;
     int cnt = 1;
 
     while (!next_queue.empty()) {

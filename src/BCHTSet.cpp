@@ -12,7 +12,7 @@
 
 bool BCHTSetContains(const std::vector<State>& table, const State& key) {
     uint32_t num_buckets = table.size() / kBucketSize;
-    uint64_t h_1 = key.SplitMix64<0x123456789abcdef0ULL, 0xfedcba9876543210ULL>()%num_buckets;  // NOLINT
+    uint64_t h_1 = key.SplitMix64<State::kXORlow1, State::kXORhigh1>()%num_buckets;
     for (int j = 0; j < kBucketSize; j++) {
         State tb_data = table[(h_1*kBucketSize) + j];
         if (tb_data == key) {
@@ -22,7 +22,7 @@ bool BCHTSetContains(const std::vector<State>& table, const State& key) {
             return false;
         }
     }
-    uint64_t h_2 = key.SplitMix64<0x0f1e2d3c4b5a6978ULL, 0x87654321abcdef09ULL>()%num_buckets;  // NOLINT
+    uint64_t h_2 = key.SplitMix64<State::kXORlow2, State::kXORhigh2>()%num_buckets;
     for (int j = 0; j < kBucketSize; j++) {
         State tb_data = table[(h_2*kBucketSize) + j];
         if (tb_data == key) {
@@ -37,10 +37,10 @@ bool BCHTSetContains(const std::vector<State>& table, const State& key) {
 
 
 int GetBucketIndex(const State& cube, uint32_t hash, uint32_t num_buckets) {
-    if (cube.SplitMix64<0x123456789abcdef0ULL, 0xfedcba9876543210ULL>()%num_buckets == hash) {
+    if (cube.SplitMix64<State::kXORlow1, State::kXORhigh1>()%num_buckets == hash) {
         return 0;
     }
-    if (cube.SplitMix64<0x0f1e2d3c4b5a6978ULL, 0x87654321abcdef09ULL>()%num_buckets == hash) {
+    if (cube.SplitMix64<State::kXORlow2, State::kXORhigh2>()%num_buckets == hash) {
         return 1;
     }
     LOG_CRITICAL("hash and bucket do not fit");
@@ -50,8 +50,8 @@ int GetBucketIndex(const State& cube, uint32_t hash, uint32_t num_buckets) {
 
 bool BfsInsert(std::vector<State>& table, uint32_t num_buckets, const State& key) {
     std::array<uint32_t, 2> start_buckets = {
-        uint32_t(key.SplitMix64<0x123456789abcdef0ULL, 0xfedcba9876543210ULL>()%num_buckets),  // NOLINT
-        uint32_t(key.SplitMix64<0x0f1e2d3c4b5a6978ULL, 0x87654321abcdef09ULL>()%num_buckets)   // NOLINT
+        uint32_t(key.SplitMix64<State::kXORlow1, State::kXORhigh1>()%num_buckets),
+        uint32_t(key.SplitMix64<State::kXORlow2, State::kXORhigh2>()%num_buckets)
     };
 
     // Layer 0: try direct insert
@@ -80,8 +80,8 @@ bool BfsInsert(std::vector<State>& table, uint32_t num_buckets, const State& key
 
 
         std::array<uint32_t, 2> current_buckets = {
-            uint32_t(current.second.first.SplitMix64<0x123456789abcdef0ULL, 0xfedcba9876543210ULL>()%num_buckets),  // NOLINT
-            uint32_t(current.second.first.SplitMix64<0x0f1e2d3c4b5a6978ULL, 0x87654321abcdef09ULL>()%num_buckets)   // NOLINT
+            uint32_t(current.second.first.SplitMix64<State::kXORlow1, State::kXORhigh1>()%num_buckets),
+            uint32_t(current.second.first.SplitMix64<State::kXORlow2, State::kXORhigh2>()%num_buckets)
         };
         for (int j = 0; j < 2; j++) {
             for (int i = 0; i < kBucketSize; i++) {

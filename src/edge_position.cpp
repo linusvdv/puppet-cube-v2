@@ -72,10 +72,10 @@ std::vector<uint32_t> EdgePositionInitialization() {
     std::vector<uint32_t> edge_positions(kEdgePositionsSize, 0);
     std::vector<bool> visited(kNumEdgePositions, false);
 
-    std::array<uint8_t, kNumPieces> starting_positions = {0, 1, 2, 3, 4, 5};
+    constexpr std::array<uint8_t, kNumPieces> kStartingPositions = {0, 1, 2, 3, 4, 5};
     std::queue<std::array<uint8_t, kNumPieces>> next_queue;
-    next_queue.push(starting_positions);
-    visited[PositionToHash(starting_positions)] = true;
+    next_queue.push(kStartingPositions);
+    visited[PositionToHash(kStartingPositions)] = true;
     int cnt = 1;
 
     while (!next_queue.empty()) {

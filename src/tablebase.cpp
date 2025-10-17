@@ -7,14 +7,10 @@
 
 #include "BCHTSet.hpp"
 #include "cube.hpp"
+#include "cuda_memory_transfer.cuh"
 #include "logger.hpp"
 #include "settings.hpp"
 #include "tablebase.hpp"
-
-#ifdef USE_CUDA
-#include "search.cuh"
-#endif // USE_CUDA
-
 
 std::vector<std::vector<State>> Tablebase::tablebase = {};
 

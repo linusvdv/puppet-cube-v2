@@ -1,8 +1,7 @@
-// This file is only a bridge between cube cpp and cube cuda code
-// This will reference the cube_bridge.cu file
 #pragma once
 #include <cstdint>
 #include <vector>
+#include "cube.hpp"
 
 void UploadCubeComputationToDevice(
     const std::vector<uint16_t>& corner_orientations,
@@ -13,3 +12,9 @@ void UploadCubeComputationToDevice(
     const std::vector<uint32_t>& edge_positions,
     const std::vector<uint8_t>& edge_heuristics
     );
+
+
+void UploadTablebaseToDevice(const std::vector<State>& tablebebase);
+
+
+void UploadRandomPositionsToDevice(const std::vector<State>& random_positions);

@@ -5,7 +5,7 @@
 #include "tablebase.hpp"
 
 #ifdef USE_CUDA
-#include "search.cuh"
+#include "BCHTSet_bridge.hpp"
 #include "info_bridge.hpp"
 #endif
 

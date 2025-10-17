@@ -113,11 +113,11 @@ constexpr std::array<uint8_t, kNumRotations> kLegalMoveIndex = {
 
 
 std::pair<bool, State> Cube::Rotate(const State& prev_state, const uint8_t& rotation) {
-    uint16_t corner_orientation = prev_state.hash_2 >> 20;      // 12 bites
-    uint16_t corner_position = prev_state.hash_1;               // 16 bites
-    uint16_t edge_orientation = prev_state.hash_3 >> 20;        // 11 bites
-    uint32_t edge_position_1 = prev_state.hash_2 & ((1<<20)-1); // 20 bites
-    uint32_t edge_position_2 = prev_state.hash_3 & ((1<<20)-1); // 20 bites
+    uint16_t corner_orientation = prev_state.hash_2 >> 20;      // 12 bites         NOLINT
+    uint16_t corner_position = prev_state.hash_1;               // 16 bites         NOLINT
+    uint16_t edge_orientation = prev_state.hash_3 >> 20;        // 11 bites         NOLINT
+    uint32_t edge_position_1 = prev_state.hash_2 & ((1<<20)-1); // 20 bites         NOLINT
+    uint32_t edge_position_2 = prev_state.hash_3 & ((1<<20)-1); // 20 bites         NOLINT
     if (kLegalMoveIndex[rotation] != 0 && ((corner_heuristics[(corner_orientation*kNumCornerPositions) + corner_position] >> kLegalMoveIndex[rotation]) & 1) == 0) {
         return {false, prev_state};
     }

@@ -45,7 +45,7 @@ uint16_t Rotate(uint16_t old_orientations, uint8_t rotation) {
         }
         else {
             uint16_t invert = 0;
-            if (rotation < 4 || rotation == 12 || rotation == 13) { // R, L, M
+            if (rotation < 4 || rotation == 12 || rotation == 13) { // R, L, M      NOLINT
                 invert = 1;
             }
             orientations |= (((old_orientations >> i) & 1) ^ invert) << kEdgeRotation[rotation][i];

@@ -10,7 +10,7 @@
 #include "tablebase.hpp"
 
 #ifdef USE_CUDA
-#include "DFS.cuh"
+#include "DFS_bridge.hpp"
 #endif
 
 

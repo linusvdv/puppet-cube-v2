@@ -94,7 +94,6 @@ if(USE_CUDA)
         src/BCHTSet.cu
         src/DFS.cu
         src/cube.cu
-        src/cube_bridge.cu
         src/info.cu
     )
 

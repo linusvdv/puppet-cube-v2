@@ -5,6 +5,7 @@
 #include "BCHTSet.cuh"
 #include "cube.cuh"
 #include "cube.hpp"
+#include "cuda_memory_transfer.cuh"
 #include "logger.hpp"
 
 
@@ -20,22 +21,6 @@ __device__ DState* d_tablebase = nullptr;
 __device__ size_t d_tablebase_size = 0;
 
 
-template<typename T>
-void UploadToDevice(const std::vector<T>& data, T*& d_pointer) {
-    T* temp_pointer = nullptr;
-    cudaError_t err = cudaMalloc((void **)&temp_pointer, sizeof(T)*data.size());
-    if (err != cudaSuccess) {
-        LOG_CRITICAL(cudaGetErrorString(err));
-    }
-    err = cudaMemcpy(temp_pointer, data.data(), sizeof(T)*data.size(), cudaMemcpyHostToDevice);
-    if (err != cudaSuccess) {
-        LOG_CRITICAL(cudaGetErrorString(err));
-    }
-    err = cudaMemcpyToSymbol(d_pointer, &temp_pointer, sizeof(T*));
-    if (err != cudaSuccess) {
-        LOG_CRITICAL(cudaGetErrorString(err));
-    }
-}
 
 
 void DCube::UploadComputationToDevice(
@@ -85,6 +70,18 @@ void UploadTablebaseToDevice(const std::vector<State>& tablebebase) {
     }
 }
 
+void UploadCubeComputationToDevice(
+    const std::vector<uint16_t>& corner_orientations,
+    const std::vector<uint16_t>& corner_positions,
+    const std::vector<uint16_t>& corner_heuristics,
+
+    const std::vector<uint16_t>& edge_orientations,
+    const std::vector<uint32_t>& edge_positions,
+    const std::vector<uint8_t>& edge_heuristics
+    ) {
+    DCube::UploadComputationToDevice(corner_orientations, corner_positions, corner_heuristics, edge_orientations, edge_positions, edge_heuristics);
+}
+
 
 __device__ constexpr uint8_t kDLegalMoveIndex[kDNumRotations] = {
     8, 9, 8, 9, 10, 11, 10, 11, 12, 13, 12, 13, 0, 0, 0, 0, 0, 0
@@ -92,11 +89,11 @@ __device__ constexpr uint8_t kDLegalMoveIndex[kDNumRotations] = {
 
 
 __device__ DRotateReturn DCube::Rotate(const DState& prev_state, const uint8_t& rotation) {
-    uint16_t corner_orientation = prev_state.hash_2 >> 20;      // 12 bites
-    uint16_t corner_position = prev_state.hash_1;               // 16 bites
-    uint16_t edge_orientation = prev_state.hash_3 >> 20;        // 11 bites
-    uint32_t edge_position_1 = prev_state.hash_2 & ((1<<20)-1); // 20 bites
-    uint32_t edge_position_2 = prev_state.hash_3 & ((1<<20)-1); // 20 bites
+    uint16_t corner_orientation = prev_state.hash_2 >> 20;      // 12 bites         NOLINT
+    uint16_t corner_position = prev_state.hash_1;               // 16 bites         NOLINT
+    uint16_t edge_orientation = prev_state.hash_3 >> 20;        // 11 bites         NOLINT
+    uint32_t edge_position_1 = prev_state.hash_2 & ((1<<20)-1); // 20 bites         NOLINT
+    uint32_t edge_position_2 = prev_state.hash_3 & ((1<<20)-1); // 20 bites         NOLINT
     if (kDLegalMoveIndex[rotation] != 0 && ((d_corner_heuristics[(corner_orientation*kDNumCornerPositions) + corner_position] >> kDLegalMoveIndex[rotation]) & 1) == 0) {
         return {false, prev_state};
     }
@@ -111,4 +108,20 @@ __device__ DRotateReturn DCube::Rotate(const DState& prev_state, const uint8_t& 
 
 __device__ bool DCube::DTablebaseContains(const DState& state) {
     return DBCHTSetContains(d_tablebase, d_tablebase_size, state);
+}
+
+
+__device__ DState* d_random_positions = nullptr;
+__device__ size_t d_random_positions_size = 0;
+size_t random_positions_size = 0;
+
+
+void UploadRandomPositionsToDevice(const std::vector<State>& random_positions) {
+    UploadToDevice(random_positions, d_random_positions);
+    size_t temp_size = random_positions.size();
+    cudaError_t err = cudaMemcpyToSymbol(d_random_positions_size, &temp_size, sizeof(temp_size));
+    if (err != cudaSuccess) {
+        LOG_CRITICAL(cudaGetErrorString(err));
+    }
+    random_positions_size = temp_size;
 }

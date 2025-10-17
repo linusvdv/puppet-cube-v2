@@ -77,6 +77,11 @@ struct State {
     static constexpr uint64_t kMulA = 0x2545f4914f6cdd1dULL;
     static constexpr uint64_t kMulB = 0x9e3779b97f4a7c15ULL;
 
+    static constexpr uint64_t kXORlow1 = 0x123456789abcdef0ULL;
+    static constexpr uint64_t kXORhigh1 = 0xfedcba9876543210ULL;
+    static constexpr uint64_t kXORlow2 = 0x0f1e2d3c4b5a6978ULL;
+    static constexpr uint64_t kXORhigh2 = 0x87654321abcdef09ULL;
+
     static uint64_t Mix64(uint64_t num) {
         num ^= num >> 31;  // NOLINT
         num *= kMulA;
@@ -88,12 +93,12 @@ struct State {
 
     template<uint64_t hash_low, uint64_t hash_high>
     uint64_t SplitMix64() const {
-        return Mix64(uint64_t(hash_1) ^ hash_low) ^ Mix64(((uint64_t(hash_2) << 32) | uint64_t(hash_3)) ^ hash_high);
+        return Mix64(uint64_t(hash_1) ^ hash_low) ^ Mix64(((uint64_t(hash_2) << 32) | uint64_t(hash_3)) ^ hash_high); // NOLINT
     }
 
     // Used for phmap
     friend std::size_t hash_value(const State& state) {  // NOLINT
-        return state.SplitMix64<0x123456789abcdef0ULL, 0xfedcba9876543210ULL>(); // NOLINT
+        return state.SplitMix64<kXORlow1, kXORhigh1>(); // NOLINT
     }
 };
 

@@ -26,21 +26,21 @@ struct Corners {
                std::tie(other.orientation, other.position, other.protruding);
     }
 
-    friend std::size_t hash_value(const Corners& c) {
+    friend std::size_t hash_value(const Corners& c) { // NOLINT
         constexpr int kMagicVal = 0x9e3779b9;
-        std::size_t h1 = std::hash<uint16_t>{}(c.orientation);
-        std::size_t h2 = std::hash<uint16_t>{}(c.position);
+        std::size_t h_1 = std::hash<uint16_t>{}(c.orientation);
+        std::size_t h_2 = std::hash<uint16_t>{}(c.position);
 
         // Hash the array
-        std::size_t h3 = 0;
+        std::size_t h_3 = 0;
         for (uint8_t val : c.protruding) {
-            h3 ^= std::hash<uint8_t>{}(val) + kMagicVal + (h3 << 6) + (h3 >> 2);
+            h_3 ^= std::hash<uint8_t>{}(val) + kMagicVal + (h_3 << 6) + (h_3 >> 2); // NOLINT
         }
 
         // Combine all hashes
-        std::size_t seed = h1;
-        seed ^= h2 + kMagicVal + (seed << 6) + (seed >> 2);
-        seed ^= h3 + kMagicVal + (seed << 6) + (seed >> 2);
+        std::size_t seed = h_1;
+        seed ^= h_2 + kMagicVal + (seed << 6) + (seed >> 2); // NOLINT
+        seed ^= h_3 + kMagicVal + (seed << 6) + (seed >> 2); // NOLINT
 
         return seed;
     }
@@ -50,20 +50,20 @@ using ParallelCorners = phmap::parallel_flat_hash_set<Corners,
     phmap::priv::hash_default_hash<Corners>,
     phmap::priv::hash_default_eq<Corners>,
     phmap::priv::Allocator<Corners>,
-    12, std::mutex>;
+    12, std::mutex>; // NOLINT
 
 
 // pre initialise legal map
 void LegalMapInitialisation (std::array<bool, kSizeLegalMap>& legal_map) {
     for (int i = 0; i < kSizeLegalMap; i++) {
-        if ((!bool(i >> 0 & 1) && !bool(i >> 4 & 1)) ||   // x
-            (!bool(i >> 2 & 1) && !bool(i >> 6 & 1)) ||   // x
-            (!bool(i >> 1 & 1) && !bool(i >> 3 & 1)) ||   // y
-            (!bool(i >> 5 & 1) && !bool(i >> 7 & 1)) ||   // y
-            (!bool(i >> 0 & 1) && !bool(i >> 1 & 1) &&    // diagonal
-             !bool(i >> 6 & 1) && !bool(i >> 7 & 1)) ||
-            (!bool(i >> 2 & 1) && !bool(i >> 3 & 1) &&    // diagonal
-             !bool(i >> 4 & 1) && !bool(i >> 5 & 1))) {
+        if ((!bool(i >> 0 & 1) && !bool(i >> 4 & 1)) ||   // x                  NOLINT
+            (!bool(i >> 2 & 1) && !bool(i >> 6 & 1)) ||   // x                  NOLINT
+            (!bool(i >> 1 & 1) && !bool(i >> 3 & 1)) ||   // y                  NOLINT
+            (!bool(i >> 5 & 1) && !bool(i >> 7 & 1)) ||   // y                  NOLINT
+            (!bool(i >> 0 & 1) && !bool(i >> 1 & 1) &&    // diagonal           NOLINT
+             !bool(i >> 6 & 1) && !bool(i >> 7 & 1)) ||   //                    NOLINT
+            (!bool(i >> 2 & 1) && !bool(i >> 3 & 1) &&    // diagonal           NOLINT
+             !bool(i >> 4 & 1) && !bool(i >> 5 & 1))) {   //                    NOLINT
             legal_map[i] = false;
         }
         else {
@@ -131,7 +131,7 @@ void ParallelCornerHeuristic(const std::vector<uint16_t>& corner_orientation, co
         for (int rotation = 0; rotation < kNumRotations; rotation++) {
             Corners next_corners = Rotate(corner_orientation, corner_position, corners, rotation);
             if (last.contains(next_corners) || current.contains(next_corners)) {
-                if (rotation%4 <= 1 && rotation < 12) {
+                if (rotation%4 <= 1 && rotation < 12) { // NOLINT
                     legal_moves |= 1 << ((rotation+1)/2);
                 }
                 continue;
@@ -139,16 +139,16 @@ void ParallelCornerHeuristic(const std::vector<uint16_t>& corner_orientation, co
             if (!IsLegal(legal_map, next_corners.protruding)) {
                 continue;
             }
-            if (rotation%4 <= 1 && rotation < 12) {
+            if (rotation%4 <= 1 && rotation < 12) { // NOLINT
                 legal_moves |= 1 << ((rotation+1)/2);
             }
 
             next.insert(next_corners);
         }
         corner_heuristic[(corners.orientation*kNumCornerPositions) + corners.position] = depth;
-        corner_heuristic[(corners.orientation*kNumCornerPositions) + corners.position] |= legal_moves << 8;
+        corner_heuristic[(corners.orientation*kNumCornerPositions) + corners.position] |= legal_moves << 8; // NOLINT
         int current_cnt = cnt++;
-        if (current_cnt % (kNumLegalCornerConfigurations / 20) == 0) {
+        if (current_cnt % (kNumLegalCornerConfigurations / 20) == 0) { // NOLINT
             LOG_EXTRA(SkipSpace(current_cnt / (kNumLegalCornerConfigurations / 100)), "%");
         }
     }
