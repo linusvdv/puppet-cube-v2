@@ -34,14 +34,14 @@ void DCube::UploadComputationToDevice(
     ) {
 
     // corner precomputation
-    UploadToDevice(corner_orientations, d_corner_orientations);
-    UploadToDevice(corner_positions, d_corner_positions);
-    UploadToDevice(corner_heuristics, d_corner_heuristics);
+    UploadToDeviceSymbol(corner_orientations, d_corner_orientations);
+    UploadToDeviceSymbol(corner_positions, d_corner_positions);
+    UploadToDeviceSymbol(corner_heuristics, d_corner_heuristics);
 
     // edge precomputation
-    UploadToDevice(edge_orientations, d_edge_orientations);
-    UploadToDevice(edge_positions, d_edge_positions);
-    UploadToDevice(edge_heuristics, d_edge_heuristics);
+    UploadToDeviceSymbol(edge_orientations, d_edge_orientations);
+    UploadToDeviceSymbol(edge_positions, d_edge_positions);
+    UploadToDeviceSymbol(edge_heuristics, d_edge_heuristics);
 }
 
 
@@ -117,7 +117,7 @@ size_t random_positions_size = 0;
 
 
 void UploadRandomPositionsToDevice(const std::vector<State>& random_positions) {
-    UploadToDevice(random_positions, d_random_positions);
+    UploadToDeviceSymbol(random_positions, d_random_positions);
     size_t temp_size = random_positions.size();
     cudaError_t err = cudaMemcpyToSymbol(d_random_positions_size, &temp_size, sizeof(temp_size));
     if (err != cudaSuccess) {

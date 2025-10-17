@@ -101,7 +101,7 @@ void TimeBCHTGPU() {
             if (err != cudaSuccess) {
                 LOG_CRITICAL(cudaGetErrorString(err));
             }
-            LOG_EXTRA(SkipSpace("run ["), SkipSpace(i), SkipSpace("/"), SkipSpace(kNumRuns), "] :", h_hit, "hits", h_miss, "misses");
+            LOG_EXTRA(SkipSpace("run ["), SkipSpace(i+1), SkipSpace("/"), SkipSpace(kNumRuns), "]:", h_hit, "hits", h_miss, "misses");
         }
 
         std::chrono::time_point gpu_since_epoch = std::chrono::high_resolution_clock::now(); // get the duration since epoch
