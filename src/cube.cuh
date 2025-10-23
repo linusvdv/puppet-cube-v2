@@ -124,7 +124,7 @@ public:
         const std::vector<uint8_t>& edge_heuristics
         );
 
-    __device__ static DRotateReturn Rotate(const DState& prev_state, const uint8_t& rotation);
+    __device__ static DRotateReturn Rotate(const DState& prev_state, uint8_t rotation);
 
     __device__ static bool DTablebaseContains(const DState& state);
 };
