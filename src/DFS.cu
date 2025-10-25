@@ -20,7 +20,7 @@ struct DFSStack {
 
 struct DFSShared {
     DState start;
-    uint8_t idx;
+    uint16_t idx;
     int8_t dfs_stack_idx;
     int8_t depths[kMaxDFSDepth];
     int8_t rotations[kMaxDFSDepth];
@@ -32,15 +32,13 @@ struct DFSShared {
 __global__ void DFSGlobal(DState* d_random_position, size_t num_random_position, size_t* d_num_nodes_gpu, size_t* d_num_tb_hits_gpu, int max_depth) {
     size_t index = threadIdx.x + (size_t(blockIdx.x) * blockDim.x);
 
-    if (index >= num_random_position) {
-        return;
-    }
-
     __shared__ DFSShared dfs_shared[kBlockDim];
-    dfs_shared[threadIdx.x] = {d_random_position[index], uint8_t(threadIdx.x), 0, {0}, {0}, 0, 0};
-    dfs_shared[threadIdx.x].cur_num_nodes_gpu++;
-    if (DCube::DTablebaseContains(dfs_shared[threadIdx.x].start)) {
-        dfs_shared[threadIdx.x].cur_num_tb_hits_gpu++;
+    if (index < num_random_position) {
+        dfs_shared[threadIdx.x] = {d_random_position[index], uint16_t(threadIdx.x), 0, {0}, {0}, 0, 0};
+        dfs_shared[threadIdx.x].cur_num_nodes_gpu++;
+        if (DCube::DTablebaseContains(dfs_shared[threadIdx.x].start)) {
+            dfs_shared[threadIdx.x].cur_num_tb_hits_gpu++;
+        }
     }
 
     __shared__ int needs_compute;
@@ -50,29 +48,36 @@ __global__ void DFSGlobal(DState* d_random_position, size_t num_random_position,
     DFSStack dfs_stack[kMaxDFSDepth+1];
     int8_t dfs_stack_idx;
 
+    DFSStack dfs_stack_old[kMaxDFSDepth+1];
+
     while (true) {
         size_t acc_num_nodes_gpu = 0;
         size_t acc_num_tb_his_gpu = 0;
-        uint8_t cur_idx;
+        uint16_t cur_idx;
 
         // load from dfs_shared
-        {
-            __syncthreads();
+        __syncthreads();
+        if (index < num_random_position) {
             if (threadIdx.x == 0) {
                 needs_compute = 0;
-                finished_compute = blockIdx.x-1;
+                finished_compute = blockDim.x-1;
+                if (num_random_position < (blockIdx.x + 1) * blockDim.x) {
+                    finished_compute = (num_random_position-1) % blockDim.x;
+                }
             }
 
             dfs_stack_idx = dfs_shared[threadIdx.x].dfs_stack_idx;
-            DState loading_state = dfs_shared[threadIdx.x].start;
+            cur_idx = dfs_shared[threadIdx.x].idx;
+            DState loading_state = d_random_position[cur_idx + size_t(blockIdx.x) * blockDim.x];
             acc_num_nodes_gpu = dfs_shared[threadIdx.x].cur_num_nodes_gpu;
             acc_num_tb_his_gpu = dfs_shared[threadIdx.x].cur_num_tb_hits_gpu;
-            cur_idx = dfs_shared[threadIdx.x].idx;
             int loading_idx = 0;
             for (int i = 0; i < kMaxDFSDepth && loading_idx <= dfs_stack_idx; i++) {
-                if (dfs_shared[threadIdx.x].depths[loading_idx] >= i) { // nomal rotation
+                if (dfs_shared[threadIdx.x].depths[loading_idx] <= i) { // nomal rotation
                     dfs_stack[loading_idx].state = loading_state;
-                    loading_state = DCube::Rotate(loading_state, dfs_shared[threadIdx.x].rotations[loading_idx]).state;
+                    dfs_stack[loading_idx].rotation = dfs_shared[threadIdx.x].rotations[loading_idx];
+                    dfs_stack[loading_idx].depth = dfs_shared[threadIdx.x].depths[loading_idx];
+                    loading_state = DCube::Rotate(loading_state, dfs_stack[loading_idx].rotation-1).state;
                     loading_idx++;
                 }
                 else {
@@ -82,28 +87,30 @@ __global__ void DFSGlobal(DState* d_random_position, size_t num_random_position,
         }
 
         // do progress on the current
-        constexpr int kBatchSync = 1000;
-        for (int i = 0; i < kBatchSync && dfs_stack_idx >= 0; i++) {
-            int8_t cur_depth = dfs_stack[dfs_stack_idx].depth;
-            DRotateReturn next = DCube::Rotate(dfs_stack[dfs_stack_idx].state, dfs_stack[dfs_stack_idx].rotation++);
+        if (index < num_random_position) {
+            constexpr int kBatchSync = 1000;
+            for (int i = 0; i < kBatchSync && dfs_stack_idx >= 0; i++) {
+                int8_t cur_depth = dfs_stack[dfs_stack_idx].depth;
+                DRotateReturn next = DCube::Rotate(dfs_stack[dfs_stack_idx].state, dfs_stack[dfs_stack_idx].rotation++);
 
-            if (dfs_stack[dfs_stack_idx].rotation >= kNumRotations) {
-                dfs_stack_idx--;
-            }
-
-            if (next.isLegal) {
-                acc_num_nodes_gpu++;
-                if (DCube::DTablebaseContains(next.state)) {
-                    acc_num_tb_his_gpu++;
+                if (dfs_stack[dfs_stack_idx].rotation >= kDNumRotations) {
+                    dfs_stack_idx--;
                 }
-                if (cur_depth+1 < max_depth) {
-                    dfs_stack[++dfs_stack_idx] = {int8_t(cur_depth+1), 0, next.state};
+
+                if (next.isLegal) {
+                    acc_num_nodes_gpu++;
+                    if (DCube::DTablebaseContains(next.state)) {
+                        acc_num_tb_his_gpu++;
+                    }
+                    if (cur_depth+1 < max_depth) {
+                        dfs_stack[++dfs_stack_idx] = {int8_t(cur_depth+1), 0, next.state};
+                    }
                 }
             }
         }
 
-        {
-            __syncthreads();
+        __syncthreads();
+        if (index < num_random_position) {
             int new_idx;
             if (dfs_stack_idx >= 0) { // needs_compute
                  new_idx = atomicAdd(&needs_compute, 1);
@@ -111,6 +118,9 @@ __global__ void DFSGlobal(DState* d_random_position, size_t num_random_position,
             else {
                 new_idx = atomicAdd(&finished_compute, -1);
             }
+
+            for (int i=0;i<kMaxDFSDepth+1;i++)
+            dfs_stack_old[i] = dfs_stack[i];
 
             // upload to shared memory
             dfs_shared[new_idx].start = dfs_stack[0].state;
@@ -123,15 +133,17 @@ __global__ void DFSGlobal(DState* d_random_position, size_t num_random_position,
                 dfs_shared[new_idx].rotations[i] = dfs_stack[i].rotation;
             }
 
-            __syncthreads();
-            if (needs_compute == 0) {
-                break;
-            }
+        }
+        __syncthreads();
+        if (needs_compute == 0) {
+            break;
         }
     }
 
-    d_num_nodes_gpu[size_t(dfs_shared[threadIdx.x].idx) + (size_t(blockIdx.x) * blockDim.x)] = dfs_shared[threadIdx.x].cur_num_nodes_gpu;
-    d_num_tb_hits_gpu[size_t(dfs_shared[threadIdx.x].idx) + (size_t(blockIdx.x) * blockDim.x)] = dfs_shared[threadIdx.x].cur_num_tb_hits_gpu;
+    if (index < num_random_position) {
+        d_num_nodes_gpu[size_t(dfs_shared[threadIdx.x].idx) + (size_t(blockIdx.x) * blockDim.x)] = dfs_shared[threadIdx.x].cur_num_nodes_gpu;
+        d_num_tb_hits_gpu[size_t(dfs_shared[threadIdx.x].idx) + (size_t(blockIdx.x) * blockDim.x)] = dfs_shared[threadIdx.x].cur_num_tb_hits_gpu;
+    }
 }
 
 
