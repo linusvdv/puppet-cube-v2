@@ -19,7 +19,6 @@ struct DFSStack {
 
 
 struct DFSShared {
-    DState start;
     uint16_t idx;
     int8_t dfs_stack_idx;
     int8_t depths[kMaxDFSDepth];
@@ -34,9 +33,9 @@ __global__ void DFSGlobal(DState* d_random_position, size_t num_random_position,
 
     __shared__ DFSShared dfs_shared[kBlockDim];
     if (index < num_random_position) {
-        dfs_shared[threadIdx.x] = {d_random_position[index], uint16_t(threadIdx.x), 0, {0}, {0}, 0, 0};
+        dfs_shared[threadIdx.x] = {uint16_t(threadIdx.x), 0, {0}, {0}, 0, 0};
         dfs_shared[threadIdx.x].cur_num_nodes_gpu++;
-        if (DCube::DTablebaseContains(dfs_shared[threadIdx.x].start)) {
+        if (DCube::DTablebaseContains(d_random_position[index])) {
             dfs_shared[threadIdx.x].cur_num_tb_hits_gpu++;
         }
     }
@@ -45,10 +44,8 @@ __global__ void DFSGlobal(DState* d_random_position, size_t num_random_position,
     __shared__ int finished_compute;
 
     // device fixed max size stack in registes
-    DFSStack dfs_stack[kMaxDFSDepth+1];
+    DFSStack dfs_stack[kMaxDFSDepth];
     int8_t dfs_stack_idx;
-
-    DFSStack dfs_stack_old[kMaxDFSDepth+1];
 
     while (true) {
         size_t acc_num_nodes_gpu = 0;
@@ -88,7 +85,7 @@ __global__ void DFSGlobal(DState* d_random_position, size_t num_random_position,
 
         // do progress on the current
         if (index < num_random_position) {
-            constexpr int kBatchSync = 1000;
+            constexpr int kBatchSync = 1000000;
             for (int i = 0; i < kBatchSync && dfs_stack_idx >= 0; i++) {
                 int8_t cur_depth = dfs_stack[dfs_stack_idx].depth;
                 DRotateReturn next = DCube::Rotate(dfs_stack[dfs_stack_idx].state, dfs_stack[dfs_stack_idx].rotation++);
@@ -119,11 +116,7 @@ __global__ void DFSGlobal(DState* d_random_position, size_t num_random_position,
                 new_idx = atomicAdd(&finished_compute, -1);
             }
 
-            for (int i=0;i<kMaxDFSDepth+1;i++)
-            dfs_stack_old[i] = dfs_stack[i];
-
             // upload to shared memory
-            dfs_shared[new_idx].start = dfs_stack[0].state;
             dfs_shared[new_idx].idx = cur_idx;
             dfs_shared[new_idx].dfs_stack_idx = dfs_stack_idx;
             dfs_shared[new_idx].cur_num_nodes_gpu = acc_num_nodes_gpu;
