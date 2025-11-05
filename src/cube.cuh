@@ -114,6 +114,8 @@ struct DRotateReturn {
 
 class DCube {
 public:
+    __device__ DCube() {}
+
     static __host__ void UploadComputationToDevice(
         const std::vector<uint16_t>& corner_orientations,
         const std::vector<uint16_t>& corner_positions,
@@ -127,4 +129,15 @@ public:
     __device__ static DRotateReturn Rotate(const DState& prev_state, const uint8_t& rotation);
 
     __device__ static bool DTablebaseContains(const DState& state);
+
+    __device__ uint16_t GetMaxHeuristic(const DState& state);
+
+private:
+    __device__ void SetCurCornerHeuristic(const DState& state);
+    __device__ void SetCurEdgeHeuristic1(const DState& state);
+    __device__ void SetCurEdgeHeuristic2(const DState& state);
+
+    uint16_t cur_corner_heuristic_ = -1;
+    uint8_t cur_edge_heuristic_1_ = -1;
+    uint8_t cur_edge_heuristic_2_ = -1;
 };

@@ -125,3 +125,48 @@ void UploadRandomPositionsToDevice(const std::vector<State>& random_positions) {
     }
     random_positions_size = temp_size;
 }
+
+
+__device__ void DCube::SetCurCornerHeuristic(const DState& state) {
+    uint16_t corner_orientation = state.hash_2 >> 20;      // 12 bites         NOLINT
+    uint16_t corner_position = state.hash_1;               // 16 bites         NOLINT
+    cur_corner_heuristic_ = d_corner_heuristics[(corner_orientation*kNumCornerPositions) + corner_position] & ((uint16_t(1) << 8) - 1); // NOLINT
+}
+
+__device__ void DCube::SetCurEdgeHeuristic1(const DState& state) {
+    uint32_t orientation = state.hash_3 >> 20; // NOLINT
+    uint32_t position = state.hash_2 & ((uint32_t(1) << 20) - 1); // NOLINT
+    cur_edge_heuristic_1_ = d_edge_heuristics[(orientation*kNumEdgePositions) + position];
+}
+
+__device__ void DCube::SetCurEdgeHeuristic2(const DState& state) {
+    uint32_t orientation = state.hash_3 >> 20; // NOLINT
+    orientation |= (__popc(orientation)%2) << (kNumEdges-1); // get last bit using even num bits parity
+    uint32_t orientation_r = 0;
+    for (int i = 1; i < kNumEdges; i++) {
+        orientation_r |= ((orientation >> i) & uint32_t(1)) << (kNumEdges-1-i);
+    }
+
+    uint32_t position = state.hash_3 & ((uint32_t(1) << 20) - 1); // NOLINT
+    uint32_t position_r = 0;
+    uint32_t temp = kNumEdgePositions;
+    for (int i = kNumEdges-1; i >= 6; i--) { // NOLINT
+        temp /= i+1;
+        position_r *= i+1;
+        position_r += i - ((position / temp) % (i + 1)); // NOLINT
+    }
+    cur_edge_heuristic_2_ = d_edge_heuristics[(orientation_r*kNumEdgePositions) + position_r];
+}
+
+__device__ uint16_t DCube::GetMaxHeuristic(const DState& state) {
+    if (cur_corner_heuristic_ == uint16_t(-1)) {
+        SetCurCornerHeuristic(state);
+    }
+    if (cur_edge_heuristic_1_ == uint8_t(-1)) {
+        SetCurEdgeHeuristic1(state);
+    }
+    if (cur_edge_heuristic_2_ == uint8_t(-1)) {
+        SetCurEdgeHeuristic2(state);
+    }
+    return max(max(cur_corner_heuristic_, uint16_t(cur_edge_heuristic_1_)), uint16_t(cur_edge_heuristic_2_));
+}

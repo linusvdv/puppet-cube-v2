@@ -50,6 +50,8 @@ __global__ void DFSGlobal(DState* d_random_position, size_t num_random_position,
             if (DCube::DTablebaseContains(next.state)) {
                 cur_num_tb_hits_gpu++;
             }
+            DCube cube;
+            cube.GetMaxHeuristic(next.state);
             if (cur_depth+1 < max_depth) {
                 dfs_stack[++dfs_stack_idx] = {int8_t(cur_depth+1), 0, next.state};
             }

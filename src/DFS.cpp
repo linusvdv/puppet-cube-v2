@@ -19,6 +19,8 @@ void DFS(const State& current, size_t& cnt, size_t& tb_cnt, int depth) {
     if (BCHTSetContains(Tablebase::tablebase.back(), current)) {
         tb_cnt++;
     }
+    Cube cube;
+    cube.GetMaxHeuristic(current);
     if (depth == 0) {
         return;
     }

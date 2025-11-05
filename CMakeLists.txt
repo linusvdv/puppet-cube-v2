@@ -123,6 +123,7 @@ set(Release_Options -O3)
 
 target_compile_options(PuppetCubeV2 PRIVATE
     $<$<COMPILE_LANGUAGE:CXX>:-Wall -Wextra -g>
+    $<$<COMPILE_LANGUAGE:CUDA>:-Xptxas -v>
     $<$<CONFIG:Debug>:${Debug_Options}>
     $<$<CONFIG:Release>:${Release_Options}>
 )
