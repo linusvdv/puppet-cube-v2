@@ -1,8 +1,11 @@
 #pragma once
+#include <algorithm>
+#include <bit>
 #include <compare>
 #include <cstddef>
 #include <cstdint>
 #include <vector>
+#include "logger.hpp"
 
 
 constexpr int kNumCorners = 8;
@@ -106,6 +109,7 @@ struct State {
 constexpr State kSolvedState = State(0, 0, 0, 0, kNumEdgePositions-1);
 
 
+// A cube instance is not long living
 class Cube {
 public:
     // corner and edge precomputation
@@ -114,6 +118,10 @@ public:
     static void UploadComputationToDevice();
 
     static std::pair<bool, State> Rotate(const State& prev_state, const uint8_t& rotation);
+
+    Cube(){}
+
+    uint16_t GetMaxHeuristic(const State& state);
 
 private:
     // precomputation
@@ -124,4 +132,12 @@ private:
     static std::vector<uint16_t> edge_orientations;
     static std::vector<uint32_t> edge_positions;
     static std::vector<uint8_t> edge_heuristics;
+
+    void SetCurCornerHeuristic(const State& state);
+    void SetCurEdgeHeuristic1(const State& state);
+    void SetCurEdgeHeuristic2(const State& state);
+
+    uint16_t cur_corner_heuristic_ = -1;
+    uint8_t cur_edge_heuristic_1_ = -1;
+    uint8_t cur_edge_heuristic_2_ = -1;
 };

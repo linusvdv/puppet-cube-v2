@@ -92,7 +92,6 @@ void Cube::Initialize() {
     LoadOrGenerate("corner_positions.bin", corner_positions, kCornerPositionsSize,
         [](){return CornerPositionInitialization();}, "[2/6] Corner Positions");
 
-
     LoadOrGenerate("corner_heuristics.bin", corner_heuristics, kNumCornerHeuristic,
         [](){return CornerHeuristicInitialization(corner_orientations, corner_positions);}, "[3/6] Corner Heuristics");
 
@@ -137,4 +136,49 @@ void Cube::UploadComputationToDevice() {
     LOG_INFO("Cube Precomputation Uploaded to Device");
     LOG_MEMORY();
     #endif // USE_CUDA
+}
+
+
+void Cube::SetCurCornerHeuristic(const State& state) {
+    uint16_t corner_orientation = state.hash_2 >> 20;      // 12 bites         NOLINT
+    uint16_t corner_position = state.hash_1;               // 16 bites         NOLINT
+    cur_corner_heuristic_ = corner_heuristics[(corner_orientation*kNumCornerPositions) + corner_position] & ((uint16_t(1) << 8) - 1); // NOLINT
+}
+
+void Cube::SetCurEdgeHeuristic1(const State& state) {
+    uint32_t orientation = state.hash_3 >> 20; // NOLINT
+    uint32_t position = state.hash_2 & ((uint32_t(1) << 20) - 1); // NOLINT
+    cur_edge_heuristic_1_ = edge_heuristics[(orientation*kNumEdgePositions) + position];
+}
+
+void Cube::SetCurEdgeHeuristic2(const State& state) {
+    uint32_t orientation = state.hash_3 >> 20; // NOLINT
+    orientation |= (std::popcount(orientation)%2) << (kNumEdges-1); // get last bit using even num bits parity
+    uint32_t orientation_r = 0;
+    for (int i = 1; i < kNumEdges; i++) {
+        orientation_r |= ((orientation >> i) & uint32_t(1)) << (kNumEdges-1-i);
+    }
+
+    uint32_t position = state.hash_3 & ((uint32_t(1) << 20) - 1); // NOLINT
+    uint32_t position_r = 0;
+    uint32_t temp = kNumEdgePositions;
+    for (int i = kNumEdges-1; i >= 6; i--) { // NOLINT
+        temp /= i+1;
+        position_r *= i+1;
+        position_r += i - ((position / temp) % (i + 1)); // NOLINT
+    }
+    cur_edge_heuristic_2_ = edge_heuristics[(orientation_r*kNumEdgePositions) + position_r];
+}
+
+uint16_t Cube::GetMaxHeuristic(const State& state) {
+    if (cur_corner_heuristic_ == uint16_t(-1)) {
+        SetCurCornerHeuristic(state);
+    }
+    if (cur_edge_heuristic_1_ == uint8_t(-1)) {
+        SetCurEdgeHeuristic1(state);
+    }
+    if (cur_edge_heuristic_2_ == uint8_t(-1)) {
+        SetCurEdgeHeuristic2(state);
+    }
+    return std::max({cur_corner_heuristic_, uint16_t(cur_edge_heuristic_1_), uint16_t(cur_edge_heuristic_2_)});
 }

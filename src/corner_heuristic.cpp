@@ -1,6 +1,7 @@
 #include <array>
 #include <atomic>
 #include <cassert>
+#include <cstddef>
 #include <cstdint>
 #include <thread>
 #include <vector>
@@ -185,6 +186,18 @@ std::vector<uint16_t> CornerHeuristicInitialization(const std::vector<uint16_t>&
         std::swap(current, next);
         next = {};
     } while (!current.empty());
+
+    std::vector<size_t> cnt_depth(depth, 0);
+    for (uint16_t corner : corner_heuristic) {
+        if (corner == 0) {
+            continue;
+        }
+        cnt_depth[corner & ((uint16_t(1)<<8) - 1)]++; // NOLINT
+    }
+    for (size_t i = 0; i < cnt_depth.size(); i++) {
+        LOG_EXTRA("Depth", SkipSpace(i), ":", cnt_depth[i]);
+    }
+
 
     if (cnt != kNumLegalCornerConfigurations) {
         LOG_CRITICAL("Found", cnt, "number of legal conrer configurations instead of", kNumLegalCornerConfigurations);
