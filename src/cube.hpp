@@ -122,6 +122,7 @@ public:
     Cube(){}
 
     uint16_t GetMaxHeuristic(const State& state);
+    uint16_t GetAppHeuristic(const State& state);
 
 private:
     // precomputation

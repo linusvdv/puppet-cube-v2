@@ -1,6 +1,8 @@
 #include "cube.hpp"
 #include "DFS.hpp"
 #include "logger.hpp"
+#include "random_position.hpp"
+#include "search.hpp"
 #include "settings.hpp"
 #include "tablebase.hpp"
 
@@ -39,6 +41,13 @@ int main (int argc, char *argv[]) {
 
     TimeDFS();
     LOG_MEMORY();
+
+    std::vector<State> random_positions = RandomPositions(10, 0);
+    for (State starting_state : random_positions) {
+        LOG_ALL(starting_state.hash_1, starting_state.hash_2, starting_state.hash_3);
+        int depth = Search(starting_state);
+        LOG_INFO("Depth:", depth);
+    }
 
     return 0;
 }

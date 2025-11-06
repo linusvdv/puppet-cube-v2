@@ -48,7 +48,6 @@ void TimeDFS() {
 
     std::vector<size_t> num_nodes_cpu(random_positions.size(), 0);
     std::vector<size_t> num_tb_hits_cpu(random_positions.size(), 0);
-    LOG_MEMORY();
 
     // Time phmap multithreads
     LOG_EXTRA("Start timing of DFS multithreads");
@@ -128,5 +127,12 @@ void TimeDFS() {
             }
         }
     }
+    #else
+    size_t total_num_positions = 0;
+    for (size_t i = 0; i < num_nodes_cpu.size(); i++) {
+        total_num_positions += num_nodes_cpu[i];
+    }
+    LOG_EXTRA("CPU Total num positions:", total_num_positions);
+    LOG_EXTRA("CPU Positions per seconds:", int64_t(total_num_positions*1000/(dfs_time_multi.count()+1e-3)));
     #endif // USE_CUDA
 }

@@ -170,6 +170,7 @@ void Cube::SetCurEdgeHeuristic2(const State& state) {
     cur_edge_heuristic_2_ = edge_heuristics[(orientation_r*kNumEdgePositions) + position_r];
 }
 
+
 uint16_t Cube::GetMaxHeuristic(const State& state) {
     if (cur_corner_heuristic_ == uint16_t(-1)) {
         SetCurCornerHeuristic(state);
@@ -181,4 +182,19 @@ uint16_t Cube::GetMaxHeuristic(const State& state) {
         SetCurEdgeHeuristic2(state);
     }
     return std::max({cur_corner_heuristic_, uint16_t(cur_edge_heuristic_1_), uint16_t(cur_edge_heuristic_2_)});
+}
+
+
+uint16_t Cube::GetAppHeuristic(const State& state) {
+    if (cur_corner_heuristic_ == uint16_t(-1)) {
+        SetCurCornerHeuristic(state);
+    }
+    if (cur_edge_heuristic_1_ == uint8_t(-1)) {
+        SetCurEdgeHeuristic1(state);
+    }
+    if (cur_edge_heuristic_2_ == uint8_t(-1)) {
+        SetCurEdgeHeuristic2(state);
+    }
+    // this part can be adjusted
+    return cur_corner_heuristic_ + uint16_t(cur_edge_heuristic_1_) + uint16_t(cur_edge_heuristic_2_);
 }
