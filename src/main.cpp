@@ -42,12 +42,7 @@ int main (int argc, char *argv[]) {
     TimeDFS();
     LOG_MEMORY();
 
-    std::vector<State> random_positions = RandomPositions(10, 0);
-    for (State starting_state : random_positions) {
-        LOG_ALL(starting_state.hash_1, starting_state.hash_2, starting_state.hash_3);
-        int depth = Search(starting_state);
-        LOG_INFO("Depth:", depth);
-    }
-
+    MainSearch();
+    LOG_INFO("Search Computed");
     return 0;
 }

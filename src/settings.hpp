@@ -35,6 +35,14 @@ public:
         return num_threads;
     }
 
+    static size_t GetNumPositions() {
+        return num_positions;
+    }
+
+    static size_t GetNumRuns() {
+        return num_runs;
+    }
+
     static int GetTBDepth() {
         return tb_depth;
     }
@@ -66,6 +74,8 @@ private:
 
     // search
     static int num_threads;
+    static size_t num_positions;
+    static size_t num_runs;
 
     // tb_depth
     // tb_depth_gpu

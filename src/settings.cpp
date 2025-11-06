@@ -13,7 +13,9 @@ std::string Settings::root_path;
 bool Settings::test_bcht = false;
 bool Settings::test_dfs = false;
 int Settings::dfs_depth = 4;
-size_t Settings::num_dfs_positions = 100000; // NOLINT
+size_t Settings::num_dfs_positions = 100000;  // NOLINT
+size_t Settings::num_positions = 100000000;  // NOLINT
+size_t Settings::num_runs = 10;
 int Settings::scrambling_depth = 100;  // NOLINT
 int Settings::num_threads = 1;
 int Settings::tb_depth = 6;  // NOLINT
@@ -31,6 +33,8 @@ static struct option long_options[] = {
     {"tb_depth", required_argument, NULL, 0},
     {"tb_depth_gpu", required_argument, NULL, 0},
     {"scrambling_depth", required_argument, NULL, 's'},
+    {"num_positions", required_argument, NULL, 'p'},
+    {"num_runs", required_argument, NULL, 'r'},
 
     {"BCHT", no_argument, NULL, 'B'},
 
@@ -59,6 +63,8 @@ list of options
     --tb_depth             depth of the tablebase (9 uses 40 GB RAM)     [6]            (0, 9)
     --tb_depth_gpu         how much get sent to GPU (<= CPU)             [8]            (0, 9)
     -s --scrambling_depth  how many moves to scramble                    [100]          (0, 1000000)
+    -p --num_positions     max number of positions used in the search    [1e8]          (0, 1e18)
+    -r --num_runs          number of runs                                [10]           (0, 1e18)
 
     -B --BCHT              time BCHT with comparison to phmap
 
@@ -124,7 +130,7 @@ Settings::Settings (int argc, char *argv[]) {
     temp_root_path.append("/../../");
     root_path.append(temp_root_path);
 
-    const char* short_options = "hiBt:Ds:l:";
+    const char* short_options = "hiBt:p:r:Ds:l:";
     opterr = 0; // supress error messages from getopt_long
     int option_index;
     signed char cop;
@@ -177,6 +183,12 @@ Settings::Settings (int argc, char *argv[]) {
                 break;
             case 's':
                 GetTFromOptarg(scrambling_depth, 0, 1000000, "SCRAMBLING DEPTH"); // NOLINT
+                break;
+            case 'p':
+                GetTFromOptarg(num_positions, size_t(0), size_t(1e18), "NUM POSITIONS");  // NOLINT
+                break;
+            case 'r':
+                GetTFromOptarg(num_runs, size_t(0), size_t(1e18), "NUM RUNS");  // NOLINT
                 break;
             case 0:
                 if (std::string(long_options[option_index].name) == "error_level") {
