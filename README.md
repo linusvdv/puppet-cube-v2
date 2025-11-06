@@ -53,7 +53,7 @@ list of options
     --tb_depth             depth of the tablebase (9 uses 40 GB RAM)     [6]            (0, 9)
     --tb_depth_gpu         how much get sent to GPU (<= CPU)             [8]            (0, 9)
     -s --scrambling_depth  how many moves to scramble                    [100]          (0, 1000000)
-    -p --num_positions     max number of positions used in the search    [1e8]          (0, 1e18)
+    -p --num_positions     max number of positions used in the search    [1e7]          (0, 1e18)
     -r --num_runs          number of runs                                [10]           (0, 1e18)
 
     -B --BCHT              time BCHT with comparison to phmap

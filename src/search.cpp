@@ -33,25 +33,38 @@ int Search(const State& starting_position, uint64_t& num_positions) {
     pq_search.push({start_cube.GetMaxHeuristic(starting_position), 0, starting_position});
     visited.insert(starting_position);
     num_positions++;
+    int best_sol = 100;
 
-    while (true) {
+    while (num_positions < Settings::GetNumPositions() && !pq_search.empty()) {
         PQSearch pq_top = pq_search.top();
         pq_search.pop();
 
         for (uint8_t rotation = 0; rotation < kNumRotations; rotation++) {
             std::pair<bool, State> next_position = Cube::Rotate(pq_top.state, rotation);
             if (BCHTSetContains(Tablebase::tablebase.back(), next_position.second)) {
-                return pq_top.depth + 1 + Settings::GetTBDepth();
+                int curr_sol = pq_top.depth + 1 + Settings::GetTBDepth();
+                if (curr_sol < best_sol) {
+                    best_sol = curr_sol;
+                    LOG_EXTRA("best sol:", best_sol, "num_positions:", num_positions);
+                }
             }
 
             Cube next_cube;
             if (!visited.contains(next_position.second)) {
+                if (std::max(int(next_cube.GetMaxHeuristic(next_position.second)), Settings::GetTBDepth()) + pq_top.depth + 1 >= best_sol) {
+                    continue;
+                }
                 pq_search.push({next_cube.GetAppHeuristic(next_position.second)+pq_top.depth+1, pq_top.depth+1, next_position.second});
                 visited.insert(next_position.second);
                 num_positions++;
             }
         }
     }
+
+    if (pq_search.empty()) {
+        LOG_EXTRA("OPTIMAL!");
+    }
+    return best_sol;
 }
 
 
