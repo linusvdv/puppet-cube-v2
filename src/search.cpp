@@ -1,6 +1,6 @@
 #include <cstdint>
 #include <queue>
-#include <set>
+#include <parallel_hashmap/phmap.h>
 
 #include "BCHTSet.hpp"
 #include "cube.hpp"
@@ -27,7 +27,7 @@ int Search(const State& starting_position, uint64_t& num_positions) {
     }
 
     std::priority_queue<PQSearch, std::vector<PQSearch>, std::greater<>> pq_search;
-    std::set<State> visited;
+    phmap::flat_hash_set<State> visited;
 
     Cube start_cube;
     pq_search.push({start_cube.GetMaxHeuristic(starting_position), 0, starting_position});
