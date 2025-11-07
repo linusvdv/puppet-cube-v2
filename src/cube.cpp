@@ -27,6 +27,14 @@ std::vector<uint32_t> Cube::edge_positions;
 std::vector<uint8_t> Cube::edge_heuristics;
 
 
+uint8_t GetRevRotation(uint8_t rotation) {
+    if (rotation % 2 == 0) {
+        return rotation + 1;
+    }
+    return rotation - 1;
+}
+
+
 // place where the precomputation is stored
 std::string GetFilePath (std::string file_name) {
     // path/to/puppet-cube-v2/precomputation/file_name

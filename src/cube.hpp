@@ -47,6 +47,9 @@ enum Rotations : uint8_t {
 };
 
 
+uint8_t GetRevRotation(uint8_t rotation);
+
+
 // 10 bytes
 struct State {
     uint16_t hash_1 = -1;

@@ -7,10 +7,17 @@
 #include <mutex>
 #include <source_location>
 #include <sstream>
+#include <stack>
 #include <string_view>
 #include <type_traits>
+#include <vector>
 
+#include "cube.hpp"
 #include "nadeau.h"
+
+
+enum Rotations : uint8_t;
+std::ostringstream& operator<<(std::ostringstream& oss, Rotations rotation);
 
 
 enum class LoggerLevel {
@@ -52,6 +59,7 @@ class Logger {
         static LoggerLevel logger_level;
         static std::mutex log_mutex;
 };
+
 
 template<typename T>
 struct SkipSpace {
@@ -108,6 +116,17 @@ void Logger::Log (LoggerLevel level, const std::source_location& source_location
         (([&] {
             if constexpr (kIsSkippedSpace<std::decay_t<Args>>) {
                 oss << args.value;
+            }
+            else if constexpr (std::is_same_v<std::remove_cvref_t<decltype(args)>, std::stack<Rotations>>) {
+                while (!args.empty()) {
+                    oss << args.top() << ' ';
+                    args.pop();
+                }
+            }
+            else if constexpr (std::is_same_v<std::remove_cvref_t<decltype(args)>, std::vector<Rotations>>) {
+                for (Rotations rotation : args) {
+                    oss << rotation << ' ';
+                }
             }
             else {
                 oss << args << ' ';

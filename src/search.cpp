@@ -1,5 +1,6 @@
 #include <cstdint>
 #include <queue>
+#include <stack>
 #include <parallel_hashmap/phmap.h>
 
 #include "BCHTSet.hpp"
@@ -19,21 +20,40 @@ struct PQSearch {
 };
 
 
+void SolveTB(std::stack<Rotations>& rev_moves, int tb_layer, State state) {
+    for (int layer = tb_layer - 1; layer >= 0; layer--) {
+        for (uint8_t rotation = 0; rotation < kNumRotations; rotation++) {
+            State next_state = Cube::Rotate(state, rotation).second;
+            if (BCHTSetContains(Tablebase::tablebase[layer], next_state)) {
+                state = next_state;
+                rev_moves.push(Rotations(GetRevRotation(rotation)));
+                break;
+            }
+        }
+    }
+}
+
+
 int Search(const State& starting_position, uint64_t& num_positions) {
     for (int i = 0; i <= Settings::GetTBDepth(); i++) {
         if (BCHTSetContains(Tablebase::tablebase[i], starting_position)) {
+            LOG_EXTRA("Position in tablebase");
+            State best_endstate = starting_position;
+            std::stack<Rotations> rev_moves;
+            SolveTB(rev_moves, i, best_endstate);
             return i;
         }
     }
 
     std::priority_queue<PQSearch, std::vector<PQSearch>, std::greater<>> pq_search;
-    phmap::flat_hash_set<State> visited;
+    phmap::flat_hash_map<State, int> visited;
 
     Cube start_cube;
     pq_search.push({start_cube.GetMaxHeuristic(starting_position), 0, starting_position});
-    visited.insert(starting_position);
+    visited.insert({starting_position, -1});
     num_positions++;
     int best_sol = 100;
+    State best_endstate;
 
     while (num_positions < Settings::GetNumPositions() && !pq_search.empty()) {
         PQSearch pq_top = pq_search.top();
@@ -45,6 +65,8 @@ int Search(const State& starting_position, uint64_t& num_positions) {
                 int curr_sol = pq_top.depth + 1 + Settings::GetTBDepth();
                 if (curr_sol < best_sol) {
                     best_sol = curr_sol;
+                    best_endstate = next_position.second;
+                    visited.insert({next_position.second, rotation});
                     LOG_EXTRA("best sol:", best_sol, "num_positions:", num_positions);
                 }
             }
@@ -55,15 +77,32 @@ int Search(const State& starting_position, uint64_t& num_positions) {
                     continue;
                 }
                 pq_search.push({next_cube.GetAppHeuristic(next_position.second)+pq_top.depth+1, pq_top.depth+1, next_position.second});
-                visited.insert(next_position.second);
+                visited.insert({next_position.second, rotation});
                 num_positions++;
             }
         }
     }
 
     if (pq_search.empty()) {
-        LOG_EXTRA("OPTIMAL!");
+        LOG_EXTRA("Optimal solution found!");
     }
+    if (best_sol == 100) {
+        LOG_EXTRA("Solution not found!");
+        return -1;
+    }
+
+    std::stack<Rotations> rev_rotations;
+    SolveTB(rev_rotations, Settings::GetTBDepth(), best_endstate);
+
+    std::vector<Rotations> search_rotations;
+    for (int i = 0; i < best_sol-Settings::GetTBDepth(); i++) {
+        uint8_t rotation = visited[best_endstate];
+        best_endstate = Cube::Rotate(best_endstate, GetRevRotation(rotation)).second;
+        search_rotations.push_back(Rotations(GetRevRotation(rotation)));
+    }
+
+    LOG_EXTRA(rev_rotations, search_rotations);
+
     return best_sol;
 }
 
