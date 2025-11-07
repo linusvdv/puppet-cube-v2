@@ -34,6 +34,37 @@ void SolveTB(std::stack<Rotations>& rev_moves, int tb_layer, State state) {
 }
 
 
+// return true if a solution is contained
+bool LeafSearch(const State& state, uint64_t& num_positions, int depth, int& best_sol, State& best_endstate, phmap::flat_hash_map<State, int>& visited, uint64_t& leaft_search_positions) {
+    num_positions++;
+    leaft_search_positions++;
+    if (BCHTSetContains(Tablebase::tablebase.back(), state)) {
+        if (depth + Settings::GetTBDepth() < best_sol) {
+            best_sol = depth + Settings::GetTBDepth();
+            best_endstate = state;
+            LOG_EXTRA("best sol:", best_sol, "num_positions:", num_positions, "leaf_search:", leaft_search_positions);
+            return true;
+        }
+    }
+    Cube cube;
+    if (std::max(int(cube.GetMaxHeuristic(state)), Settings::GetTBDepth()) + depth >= best_sol) {
+        return false;
+    }
+    bool is_solution = false;
+    for (int rotation = 0; rotation < kNumRotations; rotation++) {
+        std::pair<bool, State> next = Cube::Rotate(state, rotation);
+        if (next.first) {
+            bool res = LeafSearch(next.second, num_positions, depth+1, best_sol, best_endstate, visited, leaft_search_positions);
+            if (res) {
+                visited.insert({next.second, rotation});
+                is_solution = true;
+            }
+        }
+    }
+    return is_solution;
+}
+
+
 int Search(const State& starting_position, uint64_t& num_positions) {
     for (int i = 0; i <= Settings::GetTBDepth(); i++) {
         if (BCHTSetContains(Tablebase::tablebase[i], starting_position)) {
@@ -54,6 +85,7 @@ int Search(const State& starting_position, uint64_t& num_positions) {
     num_positions++;
     int best_sol = 100;
     State best_endstate;
+    uint64_t leaft_search_positions = 0;
 
     while (num_positions < Settings::GetNumPositions() && !pq_search.empty()) {
         PQSearch pq_top = pq_search.top();
@@ -67,7 +99,7 @@ int Search(const State& starting_position, uint64_t& num_positions) {
                     best_sol = curr_sol;
                     best_endstate = next_position.second;
                     visited.insert({next_position.second, rotation});
-                    LOG_EXTRA("best sol:", best_sol, "num_positions:", num_positions);
+                    LOG_EXTRA("best sol:", best_sol, "num_positions:", num_positions, "leaf_search:", leaft_search_positions);
                 }
             }
 
@@ -76,9 +108,16 @@ int Search(const State& starting_position, uint64_t& num_positions) {
                 if (std::max(int(next_cube.GetMaxHeuristic(next_position.second)), Settings::GetTBDepth()) + pq_top.depth + 1 >= best_sol) {
                     continue;
                 }
-                pq_search.push({next_cube.GetAppHeuristic(next_position.second)+pq_top.depth+1, pq_top.depth+1, next_position.second});
-                visited.insert({next_position.second, rotation});
-                num_positions++;
+                if (next_cube.GetMaxHeuristic(next_position.second)+pq_top.depth+1 > best_sol - 2) {
+                    if (LeafSearch(next_position.second, num_positions, pq_top.depth+1, best_sol, best_endstate, visited, leaft_search_positions)) {
+                        visited.insert({next_position.second, rotation}); // found new solution
+                    }
+                }
+                else {
+                    pq_search.push({next_cube.GetAppHeuristic(next_position.second)+pq_top.depth+1, pq_top.depth+1, next_position.second});
+                    visited.insert({next_position.second, rotation});
+                    num_positions++;
+                }
             }
         }
     }
