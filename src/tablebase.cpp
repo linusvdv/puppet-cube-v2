@@ -7,7 +7,6 @@
 
 #include "BCHTSet.hpp"
 #include "cube.hpp"
-#include "cuda_memory_transfer.cuh"
 #include "logger.hpp"
 #include "settings.hpp"
 #include "tablebase.hpp"
@@ -159,17 +158,17 @@ bool ExistsPrecomputation(std::vector<std::vector<State>>& tablebase, int depth)
     if (std::FILE* file = std::fopen(file_path.c_str(), "rb")) {
         size_t size = 0;
         if (std::fread(&size, sizeof(size), 1, file) != 1) {
-            LOG_CRITICAL(SkipSpace("Tablebase depth ["), SkipSpace(depth), SkipSpace("/"), SkipSpace(Settings::GetTBDepth()), "] was not able to read file", file_path);
+            LOG_CRITICAL(SkipSpace("Tablebase depth ["), SkipSpace(depth), SkipSpace("/"), SkipSpace(int(Settings::GetTBDepth())), "] was not able to read file", file_path);
         }
         tablebase.push_back({});
         tablebase.back().resize(size);
 
         if (std::fread(tablebase.back().data(), sizeof(State), size, file) == size) {
-            LOG_ALL(SkipSpace("Tablebase depth ["), SkipSpace(depth), SkipSpace("/"), SkipSpace(Settings::GetTBDepth()), "] read from file");
+            LOG_ALL(SkipSpace("Tablebase depth ["), SkipSpace(depth), SkipSpace("/"), SkipSpace(int(Settings::GetTBDepth())), "] read from file");
             LOG_MEMORY();
         }
         else {
-            LOG_CRITICAL(SkipSpace("Tablebase depth ["), SkipSpace(depth), SkipSpace("/"), SkipSpace(Settings::GetTBDepth()), "] was not able to read file", file_path);
+            LOG_CRITICAL(SkipSpace("Tablebase depth ["), SkipSpace(depth), SkipSpace("/"), SkipSpace(int(Settings::GetTBDepth())), "] was not able to read file", file_path);
         }
         std::fclose(file);
         return true;
@@ -184,17 +183,17 @@ void SavePrecomputation(std::vector<State>& tablebase_layer, int depth) {
     if (std::FILE* file = std::fopen(file_path.c_str(), "wb")) {
         size_t size = tablebase_layer.size();
         if (std::fwrite(&size, sizeof(size), 1, file) != 1) {
-            LOG_ERROR(SkipSpace("Tablebase depth ["), SkipSpace(depth), SkipSpace("/"), SkipSpace(Settings::GetTBDepth()), "] failed to write to file");
+            LOG_ERROR(SkipSpace("Tablebase depth ["), SkipSpace(depth), SkipSpace("/"), SkipSpace(int(Settings::GetTBDepth())), "] failed to write to file");
             return;
         }
         if (std::fwrite(tablebase_layer.data(), sizeof(State), size, file) != size) {
-            LOG_ERROR(SkipSpace("Tablebase depth ["), SkipSpace(depth), SkipSpace("/"), SkipSpace(Settings::GetTBDepth()), "] failed to write full file");
+            LOG_ERROR(SkipSpace("Tablebase depth ["), SkipSpace(depth), SkipSpace("/"), SkipSpace(int(Settings::GetTBDepth())), "] failed to write full file");
             return;
         }
         std::fclose(file);
     }
     else {
-        LOG_ERROR(SkipSpace("Tablebase depth ["), SkipSpace(depth), SkipSpace("/"), SkipSpace(Settings::GetTBDepth()), "] not able to save precomputation to file");
+        LOG_ERROR(SkipSpace("Tablebase depth ["), SkipSpace(depth), SkipSpace("/"), SkipSpace(int(Settings::GetTBDepth())), "] not able to save precomputation to file");
     }
 }
 
@@ -224,7 +223,7 @@ void Tablebase::Initialize() {
                 threads.push_back(std::jthread(TablebaseSearch, previous_tables.first, previous_tables.second, std::ref(tablebase_layer), j, Settings::GetNumThreads()));
             }
         }
-        LOG_ALL(SkipSpace("Tablebase depth ["), SkipSpace(i), SkipSpace("/"), SkipSpace(Settings::GetTBDepth()), "] precomputed:", tablebase_layer.size(), "positions");
+        LOG_ALL(SkipSpace("Tablebase depth ["), SkipSpace(i), SkipSpace("/"), SkipSpace(int(Settings::GetTBDepth())), "] precomputed:", tablebase_layer.size(), "positions");
 
         tablebase.push_back(BuildBCHTSet(tablebase_layer));
         std::swap(previous_tables.first, previous_tables.second);

@@ -124,8 +124,8 @@ public:
 
     Cube(){}
 
-    uint16_t GetMaxHeuristic(const State& state);
-    uint16_t GetAppHeuristic(const State& state);
+    uint8_t GetMaxHeuristic(const State& state);
+    uint8_t GetAppHeuristic(const State& state);
 
 private:
     // precomputation
@@ -141,7 +141,7 @@ private:
     void SetCurEdgeHeuristic1(const State& state);
     void SetCurEdgeHeuristic2(const State& state);
 
-    uint16_t cur_corner_heuristic_ = -1;
+    uint8_t cur_corner_heuristic_ = -1;
     uint8_t cur_edge_heuristic_1_ = -1;
     uint8_t cur_edge_heuristic_2_ = -1;
 };

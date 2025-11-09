@@ -150,7 +150,7 @@ void Cube::UploadComputationToDevice() {
 void Cube::SetCurCornerHeuristic(const State& state) {
     uint16_t corner_orientation = state.hash_2 >> 20;      // 12 bites         NOLINT
     uint16_t corner_position = state.hash_1;               // 16 bites         NOLINT
-    cur_corner_heuristic_ = corner_heuristics[(corner_orientation*kNumCornerPositions) + corner_position] & ((uint16_t(1) << 8) - 1); // NOLINT
+    cur_corner_heuristic_ = uint8_t(corner_heuristics[(corner_orientation*kNumCornerPositions) + corner_position] & ((uint16_t(1) << 8) - 1)); // NOLINT
 }
 
 void Cube::SetCurEdgeHeuristic1(const State& state) {
@@ -179,8 +179,8 @@ void Cube::SetCurEdgeHeuristic2(const State& state) {
 }
 
 
-uint16_t Cube::GetMaxHeuristic(const State& state) {
-    if (cur_corner_heuristic_ == uint16_t(-1)) {
+uint8_t Cube::GetMaxHeuristic(const State& state) {
+    if (cur_corner_heuristic_ == uint8_t(-1)) {
         SetCurCornerHeuristic(state);
     }
     if (cur_edge_heuristic_1_ == uint8_t(-1)) {
@@ -189,12 +189,12 @@ uint16_t Cube::GetMaxHeuristic(const State& state) {
     if (cur_edge_heuristic_2_ == uint8_t(-1)) {
         SetCurEdgeHeuristic2(state);
     }
-    return std::max({cur_corner_heuristic_, uint16_t(cur_edge_heuristic_1_), uint16_t(cur_edge_heuristic_2_)});
+    return std::max({cur_corner_heuristic_, cur_edge_heuristic_1_, cur_edge_heuristic_2_});
 }
 
 
-uint16_t Cube::GetAppHeuristic(const State& state) {
-    if (cur_corner_heuristic_ == uint16_t(-1)) {
+uint8_t Cube::GetAppHeuristic(const State& state) {
+    if (cur_corner_heuristic_ == uint8_t(-1)) {
         SetCurCornerHeuristic(state);
     }
     if (cur_edge_heuristic_1_ == uint8_t(-1)) {
@@ -204,5 +204,5 @@ uint16_t Cube::GetAppHeuristic(const State& state) {
         SetCurEdgeHeuristic2(state);
     }
     // this part can be adjusted
-    return cur_corner_heuristic_ + uint16_t(cur_edge_heuristic_1_) + uint16_t(cur_edge_heuristic_2_);
+    return cur_corner_heuristic_ + cur_edge_heuristic_1_ + cur_edge_heuristic_2_;
 }

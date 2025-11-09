@@ -1,5 +1,6 @@
 #pragma once
 #include <cstddef>
+#include <cstdint>
 #include <string>
 
 
@@ -43,7 +44,7 @@ public:
         return num_runs;
     }
 
-    static int GetTBDepth() {
+    static uint8_t GetTBDepth() {
         return tb_depth;
     }
 
