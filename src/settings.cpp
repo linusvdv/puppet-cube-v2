@@ -10,6 +10,11 @@
 
 
 std::string Settings::root_path;
+#ifdef USE_CUDA
+bool Settings::use_cuda = true;
+#else
+bool Settings::use_cuda = false;
+#endif
 bool Settings::test_bcht = false;
 bool Settings::test_dfs = false;
 int Settings::dfs_depth = 4;
@@ -26,6 +31,7 @@ bool Settings::log_info = false;
 static struct option long_options[] = {
     {"help", no_argument, NULL, 'h'},
     {"root_path", required_argument, NULL, 0},
+    {"use_cuda", required_argument, NULL, 0},
     {"info", no_argument, NULL, 'i'},
     {"log_level", required_argument, NULL, 'l'},
 
@@ -57,6 +63,7 @@ list of options
     -h --help              show this message
     -i --info              show additional hardware info
     --root_path            path to root folder puppet-cube-v2            [./PathToPuppetCubeV2/../../]
+    --use_cuda             run cuda                                      [USE_CUDA]     (true|1|false|0)
     -l --log_level         logger/error level                            [memory]       (critical|error|warning|info|all|extra|memory)
 
     -t --threads           number of threads used in the program         [MAX_THREADS]  (1, MAX_THREADS)
@@ -72,6 +79,30 @@ list of options
     --dfs_depth            depth searched from the dfs                   [4]            (1, 6)
     --num_dfs_positions    number of different dfs positions searched    [100000]       (1, 1e18)
 )";
+
+
+bool GetBoolFromOptarg (bool& num, const std::string& option) {
+    try {
+        if (optarg == NULL) {
+            LOG_WARNING(option, "No argument passed to the option");
+            return false;
+        }
+        if (std::string(optarg) == "true" || std::string(optarg) == "1") {
+            num = true;
+            return true;
+        }
+        if (std::string(optarg) == "false" || std::string(optarg) == "0") {
+            num = false;
+            return true;
+        }
+        LOG_WARNING(option, "invalid_argument", optarg);
+        return false;
+    }
+    catch (const std::invalid_argument& e) {
+        LOG_ERROR(option, "invalid argument", e.what());
+        return false;
+    }
+}
 
 
 template<typename T>
@@ -205,6 +236,9 @@ Settings::Settings (int argc, char *argv[]) {
                 }
                 if (std::string(long_options[option_index].name) == "num_dfs_positions") {
                     GetTFromOptarg(num_dfs_positions, size_t(1), size_t(1e18), "NUM DSF POSITIONS"); // NOLINT
+                }
+                if (std::string(long_options[option_index].name) == "use_cuda") {
+                    GetBoolFromOptarg(use_cuda, "USE CUDA");
                 }
                 break;
             case '?':

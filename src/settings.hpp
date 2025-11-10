@@ -60,9 +60,15 @@ public:
         return log_info;
     }
 
+    static bool UseCuda() {
+        return use_cuda;
+    }
+
+
 private:
     // this path should be equivalent to path/to/puppet-cube-v2/
     static std::string root_path;
+    static bool use_cuda;
 
     static bool log_info;
 

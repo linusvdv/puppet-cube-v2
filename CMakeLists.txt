@@ -86,6 +86,7 @@ add_executable(PuppetCubeV2
     src/random_position.cpp
     src/DFS.cpp
     src/search.cpp
+    src/special_cubes.cpp
 )
 
 if(USE_CUDA)

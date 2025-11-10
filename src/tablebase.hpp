@@ -4,6 +4,7 @@
 #include "cube.hpp"
 #include "cuda_memory_transfer.cuh"
 #include "search.cuh"
+#include "settings.hpp"
 #include "logger.hpp"
 
 #ifdef USE_CUDA
@@ -24,9 +25,11 @@ public:
 
     static void UploadComputationToDevice() {
         #ifdef USE_CUDA
-        LOG_EXTRA("Start Tablebase Uploading Precomputation to Device");
-        UploadTablebaseToDevice(tablebase.back());
-        LOG_INFO("Tablebase Precomputation Uploaded to Device");
+        if (Settings::UseCuda()) {
+            LOG_EXTRA("Start Tablebase Uploading Precomputation to Device");
+            UploadTablebaseToDevice(tablebase.back());
+            LOG_INFO("Tablebase Precomputation Uploaded to Device");
+        }
         #endif // USE_CUDA
     }
 

@@ -139,10 +139,12 @@ std::pair<bool, State> Cube::Rotate(const State& prev_state, const uint8_t& rota
 
 void Cube::UploadComputationToDevice() {
     #ifdef USE_CUDA
-    LOG_EXTRA("Start Cube Uploading Precomputation to Device");
-    UploadCubeComputationToDevice(corner_orientations, corner_positions, corner_heuristics, edge_orientations, edge_positions, edge_heuristics);
-    LOG_INFO("Cube Precomputation Uploaded to Device");
-    LOG_MEMORY();
+    if (Settings::UseCuda()) {
+        LOG_EXTRA("Start Cube Uploading Precomputation to Device");
+        UploadCubeComputationToDevice(corner_orientations, corner_positions, corner_heuristics, edge_orientations, edge_positions, edge_heuristics);
+        LOG_INFO("Cube Precomputation Uploaded to Device");
+        LOG_MEMORY();
+    }
     #endif // USE_CUDA
 }
 

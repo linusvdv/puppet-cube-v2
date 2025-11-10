@@ -243,9 +243,11 @@ void Tablebase::Initialize() {
         }
         std::vector<State> random_positions = TimeTablebaseCPU(tablebase, tablebase_layer);
         #ifdef USE_CUDA
-        LOG_EXTRA("Start Tablebase Timing Uploading Precomputation to Device");
-        UploadRandomPositionsToDevice(random_positions);
-        LOG_INFO("Tablebase Timing Uploaded to Device");
+        if (Settings::UseCuda()) {
+            LOG_EXTRA("Start Tablebase Timing Uploading Precomputation to Device");
+            UploadRandomPositionsToDevice(random_positions);
+            LOG_INFO("Tablebase Timing Uploaded to Device");
+        }
         #endif // USE_CUDA
     }
 }

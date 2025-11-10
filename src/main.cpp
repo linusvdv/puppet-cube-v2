@@ -20,7 +20,7 @@ int main (int argc, char *argv[]) {
     LOG_MEMORY();
 
     #ifdef USE_CUDA
-    if (Settings::GetLogInfo()) {
+    if (Settings::GetLogInfo() && Settings::UseCuda()) {
         GetDeviceInfo();
     }
     #endif // USE_CUDA
@@ -36,7 +36,9 @@ int main (int argc, char *argv[]) {
 
     // time BCHT on GPU
     #ifdef USE_CUDA
-    TimeBCHTGPU();
+    if (Settings::UseCuda()) {
+        TimeBCHTGPU();
+    }
     #endif
 
     TimeDFS();
