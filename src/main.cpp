@@ -44,7 +44,7 @@ int main (int argc, char *argv[]) {
     TimeDFS();
     LOG_MEMORY();
 
-    MainSearch();
+    SearchManager();
     LOG_INFO("Search Computed");
     return 0;
 }

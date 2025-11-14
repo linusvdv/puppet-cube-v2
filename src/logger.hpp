@@ -118,9 +118,10 @@ void Logger::Log (LoggerLevel level, const std::source_location& source_location
                 oss << args.value;
             }
             else if constexpr (std::is_same_v<std::remove_cvref_t<decltype(args)>, std::stack<Rotations>>) {
-                while (!args.empty()) {
-                    oss << args.top() << ' ';
-                    args.pop();
+                std::stack<Rotations> rotations_cpy = args;
+                while (!rotations_cpy.empty()) {
+                    oss << rotations_cpy.top() << ' ';
+                    rotations_cpy.pop();
                 }
             }
             else if constexpr (std::is_same_v<std::remove_cvref_t<decltype(args)>, std::vector<Rotations>>) {
