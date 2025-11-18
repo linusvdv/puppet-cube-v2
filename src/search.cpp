@@ -1,5 +1,6 @@
 #include <atomic>
 #include <cstdint>
+#include <mutex>
 #include <queue>
 #include <stack>
 #include <thread>
@@ -59,36 +60,36 @@ void SolveSearch(std::vector<Rotations>& search_rotations, int depth, State stat
 
 
 // return true if a solution is contained
-/*
-bool LeafSearch (const State& state, uint64_t& num_positions, uint8_t depth, uint8_t& best_sol, State& best_endstate, phmap::flat_hash_map<State, VisitedInfo>& visited, uint64_t& leaft_search_positions) {
-    num_positions++;
+bool LeafSearch (const State& state, uint8_t depth, std::pair<State, uint8_t>& best_endstate, VisitedMap& visited, uint64_t& leaft_search_positions, std::mutex& visited_mtx) {
     leaft_search_positions++;
     if (BCHTSetContains(Tablebase::tablebase.back(), state)) {
-        if (depth + Settings::GetTBDepth() < best_sol) {
-            best_sol = depth + Settings::GetTBDepth();
-            best_endstate = state;
-            LOG_EXTRA("best sol:", int(best_sol), "num_positions:", num_positions, "leaf_search:", leaft_search_positions);
+        if (depth + Settings::GetTBDepth() < best_endstate.second) {
+            best_endstate = {state, depth + Settings::GetTBDepth()};
+            LOG_EXTRA("best sol:", int(best_endstate.second), "leaf_search:", leaft_search_positions);
             LOG_MEMORY();
             return true;
         }
     }
     Cube cube;
-    if (std::max(cube.GetMaxHeuristic(state), Settings::GetTBDepth()) + depth >= best_sol) {
+    //LOG_EXTRA(int(std::max(cube.GetMaxHeuristic(state), Settings::GetTBDepth()) + depth), int(best_endstate.second));
+    if (std::max(cube.GetMaxHeuristic(state), Settings::GetTBDepth()) + depth >= best_endstate.second) {
         return false;
     }
     bool is_solution = false;
     for (uint8_t rotation = 0; rotation < kNumRotations; rotation++) {
         std::pair<bool, State> next = Cube::Rotate(state, rotation);
         if (next.first) {
-            bool res = LeafSearch(next.second, num_positions, depth+1, best_sol, best_endstate, visited, leaft_search_positions);
+            bool res = LeafSearch(next.second, depth+1, best_endstate, visited, leaft_search_positions, visited_mtx);
             if (res) {
+                std::lock_guard lock(visited_mtx);
+
                 auto find_visited = visited.find(next.second);
                 if (find_visited == visited.end()) {
-                    visited.insert({next.second, {uint8_t(depth+1), rotation}}); // found new solution
+                    visited.insert({next.second, uint8_t(depth+1)}); // found new solution
                     is_solution = true;
                 }
-                else if (find_visited->second.depth > uint8_t(depth+1)) {
-                    find_visited->second = {uint8_t(depth+1), rotation};
+                else if (find_visited->second > uint8_t(depth+1)) {
+                    find_visited->second = uint8_t(depth+1);
                     is_solution = true;
                 }
             }
@@ -96,21 +97,36 @@ bool LeafSearch (const State& state, uint64_t& num_positions, uint8_t depth, uin
     }
     return is_solution;
 }
-*/
 
 
 void LeafManager (std::stop_token stocken, uint64_t& num_positions_leaf, VisitedMap& visited_leaf, std::atomic<uint8_t>& atomic_best_depth, std::pair<State, uint8_t>& best_endstate_leafs,
                   std::atomic<std::shared_ptr<phmap::flat_hash_map<State, uint8_t>>>& shared_leaf_states, const uint64_t& leaf_batch_size) {
-    return;
     std::shared_ptr<phmap::flat_hash_map<State, uint8_t>> local_buffer;
 
+    std::mutex visited_mtx;
     while (!stocken.stop_requested()) {
         std::shared_ptr<phmap::flat_hash_map<State, uint8_t>> shared_data = shared_leaf_states.load(std::memory_order_acquire);
-        if (shared_data->size() >= leaf_batch_size) {
+        if (shared_data->size() > 0) {
+            assert(shared_data->size() <= leaf_batch_size);
             std::shared_ptr<phmap::flat_hash_map<State, uint8_t>> new_empty_buffer = std::make_shared<phmap::flat_hash_map<State, uint8_t>>();
             local_buffer = shared_leaf_states.exchange(new_empty_buffer, std::memory_order_acquire);
 
-            // TODO: Do some local buffer leaf calc
+            std::vector<std::pair<State, uint8_t>> starting_positions(local_buffer->begin(), local_buffer->end());
+            std::vector<uint64_t> num_positions_leaf_thread(starting_positions.size());
+            std::vector<std::pair<State, uint8_t>> best_endstate_thread(starting_positions.size(), {State(), atomic_best_depth});
+            {
+                std::vector<std::jthread> threads;
+                for (uint64_t i = 0; i < starting_positions.size(); i++) {
+                    threads.push_back(std::jthread(LeafSearch,
+                            std::ref(starting_positions[i].first),
+                            starting_positions[i].second,
+                            std::ref(best_endstate_thread[i]),
+                            std::ref(visited_leaf),
+                            std::ref(num_positions_leaf_thread[i]),
+                            std::ref(visited_mtx)));
+                }
+            }
+            // TODO: thread merging pos + best
         }
     }
 }
@@ -137,7 +153,7 @@ void Search (uint64_t& num_positions_search, VisitedMap& visited_search, std::at
     num_positions_search++;
 
     // local buffer for leaf search
-    std::shared_ptr<phmap::flat_hash_map<State, uint8_t>> local_buffer;
+    std::shared_ptr<phmap::flat_hash_map<State, uint8_t>> local_buffer = std::make_shared<phmap::flat_hash_map<State, uint8_t>>();
 
     // start of search
     while (num_positions_search < Settings::GetNumPositions() && !pq_search.empty()) {
@@ -184,7 +200,7 @@ void Search (uint64_t& num_positions_search, VisitedMap& visited_search, std::at
 
             num_positions_search++;
 
-            if (next_cube.GetMaxHeuristic(next_state.second) + pq_top.depth + 1 > best_endstate_search.second - 2 && false) {
+            if (next_cube.GetMaxHeuristic(next_state.second) + pq_top.depth + 1 > best_endstate_search.second - 2) {
                 // TODO: local buffer has to be updated if a lower depth needs to be searched by leafsearch
                 local_buffer->insert({next_state.second, pq_top.depth+1});
 
@@ -205,7 +221,6 @@ void Search (uint64_t& num_positions_search, VisitedMap& visited_search, std::at
         }
     }
 
-    /*
     // swap local buffer with shared leaf states when it is swaped with an empty one
     if (local_buffer->size() >= leaf_batch_size) {
         auto shared_data = shared_leaf_states.load(std::memory_order_acquire);
@@ -216,7 +231,6 @@ void Search (uint64_t& num_positions_search, VisitedMap& visited_search, std::at
 
         local_buffer = shared_leaf_states.exchange(local_buffer, std::memory_order_acq_rel);
     }
-*/
 }
 
 
@@ -244,7 +258,7 @@ void SearchManager () {
         VisitedMap visited_search;
         VisitedMap visited_leaf;
 
-        std::atomic<uint8_t> atomic_best_depth = -1;
+        std::atomic<uint8_t> atomic_best_depth = uint8_t(-1);
 
         std::pair<State, uint8_t> best_endstate_search = {State(), -1};
         std::pair<State, uint8_t> best_endstate_leafs = {State(), -1};
@@ -255,7 +269,7 @@ void SearchManager () {
             std::make_shared<phmap::flat_hash_map<State, uint8_t>>(),
             std::memory_order_release
         );
-        uint64_t leaf_batch_size = 10;
+        uint64_t leaf_batch_size = 20;
 
         // Start LeafManager on a seperate thread
         // TODO:
