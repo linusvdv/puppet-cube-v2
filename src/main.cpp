@@ -1,7 +1,7 @@
 #include "cube.hpp"
 #include "DFS.hpp"
+#include "info.hpp"
 #include "logger.hpp"
-#include "random_position.hpp"
 #include "search.hpp"
 #include "settings.hpp"
 #include "tablebase.hpp"
@@ -19,6 +19,7 @@ int main (int argc, char *argv[]) {
     LOG_INFO("Puppet Cube V2 by Linus VandeVondele");
     LOG_MEMORY();
 
+    GetHostInfo();
     #ifdef USE_CUDA
     if (Settings::GetLogInfo() && Settings::UseCuda()) {
         GetDeviceInfo();
