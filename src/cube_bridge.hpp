@@ -1,7 +1,9 @@
 #pragma once
 #include <cstdint>
 #include <vector>
+
 #include "cube.hpp"
+
 
 void UploadCubeComputationToDevice(
     const std::vector<uint16_t>& corner_orientations,

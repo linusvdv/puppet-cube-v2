@@ -12,6 +12,7 @@ CompileFlags:
     - --generate-code=arch=compute_89,code=[compute_89,sm_89]
     - --expt-extended-lambda
     - -rdc=true
+    - -Xptxas
 
 If:
   PathMatch: \.(cpp|cc|cxx|c|h|hpp)$
@@ -23,3 +24,4 @@ CompileFlags:
     - -forward-unknown-to-host-compiler
     - --generate-code=arch=compute_89,code=[compute_89,sm_89]
     - --expt-extended-lambda
+    - -Xptxas

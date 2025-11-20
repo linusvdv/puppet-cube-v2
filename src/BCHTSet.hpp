@@ -4,6 +4,7 @@
 #include "cube.hpp"
 #include "tablebase.hpp"
 
+
 constexpr int kBucketSize = 2;
 constexpr float kLoadFacor = 0.8;
 

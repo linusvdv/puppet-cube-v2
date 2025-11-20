@@ -1,6 +1,5 @@
 #include <mutex>
 
-
 #include "cube.hpp"
 #include "logger.hpp"
 

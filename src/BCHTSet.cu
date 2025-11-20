@@ -1,7 +1,6 @@
 #include "BCHTSet.cuh"
 #include "BCHTSet.hpp"
 #include "cube.cuh"
-#include "cuda_memory_transfer.cuh"
 #include "settings.hpp"
 
 
@@ -45,6 +44,7 @@ extern __device__ DState* d_random_positions;
 extern __device__ size_t d_random_positions_size;
 extern size_t random_positions_size;
 
+
 constexpr size_t kBatching = 10;
 __global__ void DTimeBCHTtable(unsigned long long* hit, unsigned long long* miss) {
     size_t index = threadIdx.x + (blockIdx.x * blockDim.x);
@@ -57,6 +57,7 @@ __global__ void DTimeBCHTtable(unsigned long long* hit, unsigned long long* miss
         }
     }
 }
+
 
 void TimeBCHTGPU() {
     if (Settings::GetTestBCHT()) {

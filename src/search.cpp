@@ -4,13 +4,13 @@
 #include <queue>
 #include <stack>
 #include <thread>
-#include <parallel_hashmap/phmap.h>
 
 #include "BCHTSet.hpp"
 #include "cube.hpp"
 #include "logger.hpp"
 #include "utils.hpp"
 #include "random_position.hpp"
+#include "search.hpp"
 #include "settings.hpp"
 #include "tablebase.hpp"
 
@@ -22,9 +22,6 @@ struct PQSearch {
 
     std::strong_ordering operator<=>(const PQSearch&) const = default;
 };
-
-
-using VisitedMap = phmap::flat_hash_map<State, uint8_t>;
 
 
 void SolveTB(std::stack<Rotations>& tb_rotations, int tb_layer, State state) {
@@ -117,11 +114,16 @@ void LeafManager (std::stop_token stocken, uint64_t& num_positions_leaf, Visited
         }
 
         if (is_new) {
-            for (const std::pair<State, uint8_t> starting_position : *local_buffer) {
-                uint8_t best_depth = atomic_best_depth;
-                LeafSearch(starting_position.first, starting_position.second, best_depth,
-                           best_endstate_leafs, visited_leaf,
-                           num_positions_leaf, atomic_best_depth, thread_idx);
+            if (Settings::UseCuda()) {
+                std::vector<std::pair<State, uint8_t>> starting_positions(local_buffer->begin(), local_buffer->end());
+            }
+            else {
+                for (const std::pair<State, uint8_t> starting_position : *local_buffer) {
+                    uint8_t best_depth = atomic_best_depth;
+                    LeafSearch(starting_position.first, starting_position.second, best_depth,
+                            best_endstate_leafs, visited_leaf,
+                            num_positions_leaf, atomic_best_depth, thread_idx);
+                }
             }
         }
         else {

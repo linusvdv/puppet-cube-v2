@@ -6,7 +6,6 @@
 #include "cube.cuh"
 #include "cube.hpp"
 #include "cuda_memory_transfer.cuh"
-#include "logger.hpp"
 
 
 __device__ uint16_t* d_corner_orientations = nullptr;
@@ -46,28 +45,8 @@ void DCube::UploadComputationToDevice(
 
 
 void UploadTablebaseToDevice(const std::vector<State>& tablebebase) {
-    static_assert(sizeof(State) == sizeof(DState));
-    static_assert(alignof(State) == alignof(DState));
-
-    DState* temp_pointer = nullptr;
-    cudaError_t err = cudaMalloc((void **)&temp_pointer, sizeof(State)*tablebebase.size());
-    if (err != cudaSuccess) {
-        LOG_CRITICAL(cudaGetErrorString(err));
-    }
-    err = cudaMemcpy(temp_pointer, tablebebase.data(), sizeof(State)*tablebebase.size(), cudaMemcpyHostToDevice);
-    if (err != cudaSuccess) {
-        LOG_CRITICAL(cudaGetErrorString(err));
-    }
-    err = cudaMemcpyToSymbol(d_tablebase, &temp_pointer, sizeof(DState*));
-    if (err != cudaSuccess) {
-        LOG_CRITICAL(cudaGetErrorString(err));
-    }
-
-    size_t temp_size = tablebebase.size();
-    err = cudaMemcpyToSymbol(d_tablebase_size, &temp_size, sizeof(temp_size));
-    if (err != cudaSuccess) {
-        LOG_CRITICAL(cudaGetErrorString(err));
-    }
+    UploadToDeviceSymbol(tablebebase, d_tablebase);
+    UploadToSymbol(tablebebase.size(), d_tablebase_size);
 }
 
 void UploadCubeComputationToDevice(
@@ -118,12 +97,8 @@ size_t random_positions_size = 0;
 
 void UploadRandomPositionsToDevice(const std::vector<State>& random_positions) {
     UploadToDeviceSymbol(random_positions, d_random_positions);
-    size_t temp_size = random_positions.size();
-    cudaError_t err = cudaMemcpyToSymbol(d_random_positions_size, &temp_size, sizeof(temp_size));
-    if (err != cudaSuccess) {
-        LOG_CRITICAL(cudaGetErrorString(err));
-    }
-    random_positions_size = temp_size;
+    random_positions_size = random_positions.size();
+    UploadToSymbol(random_positions_size, d_random_positions_size);
 }
 
 

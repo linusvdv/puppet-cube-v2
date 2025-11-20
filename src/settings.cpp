@@ -253,6 +253,13 @@ Settings::Settings (int argc, char *argv[]) {
         }
     }
 
+    #ifndef USE_CUDA
+    if (use_cuda) {
+        use_cuda = false;
+        LOG_WARNING("Cannot enable USE CUDA - compile with CUDA")
+    }
+    #endif  // USE_CUDA
+
     // tb_depth
     tb_depth_gpu = std::min(tb_depth, tb_depth_gpu);
 }

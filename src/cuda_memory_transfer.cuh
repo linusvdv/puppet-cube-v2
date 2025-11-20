@@ -26,6 +26,7 @@ void UploadToDeviceSymbol(const std::vector<T>& data, T*& d_pointer) {
     }
 }
 
+
 template<typename T1, typename T2>
 void UploadToDeviceSymbol(const std::vector<T1>& data, T2*& d_pointer) {
     static_assert(sizeof(T1) == sizeof(T2));
@@ -61,4 +62,32 @@ void UploadToDevice(const std::vector<T1>& data, T2*& d_pointer) {
     if (err != cudaSuccess) {
         LOG_CRITICAL(cudaGetErrorString(err));
     }
+}
+
+
+// UploadToSymbol
+template<typename T>
+void UploadToSymbol(const T& data, T& d_pointer) {
+    cudaError_t err = cudaMemcpyToSymbol(d_pointer, &data, sizeof(T));
+    if (err != cudaSuccess) {
+        LOG_CRITICAL(cudaGetErrorString(err));
+    }
+}
+
+
+// DownloadFromDevice
+template<typename T1, typename T2>
+void DownloadFromDevice(std::vector<T1>& data, T2*& d_pointer) {
+    static_assert(sizeof(T1) == sizeof(T2));
+    static_assert(alignof(T1) == alignof(T2));
+
+    cudaError_t err = cudaMemcpy(data.data(), d_pointer, sizeof(T1)*data.size(), cudaMemcpyDeviceToHost);
+    if (err != cudaSuccess) {
+        LOG_CRITICAL(cudaGetErrorString(err));
+    }
+    err = cudaFree(d_pointer);
+    if (err != cudaSuccess) {
+        LOG_CRITICAL(cudaGetErrorString(err));
+    }
+    d_pointer = nullptr;
 }

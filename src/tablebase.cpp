@@ -11,6 +11,7 @@
 #include "settings.hpp"
 #include "tablebase.hpp"
 
+
 std::vector<std::vector<State>> Tablebase::tablebase = {};
 
 

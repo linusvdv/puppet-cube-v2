@@ -83,13 +83,6 @@ void GPUDFS(const std::vector<State>& random_position, std::vector<size_t>& num_
     }
 
     // get result
-    err = cudaMemcpy(num_nodes_gpu.data(), d_num_nodes_gpu, sizeof(size_t)*num_nodes_gpu.size(), cudaMemcpyDeviceToHost);
-    if (err != cudaSuccess) {
-        LOG_CRITICAL(cudaGetErrorString(err));
-    }
-    // get result
-    err = cudaMemcpy(num_tb_hits_gpu.data(), d_num_tb_hits_gpu, sizeof(size_t)*num_tb_hits_gpu.size(), cudaMemcpyDeviceToHost);
-    if (err != cudaSuccess) {
-        LOG_CRITICAL(cudaGetErrorString(err));
-    }
+    DownloadFromDevice(num_nodes_gpu, d_num_nodes_gpu);
+    DownloadFromDevice(num_tb_hits_gpu, d_num_tb_hits_gpu);
 }
