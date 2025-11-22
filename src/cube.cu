@@ -20,6 +20,12 @@ __device__ DState* d_tablebase = nullptr;
 __device__ size_t d_tablebase_size = 0;
 
 
+__device__ uint8_t DGetRevRotation(uint8_t rotation) {
+    if (rotation % 2 == 0) {
+        return rotation + 1;
+    }
+    return rotation - 1;
+}
 
 
 void DCube::UploadComputationToDevice(
@@ -105,14 +111,16 @@ void UploadRandomPositionsToDevice(const std::vector<State>& random_positions) {
 __device__ void DCube::SetCurCornerHeuristic(const DState& state) {
     uint16_t corner_orientation = state.hash_2 >> 20;      // 12 bites         NOLINT
     uint16_t corner_position = state.hash_1;               // 16 bites         NOLINT
-    cur_corner_heuristic_ = d_corner_heuristics[(corner_orientation*kNumCornerPositions) + corner_position] & ((uint16_t(1) << 8) - 1); // NOLINT
+    cur_corner_heuristic_ = uint8_t(d_corner_heuristics[(corner_orientation*kNumCornerPositions) + corner_position] & ((uint16_t(1) << 8) - 1)); // NOLINT
 }
+
 
 __device__ void DCube::SetCurEdgeHeuristic1(const DState& state) {
     uint32_t orientation = state.hash_3 >> 20; // NOLINT
     uint32_t position = state.hash_2 & ((uint32_t(1) << 20) - 1); // NOLINT
     cur_edge_heuristic_1_ = d_edge_heuristics[(orientation*kNumEdgePositions) + position];
 }
+
 
 __device__ void DCube::SetCurEdgeHeuristic2(const DState& state) {
     uint32_t orientation = state.hash_3 >> 20; // NOLINT
@@ -133,8 +141,9 @@ __device__ void DCube::SetCurEdgeHeuristic2(const DState& state) {
     cur_edge_heuristic_2_ = d_edge_heuristics[(orientation_r*kNumEdgePositions) + position_r];
 }
 
-__device__ uint16_t DCube::GetMaxHeuristic(const DState& state) {
-    if (cur_corner_heuristic_ == uint16_t(-1)) {
+
+__device__ uint8_t DCube::GetMaxHeuristic(const DState& state) {
+    if (cur_corner_heuristic_ == uint8_t(-1)) {
         SetCurCornerHeuristic(state);
     }
     if (cur_edge_heuristic_1_ == uint8_t(-1)) {
@@ -143,5 +152,19 @@ __device__ uint16_t DCube::GetMaxHeuristic(const DState& state) {
     if (cur_edge_heuristic_2_ == uint8_t(-1)) {
         SetCurEdgeHeuristic2(state);
     }
-    return max(max(cur_corner_heuristic_, uint16_t(cur_edge_heuristic_1_)), uint16_t(cur_edge_heuristic_2_));
+    return max(max(cur_corner_heuristic_, cur_edge_heuristic_1_), cur_edge_heuristic_2_);
+}
+
+
+__device__ uint8_t DCube::GetAppHeuristic(const DState& state) {
+    if (cur_corner_heuristic_ == uint8_t(-1)) {
+        SetCurCornerHeuristic(state);
+    }
+    if (cur_edge_heuristic_1_ == uint8_t(-1)) {
+        SetCurEdgeHeuristic1(state);
+    }
+    if (cur_edge_heuristic_2_ == uint8_t(-1)) {
+        SetCurEdgeHeuristic2(state);
+    }
+    return cur_corner_heuristic_ + cur_edge_heuristic_1_ + cur_edge_heuristic_2_;
 }

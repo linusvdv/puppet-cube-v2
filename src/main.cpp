@@ -39,7 +39,6 @@ int main (int argc, char *argv[]) {
     #ifdef USE_CUDA
     if (Settings::UseCuda()) {
         TimeBCHTGPU();
-        LOG_INFO("Time BCHT");
     }
     #endif
 

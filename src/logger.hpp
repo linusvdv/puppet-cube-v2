@@ -151,4 +151,4 @@ void Logger::Log (LoggerLevel level, const std::source_location& source_location
 #define LOG_INFO(...)     Logger::Log(LoggerLevel::kInfo, std::source_location::current(), __VA_ARGS__)
 #define LOG_ALL(...)      Logger::Log(LoggerLevel::kAll, std::source_location::current(), __VA_ARGS__)
 #define LOG_EXTRA(...)    Logger::Log(LoggerLevel::kExtra, std::source_location::current(), __VA_ARGS__)
-#define LOG_MEMORY()   Logger::Log(LoggerLevel::kMemory, std::source_location::current())
+#define LOG_MEMORY()      Logger::Log(LoggerLevel::kMemory, std::source_location::current())

@@ -109,5 +109,6 @@ void TimeBCHTGPU() {
         std::chrono::milliseconds gpu_millis = std::chrono::duration_cast<std::chrono::milliseconds>(gpu_since_epoch - gpu_time);
         LOG_ALL("Time duration on GPU:", gpu_millis.count());
         LOG_MEMORY();
+        LOG_INFO("Time BCHT");
     }
 }

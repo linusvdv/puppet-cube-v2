@@ -15,6 +15,11 @@
 #include "tablebase.hpp"
 
 
+#ifdef USE_CUDA
+#include "search_bridge.hpp"
+#endif  // USE_CUDA
+
+
 struct PQSearch {
     uint8_t value;
     uint8_t depth;
@@ -116,6 +121,7 @@ void LeafManager (std::stop_token stocken, uint64_t& num_positions_leaf, Visited
         if (is_new) {
             if (Settings::UseCuda()) {
                 std::vector<std::pair<State, uint8_t>> starting_positions(local_buffer->begin(), local_buffer->end());
+                DeviceLeafManager(starting_positions, num_positions_leaf, visited_leaf, atomic_best_depth, best_endstate_leafs, leaf_batch_size, thread_idx);
             }
             else {
                 for (const std::pair<State, uint8_t> starting_position : *local_buffer) {
@@ -206,7 +212,7 @@ void Search (uint64_t& num_positions_search, VisitedMap& visited_search, std::at
 
             num_positions_search++;
 
-            if (next_cube.GetMaxHeuristic(next_state.second) + pq_top.depth + 1 > best_depth - 4) {
+            if (next_cube.GetMaxHeuristic(next_state.second) + pq_top.depth + 1 > best_depth - 4 && best_depth < 30 + Settings::GetTBDepth()) {
                 auto find_local_buffer = local_buffer->find(next_state.second);
                 if (find_local_buffer == local_buffer->end()) {
                     local_buffer->insert({next_state.second, pq_top.depth+1});
@@ -281,7 +287,7 @@ void SearchManager () {
             std::make_shared<phmap::flat_hash_map<State, uint8_t>>(),
             std::memory_order_release
         );
-        uint64_t leaf_batch_size = 100;
+        uint64_t leaf_batch_size = 512*3;
 
         // Start LeafManager on a seperate thread
         std::vector<std::jthread> leaf_manager_threads;

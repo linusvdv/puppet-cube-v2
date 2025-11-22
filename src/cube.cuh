@@ -23,6 +23,9 @@ __device__ constexpr int kDEdgePositionsSize = kDNumEdgePositions * kDNumRotatio
 __device__ constexpr int kDNumEdgeHeuristic = kDNumEdgePositions * kDNumEdgeOrientation;
 
 
+__device__ uint8_t DGetRevRotation(uint8_t rotation);
+
+
 enum DRotations : uint8_t {
     kDR,
     kDRc,
@@ -130,14 +133,15 @@ public:
 
     __device__ static bool DTablebaseContains(const DState& state);
 
-    __device__ uint16_t GetMaxHeuristic(const DState& state);
+    __device__ uint8_t GetMaxHeuristic(const DState& state);
+    __device__ uint8_t GetAppHeuristic(const DState& state);
 
 private:
     __device__ void SetCurCornerHeuristic(const DState& state);
     __device__ void SetCurEdgeHeuristic1(const DState& state);
     __device__ void SetCurEdgeHeuristic2(const DState& state);
 
-    uint16_t cur_corner_heuristic_ = -1;
+    uint8_t cur_corner_heuristic_ = -1;
     uint8_t cur_edge_heuristic_1_ = -1;
     uint8_t cur_edge_heuristic_2_ = -1;
 };
