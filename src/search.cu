@@ -33,6 +33,7 @@ __global__ void DeviceLeafSearch (std::pair<DState, uint8_t>* d_starting_positio
     uint8_t depth_offset = d_starting_positions[index].second;
 
     num_positions++;
+
     if (DCube::DTablebaseContains(state)) {
         uint8_t depth = rotation_idx + tb_depth + d_starting_positions[index].second;
         d_best_depths[index] = min(depth, d_best_depths[index]);
@@ -60,13 +61,13 @@ __global__ void DeviceLeafSearch (std::pair<DState, uint8_t>* d_starting_positio
         }
         state = next_pos.state;
 
-
         rotations.raw[rotation_idx] ^= uint8_t(1<<7);  // NOLINT
         if (!rev) {
             DCube cube;
             num_positions++;
+            rotation_idx++;
+
             if (max(tb_depth, cube.GetMaxHeuristic(state)) + rotation_idx + depth_offset < best_depth) {
-                rotation_idx++;
                 if (DCube::DTablebaseContains(state)) {
                     uint8_t depth = rotation_idx + tb_depth + d_starting_positions[index].second;
                     d_best_depths[index] = min(depth, d_best_depths[index]);
@@ -125,12 +126,17 @@ void DeviceLeafManager (const std::vector<std::pair<State, uint8_t>>& starting_p
 
     // new solution do it on the CPU to get the path
     if (best_depth < atomic_best_depth) {
-        LOG_ALL("New best sol");
+        LOG_ALL("New best sol (GPU):", int(best_depth));
         for (const std::pair<State, uint8_t>& starting_position : starting_positions) {
             uint8_t best_depth = atomic_best_depth;
             LeafSearch(starting_position.first, starting_position.second, best_depth,
                        best_endstate_leafs, visited_leaf,
                        num_positions_leaf, atomic_best_depth, thread_idx);
         }
+    }
+
+    err = cudaFree(d_starting_positions);
+    if (err != cudaSuccess) {
+        LOG_CRITICAL(cudaGetErrorString(err));
     }
 }

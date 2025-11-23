@@ -19,7 +19,9 @@ int main (int argc, char *argv[]) {
     LOG_INFO("Puppet Cube V2 by Linus VandeVondele");
     LOG_MEMORY();
 
-    GetHostInfo();
+    if (Settings::GetLogInfo()) {
+        GetHostInfo();
+    }
     #ifdef USE_CUDA
     if (Settings::GetLogInfo() && Settings::UseCuda()) {
         GetDeviceInfo();

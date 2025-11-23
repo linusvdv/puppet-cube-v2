@@ -287,7 +287,7 @@ void SearchManager () {
             std::make_shared<phmap::flat_hash_map<State, uint8_t>>(),
             std::memory_order_release
         );
-        uint64_t leaf_batch_size = 512*3;
+        uint64_t leaf_batch_size = 512;
 
         // Start LeafManager on a seperate thread
         std::vector<std::jthread> leaf_manager_threads;
