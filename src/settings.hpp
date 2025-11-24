@@ -4,7 +4,7 @@
 #include <string>
 
 
-constexpr size_t kBlockDim = 64;
+constexpr size_t kBlockDim = 32;
 constexpr int kMaxDFSDepth = 6;
 
 

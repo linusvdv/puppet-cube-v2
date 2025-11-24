@@ -105,7 +105,7 @@ void DeviceLeafManager (const std::vector<std::pair<State, uint8_t>>& starting_p
     uint8_t* d_best_depths;
     UploadToDevice(best_depths, d_best_depths);
 
-    size_t grid_dim = (sp_size/kBlockDim)+1;
+    size_t grid_dim = ((sp_size-1)/kBlockDim)+1;
     DeviceLeafSearch<<<grid_dim, kBlockDim>>>(d_starting_positions, d_num_positions_leafs, d_best_depths, sp_size, Settings::GetTBDepth());
     cudaDeviceSynchronize();
     cudaError_t err = cudaGetLastError();
