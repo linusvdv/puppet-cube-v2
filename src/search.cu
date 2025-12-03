@@ -20,7 +20,7 @@ __global__ void DeviceLeafSearch (uint64_t* d_num_positions_leafs, uint8_t* d_le
                                   uint8_t* d_rotation_idxs, uint8_t* d_best_depths, URotations* d_urotations, uint8_t tb_depth) {
     // get current leaf thread idx
     size_t index = threadIdx.x + (size_t(blockIdx.x) * blockDim.x);
-    uint8_t leaf_thread_idx = (kLeafThreadSize * index) + d_leaf_thread_idxs[index];
+    uint64_t leaf_thread_idx = (kLeafThreadSize * index) + d_leaf_thread_idxs[index];
 
     // load from global memory
     uint8_t rotation_idx = d_rotation_idxs[leaf_thread_idx];
@@ -125,7 +125,7 @@ __global__ void DeviceLeafSearch (uint64_t* d_num_positions_leafs, uint8_t* d_le
         if (DCube::DTablebaseContains(state)) {
             uint8_t depth = rotation_idx + tb_depth + depth_offset;
             best_depth = min(depth, best_depth);
-            printf("NEW best: %d position_idx %d\n", int(best_depth), int(leaf_thread_idx));
+            printf("NEW best: %d leaf_thread_idx %d\n", int(best_depth), int(leaf_thread_idx));
         }
     }
 
@@ -135,7 +135,7 @@ __global__ void DeviceLeafSearch (uint64_t* d_num_positions_leafs, uint8_t* d_le
     d_urotations[leaf_thread_idx] = rotations; // not really necessary
     d_num_positions_leafs[leaf_thread_idx] = num_positions;
 
-    d_leaf_thread_idxs[index] = leaf_thread_idx;
+    d_leaf_thread_idxs[index] = leaf_thread_idx % kLeafThreadSize;
 }
 
 
@@ -222,6 +222,10 @@ void DeviceLeafManager (std::stop_token& stocken, std::atomic<std::shared_ptr<ph
             }
 
             // write new position
+            if (local_position_queue.empty()) {
+                continue;
+            }
+
             rotation_idxs[i] = 0;
             starting_positions[i] = local_position_queue.front();
             local_position_queue.pop();
@@ -261,6 +265,8 @@ void DeviceLeafManager (std::stop_token& stocken, std::atomic<std::shared_ptr<ph
         MemcpyFromDevice(urotations, d_urotations);
         MemcpyFromDevice(num_positions_leafs, d_num_positions_leafs);
     }
+
+    LOG_EXTRA(SkipSpace("#"), thread_idx, "finished with all kernals");
 
     // free all memory
     FreeCudaPointer(d_rotation_idxs);
