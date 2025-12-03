@@ -36,7 +36,7 @@ __global__ void DeviceLeafSearch (uint64_t* d_num_positions_leafs, uint8_t* d_le
     }
 
     // make a constant number of position during each kernal function call
-    constexpr int kNumPosBatchSize = 10000;
+    constexpr int kNumPosBatchSize = 1000;
     for (int cur_pos_batch = 0; cur_pos_batch < kNumPosBatchSize; cur_pos_batch++) {
         if (rotation_idx == uint8_t(-1)) {
             // newly solved position
@@ -186,13 +186,13 @@ void DeviceLeafManager (std::stop_token& stocken, std::atomic<std::shared_ptr<ph
                 rotation_idxs[i] = uint8_t(-1);
             }
 
-            // update best depth
-            best_depths[i] = cur_best_depth;
-
             // not yet finished with calculation
             if (rotation_idxs[i] != uint8_t(-1)) {
                 continue;
             }
+
+            // finished with calculation
+            num_positions_leaf += num_positions_leafs[i];
 
             if (local_position_queue.empty()) {
                 std::shared_ptr<phmap::flat_hash_map<State, uint8_t>> local_buffer;
@@ -230,6 +230,11 @@ void DeviceLeafManager (std::stop_token& stocken, std::atomic<std::shared_ptr<ph
             starting_positions[i] = local_position_queue.front();
             local_position_queue.pop();
             urotations[i] = {0, 0, 0, 0};
+        }
+        // update all best depths
+        cur_best_depth = atomic_best_depth;
+        for (uint64_t i = 0; i < leaf_batch_size*kLeafThreadSize; i++) {
+            best_depths[i] = cur_best_depth;
         }
 
         // finished all positions

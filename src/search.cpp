@@ -52,12 +52,17 @@ void SolveSearch(std::vector<Rotations>& search_rotations, int depth, State stat
                 state = next_state;
                 break;
             }
+            bool stopped = false;
             for (const VisitedMap& visited_leaf : visited_leaf_threads) {
                 if (auto vis = visited_leaf.find(next_state); vis != visited_leaf.end() && vis->second == i) {
                     search_rotations.push_back(Rotations(GetRevRotation(rotation)));
                     state = next_state;
+                    stopped = true;
                     break;
                 }
+            }
+            if (stopped) {
+                break;
             }
         }
     }
