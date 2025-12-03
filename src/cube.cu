@@ -52,7 +52,7 @@ void DCube::UploadComputationToDevice(
 
 void UploadTablebaseToDevice(const std::vector<State>& tablebebase) {
     UploadToDeviceSymbol(tablebebase, d_tablebase);
-    UploadToSymbol(tablebebase.size(), d_tablebase_size);
+    MemcpyToSymbol(tablebebase.size(), d_tablebase_size);
 }
 
 void UploadCubeComputationToDevice(
@@ -104,7 +104,7 @@ size_t random_positions_size = 0;
 void UploadRandomPositionsToDevice(const std::vector<State>& random_positions) {
     UploadToDeviceSymbol(random_positions, d_random_positions);
     random_positions_size = random_positions.size();
-    UploadToSymbol(random_positions_size, d_random_positions_size);
+    MemcpyToSymbol(random_positions_size, d_random_positions_size);
 }
 
 

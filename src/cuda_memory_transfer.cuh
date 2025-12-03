@@ -8,19 +8,16 @@
 #include "logger.hpp"
 
 
-// UploadToDeviceSymbol
-template<typename T>
-void UploadToDeviceSymbol(const std::vector<T>& data, T*& d_pointer) {
-    T* temp_pointer = nullptr;
-    cudaError_t err = cudaMalloc((void **)&temp_pointer, sizeof(T)*data.size());
-    if (err != cudaSuccess) {
-        LOG_CRITICAL(cudaGetErrorString(err));
-    }
-    err = cudaMemcpy(temp_pointer, data.data(), sizeof(T)*data.size(), cudaMemcpyHostToDevice);
-    if (err != cudaSuccess) {
-        LOG_CRITICAL(cudaGetErrorString(err));
-    }
-    err = cudaMemcpyToSymbol(d_pointer, &temp_pointer, sizeof(T*));
+template<typename T1, typename T2>
+concept SameDataTypeStructure =
+    sizeof(T1) == sizeof(T2) &&
+    alignof(T1) == alignof(T2);
+
+
+template<typename T1, typename T2>
+requires SameDataTypeStructure<T1, T2>
+inline void MallocOnDevice(const std::vector<T1>& data, T2*& pointer) {
+    cudaError_t err = cudaMalloc((void **)&pointer, sizeof(T1)*data.size());
     if (err != cudaSuccess) {
         LOG_CRITICAL(cudaGetErrorString(err));
     }
@@ -28,46 +25,17 @@ void UploadToDeviceSymbol(const std::vector<T>& data, T*& d_pointer) {
 
 
 template<typename T1, typename T2>
-void UploadToDeviceSymbol(const std::vector<T1>& data, T2*& d_pointer) {
-    static_assert(sizeof(T1) == sizeof(T2));
-    static_assert(alignof(T1) == alignof(T2));
-
-    T2* temp_pointer = nullptr;
-    cudaError_t err = cudaMalloc((void **)&temp_pointer, sizeof(T1)*data.size());
-    if (err != cudaSuccess) {
-        LOG_CRITICAL(cudaGetErrorString(err));
-    }
-    err = cudaMemcpy(temp_pointer, data.data(), sizeof(T1)*data.size(), cudaMemcpyHostToDevice);
-    if (err != cudaSuccess) {
-        LOG_CRITICAL(cudaGetErrorString(err));
-    }
-    err = cudaMemcpyToSymbol(d_pointer, &temp_pointer, sizeof(T2*));
+requires SameDataTypeStructure<T1, T2>
+inline void MemcpyToDevice(const std::vector<T1>& data, T2*& pointer) {
+    cudaError_t err = cudaMemcpy(pointer, data.data(), sizeof(T1)*data.size(), cudaMemcpyHostToDevice);
     if (err != cudaSuccess) {
         LOG_CRITICAL(cudaGetErrorString(err));
     }
 }
 
 
-// UploadToDevice
-template<typename T1, typename T2>
-void UploadToDevice(const std::vector<T1>& data, T2*& d_pointer) {
-    static_assert(sizeof(T1) == sizeof(T2));
-    static_assert(alignof(T1) == alignof(T2));
-
-    cudaError_t err = cudaMalloc((void **)&d_pointer, sizeof(T1)*data.size());
-    if (err != cudaSuccess) {
-        LOG_CRITICAL(cudaGetErrorString(err));
-    }
-    err = cudaMemcpy(d_pointer, data.data(), sizeof(T1)*data.size(), cudaMemcpyHostToDevice);
-    if (err != cudaSuccess) {
-        LOG_CRITICAL(cudaGetErrorString(err));
-    }
-}
-
-
-// UploadToSymbol
 template<typename T>
-void UploadToSymbol(const T& data, T& d_pointer) {
+inline void MemcpyToSymbol(const T& data, T& d_pointer) {
     cudaError_t err = cudaMemcpyToSymbol(d_pointer, &data, sizeof(T));
     if (err != cudaSuccess) {
         LOG_CRITICAL(cudaGetErrorString(err));
@@ -75,19 +43,47 @@ void UploadToSymbol(const T& data, T& d_pointer) {
 }
 
 
-// DownloadFromDevice
 template<typename T1, typename T2>
-void DownloadFromDevice(std::vector<T1>& data, T2*& d_pointer) {
-    static_assert(sizeof(T1) == sizeof(T2));
-    static_assert(alignof(T1) == alignof(T2));
-
-    cudaError_t err = cudaMemcpy(data.data(), d_pointer, sizeof(T1)*data.size(), cudaMemcpyDeviceToHost);
+requires SameDataTypeStructure<T1, T2>
+inline void MemcpyFromDevice(std::vector<T1>& data, T2*& pointer) {
+    cudaError_t err = cudaMemcpy(data.data(), pointer, sizeof(T1)*data.size(), cudaMemcpyDeviceToHost);
     if (err != cudaSuccess) {
         LOG_CRITICAL(cudaGetErrorString(err));
     }
-    err = cudaFree(d_pointer);
+}
+
+
+template<typename T>
+inline void FreeCudaPointer(T& d_pointer) {
+    cudaError_t err = cudaFree(d_pointer);
     if (err != cudaSuccess) {
         LOG_CRITICAL(cudaGetErrorString(err));
     }
     d_pointer = nullptr;
+}
+
+
+template<typename T1, typename T2>
+requires SameDataTypeStructure<T1, T2>
+void UploadToDeviceSymbol(const std::vector<T1>& data, T2*& d_pointer) {
+    T2* temp_pointer = nullptr;
+    MallocOnDevice(data, temp_pointer);
+    MemcpyToDevice(data, temp_pointer);
+    MemcpyToSymbol(temp_pointer, d_pointer);
+}
+
+
+template<typename T1, typename T2>
+requires SameDataTypeStructure<T1, T2>
+void UploadToDevice(const std::vector<T1>& data, T2*& d_pointer) {
+    MallocOnDevice(data, d_pointer);
+    MemcpyToDevice(data, d_pointer);
+}
+
+
+template<typename T1, typename T2>
+requires SameDataTypeStructure<T1, T2>
+void DownloadFromDevice(std::vector<T1>& data, T2*& d_pointer) {
+    MemcpyFromDevice(data, d_pointer);
+    FreeCudaPointer(d_pointer);
 }

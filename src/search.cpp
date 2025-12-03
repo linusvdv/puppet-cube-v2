@@ -104,6 +104,12 @@ bool LeafSearch (const State& state, uint8_t depth, uint8_t& best_depth, std::pa
 
 void LeafManager (std::stop_token stocken, uint64_t& num_positions_leaf, VisitedMap& visited_leaf, std::atomic<uint8_t>& atomic_best_depth, std::pair<State, uint8_t>& best_endstate_leafs,
                   std::atomic<std::shared_ptr<phmap::flat_hash_map<State, uint8_t>>>& shared_leaf_states, [[maybe_unused]] const uint64_t& leaf_batch_size, const int& thread_idx, std::mutex& mtx) {
+    if (Settings::UseCuda()) {
+        DeviceLeafManager(stocken, shared_leaf_states, mtx, num_positions_leaf, visited_leaf,
+                          atomic_best_depth, best_endstate_leafs, leaf_batch_size, thread_idx);
+        return;
+    }
+
     std::shared_ptr<phmap::flat_hash_map<State, uint8_t>> local_buffer;
 
     while (!stocken.stop_requested()) {
@@ -119,17 +125,11 @@ void LeafManager (std::stop_token stocken, uint64_t& num_positions_leaf, Visited
         }
 
         if (is_new) {
-            if (Settings::UseCuda()) {
-                std::vector<std::pair<State, uint8_t>> starting_positions(local_buffer->begin(), local_buffer->end());
-                DeviceLeafManager(starting_positions, num_positions_leaf, visited_leaf, atomic_best_depth, best_endstate_leafs, leaf_batch_size, thread_idx);
-            }
-            else {
-                for (const std::pair<State, uint8_t> starting_position : *local_buffer) {
-                    uint8_t best_depth = atomic_best_depth;
-                    LeafSearch(starting_position.first, starting_position.second, best_depth,
-                            best_endstate_leafs, visited_leaf,
-                            num_positions_leaf, atomic_best_depth, thread_idx);
-                }
+            for (const std::pair<State, uint8_t> starting_position : *local_buffer) {
+                uint8_t best_depth = atomic_best_depth;
+                LeafSearch(starting_position.first, starting_position.second, best_depth,
+                        best_endstate_leafs, visited_leaf,
+                        num_positions_leaf, atomic_best_depth, thread_idx);
             }
         }
         else {
@@ -303,6 +303,13 @@ void SearchManager () {
 
         // Search
         Search(num_positions_search, visited_search, atomic_best_depth, best_endstate_search, random_positions[i], shared_leaf_states, leaf_batch_size);
+
+        // wait until all shared position are empty
+        auto shared_data = shared_leaf_states.load(std::memory_order_acquire);
+        while (!shared_data->empty()) {
+            std::this_thread::yield(); // prevent busy spin burn
+            shared_data = shared_leaf_states.load(std::memory_order_acquire);
+        }
 
         // Stop LeafManager
         for (int i = 0; i < Settings::GetNumThreads(); i++) {
