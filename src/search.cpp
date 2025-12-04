@@ -217,7 +217,7 @@ void Search (uint64_t& num_positions_search, VisitedMap& visited_search, std::at
 
             num_positions_search++;
 
-            if (next_cube.GetMaxHeuristic(next_state.second) + pq_top.depth + 1 > best_depth - 4 && best_depth < 30 + Settings::GetTBDepth()) {
+            if (next_cube.GetMaxHeuristic(next_state.second) + pq_top.depth + 1 > best_depth - 3 && best_depth < 30 + Settings::GetTBDepth()) {
                 auto find_local_buffer = local_buffer->find(next_state.second);
                 if (find_local_buffer == local_buffer->end()) {
                     local_buffer->insert({next_state.second, pq_top.depth+1});
