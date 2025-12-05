@@ -149,10 +149,15 @@ void Cube::UploadComputationToDevice() {
 }
 
 
-void Cube::SetCurCornerHeuristic(const State& state) {
+uint16_t Cube::GetCurCornerHeuristic(const State& state) {
     uint16_t corner_orientation = state.hash_2 >> 20;      // 12 bites         NOLINT
     uint16_t corner_position = state.hash_1;               // 16 bites         NOLINT
-    cur_corner_heuristic_ = uint8_t(corner_heuristics[(corner_orientation*kNumCornerPositions) + corner_position] & ((uint16_t(1) << 8) - 1)); // NOLINT
+    return uint8_t(corner_heuristics[(corner_orientation*kNumCornerPositions) + corner_position] & ((uint16_t(1) << 8) - 1)); // NOLINT
+}
+
+
+void Cube::SetCurCornerHeuristic(const State& state) {
+    cur_corner_heuristic_ = GetCurCornerHeuristic(state);
 }
 
 void Cube::SetCurEdgeHeuristic1(const State& state) {

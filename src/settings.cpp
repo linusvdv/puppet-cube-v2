@@ -26,6 +26,7 @@ int Settings::num_threads = 1;
 int Settings::tb_depth = 6;  // NOLINT
 int Settings::tb_depth_gpu = 8;  // NOLINT
 bool Settings::log_info = false;
+int Settings::min_corner_heuristic = 0;
 
 
 static struct option long_options[] = {
@@ -41,6 +42,7 @@ static struct option long_options[] = {
     {"scrambling_depth", required_argument, NULL, 's'},
     {"num_positions", required_argument, NULL, 'p'},
     {"num_runs", required_argument, NULL, 'r'},
+    {"min_corner_heuristic", required_argument, NULL, 'm'},
 
     {"BCHT", no_argument, NULL, 'B'},
 
@@ -60,24 +62,25 @@ usage: ./build/bin/PuppetCubeV2 [options]
     -o value
 
 list of options
-    -h --help              show this message
-    -i --info              show additional hardware info
-    --root_path            path to root folder puppet-cube-v2            [./PathToPuppetCubeV2/../../]
-    --use_cuda             run cuda                                      [USE_CUDA]     (true|1|false|0)
-    -l --log_level         logger/error level                            [memory]       (critical|error|warning|info|all|extra|memory)
+    -h --help                  show this message
+    -i --info                  show additional hardware info
+    --root_path                path to root folder puppet-cube-v2                         [./PathToPuppetCubeV2/../../]
+    --use_cuda                 run cuda                                                   [USE_CUDA]     (true|1|false|0)
+    -l --log_level             logger/error level                                         [memory]       (critical|error|warning|info|all|extra|memory)
 
-    -t --threads           number of threads used in the program         [MAX_THREADS]  (1, MAX_THREADS)
-    --tb_depth             depth of the tablebase (9 uses 40 GB RAM)     [6]            (0, 9)
-    --tb_depth_gpu         how much get sent to GPU (<= CPU)             [8]            (0, 9)
-    -s --scrambling_depth  how many moves to scramble                    [100]          (0, 1000000)
-    -p --num_positions     max number of positions used in the search    [1e7]          (0, 1e18)
-    -r --num_runs          number of runs                                [10]           (0, 1e18)
+    -t --threads               number of threads used in the program                      [MAX_THREADS]  (1, MAX_THREADS)
+    --tb_depth                 depth of the tablebase (9 uses 40 GB RAM)                  [6]            (0, 9)
+    --tb_depth_gpu             how much get sent to GPU (<= CPU)                          [8]            (0, 9)
+    -s --scrambling_depth      how many moves to scramble                                 [100]          (0, 1000000)
+    -p --num_positions         max number of positions used in the search                 [1e7]          (0, 1e18)
+    -r --num_runs              number of runs                                             [10]           (0, 1e18)
+    -m --min_corner_heuristic  all starting position have at least this corner heuristic  [0]            (0, 27)
 
-    -B --BCHT              time BCHT with comparison to phmap
+    -B --BCHT                  time BCHT with comparison to phmap
 
-    -D --dfs               time dfs on CPU [and GPU]
-    --dfs_depth            depth searched from the dfs                   [4]            (1, 6)
-    --num_dfs_positions    number of different dfs positions searched    [100000]       (1, 1e18)
+    -D --dfs                   time dfs on CPU [and GPU]
+    --dfs_depth                depth searched from the dfs                                [4]            (1, 6)
+    --num_dfs_positions        number of different dfs positions searched                 [100000]       (1, 1e18)
 )";
 
 
@@ -161,7 +164,7 @@ Settings::Settings (int argc, char *argv[]) {
     temp_root_path.append("/../../");
     root_path.append(temp_root_path);
 
-    const char* short_options = "hiBt:p:r:Ds:l:";
+    const char* short_options = "hiBt:p:r:m:Ds:l:";
     opterr = 0; // supress error messages from getopt_long
     int option_index;
     signed char cop;
@@ -220,6 +223,9 @@ Settings::Settings (int argc, char *argv[]) {
                 break;
             case 'r':
                 GetTFromOptarg(num_runs, size_t(0), size_t(1e18), "NUM RUNS");  // NOLINT
+                break;
+            case 'm':
+                GetTFromOptarg(min_corner_heuristic, 0, 27, "MIN CORNER HEURISTIC");
                 break;
             case 0:
                 if (std::string(long_options[option_index].name) == "error_level") {

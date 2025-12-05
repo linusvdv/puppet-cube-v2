@@ -268,6 +268,7 @@ void SearchManager () {
 
     // random starting positions
     std::vector<State> random_positions = RandomPositions(Settings::GetNumRuns(), 0);
+    LOG_EXTRA("Calculated RandomPositions");
 
     // accumulated positions for information purposes
     uint64_t acc_total_num_positions = 0;

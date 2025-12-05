@@ -64,6 +64,10 @@ public:
         return use_cuda;
     }
 
+    static int GetMinCornerHeuristic() {
+        return min_corner_heuristic;
+    }
+
 
 private:
     // this path should be equivalent to path/to/puppet-cube-v2/
@@ -83,6 +87,8 @@ private:
     static int num_threads;
     static size_t num_positions;
     static size_t num_runs;
+
+    static int min_corner_heuristic;
 
     // tb_depth
     // tb_depth_gpu

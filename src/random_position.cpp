@@ -19,6 +19,11 @@ std::vector<State> RandomPositions (const size_t& num_elements, size_t seed_offs
             std::pair<bool, State> res = Cube::Rotate(state, dist(gen));
             state = res.second;
         }
+
+        while (Cube::GetCurCornerHeuristic(state) < Settings::GetMinCornerHeuristic()) {
+            state = Cube::Rotate(state, dist(gen)).second;
+        }
+
         random_positions.push_back(state);
     }
     return random_positions;

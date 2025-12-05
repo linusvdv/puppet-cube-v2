@@ -44,22 +44,23 @@ usage: ./build/bin/PuppetCubeV2 [options]
     -o value
 
 list of options
-    -h --help              show this message
-    -i --info              show additional hardware info
-    --root_path            path to root folder puppet-cube-v2            [./PathToPuppetCubeV2/../../]
-    --use_cuda             run cuda                                      [USE_CUDA]     (true|1|false|0)
-    -e --error_level       logger/error level                            [memory]       (critical|error|warning|info|all|extra|memory)
+    -h --help                  show this message
+    -i --info                  show additional hardware info
+    --root_path                path to root folder puppet-cube-v2                         [./PathToPuppetCubeV2/../../]
+    --use_cuda                 run cuda                                                   [USE_CUDA]     (true|1|false|0)
+    -l --log_level             logger/error level                                         [memory]       (critical|error|warning|info|all|extra|memory)
 
-    -t --threads           number of threads used in the program         [MAX_THREADS]  (1, MAX_THREADS)
-    --tb_depth             depth of the tablebase (9 uses 40 GB RAM)     [6]            (0, 9)
-    --tb_depth_gpu         how much get sent to GPU (<= CPU)             [8]            (0, 9)
-    -s --scrambling_depth  how many moves to scramble                    [100]          (0, 1000000)
-    -p --num_positions     max number of positions used in the search    [1e7]          (0, 1e18)
-    -r --num_runs          number of runs                                [10]           (0, 1e18)
+    -t --threads               number of threads used in the program                      [MAX_THREADS]  (1, MAX_THREADS)
+    --tb_depth                 depth of the tablebase (9 uses 40 GB RAM)                  [6]            (0, 9)
+    --tb_depth_gpu             how much get sent to GPU (<= CPU)                          [8]            (0, 9)
+    -s --scrambling_depth      how many moves to scramble                                 [100]          (0, 1000000)
+    -p --num_positions         max number of positions used in the search                 [1e7]          (0, 1e18)
+    -r --num_runs              number of runs                                             [10]           (0, 1e18)
+    -m --min_corner_heuristic  all starting position have at least this corner heuristic  [0]            (0, 27)
 
-    -B --BCHT              time BCHT with comparison to phmap
+    -B --BCHT                  time BCHT with comparison to phmap
 
-    -D --dfs               time dfs on CPU [and GPU]
-    --dfs_depth            depth searched from the dfs                   [4]            (1, 6)
-    --num_dfs_positions    number of different dfs positions searched    [100000]       (1, 1e18)
+    -D --dfs                   time dfs on CPU [and GPU]
+    --dfs_depth                depth searched from the dfs                                [4]            (1, 6)
+    --num_dfs_positions        number of different dfs positions searched                 [100000]       (1, 1e18)
 ```

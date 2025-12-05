@@ -128,6 +128,8 @@ public:
     uint8_t GetMaxHeuristic(const State& state);
     uint8_t GetAppHeuristic(const State& state);
 
+    static uint16_t GetCurCornerHeuristic(const State& state);
+
 private:
     // precomputation
     static std::vector<uint16_t> corner_orientations;
