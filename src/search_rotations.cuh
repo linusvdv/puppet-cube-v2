@@ -1,6 +1,9 @@
 #include <cstdint>
 
 
+constexpr int kURotationSize = 32;
+
+
 struct URotations {
     uint64_t data[4];
 

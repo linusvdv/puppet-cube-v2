@@ -217,7 +217,7 @@ void Search (uint64_t& num_positions_search, VisitedMap& visited_search, std::at
 
             num_positions_search++;
 
-            if (next_cube.GetMaxHeuristic(next_state.second) + pq_top.depth + 1 > best_depth - 3 && best_depth < 30 + Settings::GetTBDepth()) {
+            if (next_cube.GetMaxHeuristic(next_state.second) + pq_top.depth + 1 > best_depth - 4 && best_depth < 30 + Settings::GetTBDepth()) {
                 auto find_local_buffer = local_buffer->find(next_state.second);
                 if (find_local_buffer == local_buffer->end()) {
                     local_buffer->insert({next_state.second, pq_top.depth+1});
@@ -313,9 +313,9 @@ void SearchManager () {
         // wait until all shared position are empty
         auto shared_data = shared_leaf_states.load(std::memory_order_acquire);
         while (!shared_data->empty()) {
-            std::this_thread::yield(); // prevent busy spin burn
             shared_data = shared_leaf_states.load(std::memory_order_acquire);
         }
+        LOG_EXTRA("start with finishing search");
 
         // Stop LeafManager
         for (int i = 0; i < Settings::GetNumThreads(); i++) {
