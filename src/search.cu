@@ -189,11 +189,6 @@ void DeviceLeafManager (std::stop_token& stocken, std::atomic<std::shared_ptr<ph
     std::queue<std::pair<State, uint8_t>> local_position_queue;
     bool first_finished_position = true;
 
-    std::vector<std::pair<State, uint8_t>> starting_positions_copy(leaf_batch_size*kLeafThreadSize);
-    std::vector<uint64_t> starting_pos_thread(leaf_batch_size*kLeafThreadSize);
-    for (uint64_t i = 0; i < leaf_batch_size*kLeafThreadSize; i++) {
-        starting_pos_thread[i] = i;
-    }
     uint64_t cur_finished_split_idx = 0;
 
     while (true) {
@@ -202,26 +197,13 @@ void DeviceLeafManager (std::stop_token& stocken, std::atomic<std::shared_ptr<ph
         uint8_t cur_best_depth = atomic_best_depth;
         for (uint64_t i = 0; i < leaf_batch_size*kLeafThreadSize; i++) {
             // better solution
-            if (best_depths[i] < cur_best_depth && first_finished_position) {
+            if (best_depths[i] < cur_best_depth) {
                 // do a CPU search for this position
                 LeafSearch(starting_positions[i].first, starting_positions[i].second, cur_best_depth,
                            best_endstate_leafs, visited_leaf,
                            num_positions_leaf, atomic_best_depth, thread_idx);
                 // mark as finished
                 rotation_idxs[i] = uint8_t(-1);
-            }
-            else if (best_depths[i] < cur_best_depth && !first_finished_position) {
-                // do a CPU search for this position
-                LeafSearch(starting_positions_copy[starting_pos_thread[i]].first, starting_positions_copy[starting_pos_thread[i]].second, cur_best_depth,
-                           best_endstate_leafs, visited_leaf,
-                           num_positions_leaf, atomic_best_depth, thread_idx);
-                // mark as finished
-                // I know that it may mean that some of the others need one more pass
-                for (uint64_t j = 0; j < leaf_batch_size*kLeafThreadSize; j++) {
-                    if (starting_pos_thread[i] == starting_pos_thread[j]) {
-                        rotation_idxs[j] = uint8_t(-1);
-                    }
-                }
             }
 
             // not yet finished with calculation
@@ -250,7 +232,6 @@ void DeviceLeafManager (std::stop_token& stocken, std::atomic<std::shared_ptr<ph
                     if (stocken.stop_requested()) {
                         finished_positions.push(i);
                         if (first_finished_position) {
-                            starting_positions_copy = starting_positions;
                             first_finished_position = false;
                         }
                         break;
@@ -303,6 +284,15 @@ void DeviceLeafManager (std::stop_token& stocken, std::atomic<std::shared_ptr<ph
                 // split up
                 // it is guarantied that rotation_idx > 0
                 std::pair<State, uint8_t> starting_position = starting_positions[cur_finished_split_idx];
+                // insert into visited_leaf such that it can be traced back
+                auto find_visited = visited_leaf.find(starting_position.first);
+                if (find_visited == visited_leaf.end()) {
+                    visited_leaf.insert({starting_position.first, starting_position.second}); // found new solution
+                }
+                else if (find_visited->second > starting_position.second) {
+                    find_visited->second = starting_position.second;
+                }
+
                 URotations urotation = urotations[cur_finished_split_idx];
 
                 uint8_t rotation = urotation[0] ^ uint8_t(1<<7); // as it is a rev move (else rotation_idx == 0)
@@ -310,6 +300,7 @@ void DeviceLeafManager (std::stop_token& stocken, std::atomic<std::shared_ptr<ph
 
                 // do the current rotation
                 std::pair<State, uint8_t> new_starting_position = {Cube::Rotate(starting_position.first, rotation).second, starting_position.second+1};
+
                 // shift urotation by a move
                 URotations new_urotation = {0, 0, 0, 0};
                 for (int i = 0; i < kURotationSize-1; i++) {
@@ -330,7 +321,6 @@ void DeviceLeafManager (std::stop_token& stocken, std::atomic<std::shared_ptr<ph
                     finished_positions.pop();
 
                     // ability to trace back the real starting position of a new best solution
-                    starting_pos_thread[next_idx] = starting_pos_thread[cur_finished_split_idx];
                     starting_positions[next_idx] = {next_rot.second, starting_position.second+1};
                     urotations[next_idx] = {0, 0, 0, 0};
                     rotation_idxs[next_idx] = 0;
