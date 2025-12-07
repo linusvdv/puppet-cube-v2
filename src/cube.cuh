@@ -2,6 +2,7 @@
 #pragma once
 #include <compare>
 #include <cuda.h>
+#include <cuda_runtime_api.h>
 
 #include "cube.hpp"
 
@@ -117,31 +118,50 @@ struct DRotateReturn {
 
 class DCube {
 public:
-    __device__ DCube() {}
-
-    static __host__ void UploadComputationToDevice(
+    __host__ void UploadComputationToDevice(
         const std::vector<uint16_t>& corner_orientations,
         const std::vector<uint16_t>& corner_positions,
         const std::vector<uint16_t>& corner_heuristics,
 
         const std::vector<uint16_t>& edge_orientations,
         const std::vector<uint32_t>& edge_positions,
-        const std::vector<uint8_t>& edge_heuristics
-        );
+        const std::vector<uint8_t>& edge_heuristics,
+        int gpu_device_idx);
 
-    __device__ static DRotateReturn Rotate(const DState& prev_state, const uint8_t& rotation);
+    __host__ void UploadTablebaseToDevice(const std::vector<State>& tablebebase);
 
-    __device__ static bool DTablebaseContains(const DState& state);
 
-    __device__ uint8_t GetMaxHeuristic(const DState& state);
-    __device__ uint8_t GetAppHeuristic(const DState& state);
+    __device__ DRotateReturn Rotate(const DState& prev_state, const uint8_t& rotation);
+
+    __device__ bool DTablebaseContains(const DState& state);
+
+    uint16_t* d_corner_orientations = nullptr;
+    uint16_t* d_corner_positions = nullptr;
+    uint16_t* d_corner_heuristics = nullptr;
+
+    uint16_t* d_edge_orientations = nullptr;
+    uint32_t* d_edge_positions = nullptr;
+    uint8_t* d_edge_heuristics = nullptr;
+
+    DState* d_tablebase = nullptr;
+    size_t d_tablebase_size = 0;
+};
+
+
+class DHeuristics {
+public:
+    __device__ uint8_t GetMaxHeuristic(const DState& state, const DCube& dcube);
+    __device__ uint8_t GetAppHeuristic(const DState& state, const DCube& dcube);
+
+    __device__ void SetCurCornerHeuristic(const DState& state, const DCube& dcube);
+    __device__ void SetCurEdgeHeuristic1(const DState& state, const DCube& dcube);
+    __device__ void SetCurEdgeHeuristic2(const DState& state, const DCube& dcube);
 
 private:
-    __device__ void SetCurCornerHeuristic(const DState& state);
-    __device__ void SetCurEdgeHeuristic1(const DState& state);
-    __device__ void SetCurEdgeHeuristic2(const DState& state);
-
     uint8_t cur_corner_heuristic_ = -1;
     uint8_t cur_edge_heuristic_1_ = -1;
     uint8_t cur_edge_heuristic_2_ = -1;
 };
+
+
+DCube GetDCube(int gpu_device_idx);

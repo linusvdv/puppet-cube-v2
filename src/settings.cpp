@@ -8,6 +8,10 @@
 #include "settings.hpp"
 #include "logger.hpp"
 
+#ifdef USE_CUDA
+#include "info_bridge.hpp"
+#endif  // USE_CUDA
+
 
 std::string Settings::root_path;
 #ifdef USE_CUDA
@@ -15,6 +19,7 @@ bool Settings::use_cuda = true;
 #else
 bool Settings::use_cuda = false;
 #endif
+int Settings::device_count = 1;
 bool Settings::test_bcht = false;
 bool Settings::test_dfs = false;
 int Settings::dfs_depth = 4;
@@ -33,6 +38,7 @@ static struct option long_options[] = {
     {"help", no_argument, NULL, 'h'},
     {"root_path", required_argument, NULL, 0},
     {"use_cuda", required_argument, NULL, 0},
+    {"device_count", required_argument, NULL, 'd'},
     {"info", no_argument, NULL, 'i'},
     {"log_level", required_argument, NULL, 'l'},
 
@@ -66,6 +72,7 @@ list of options
     -i --info                  show additional hardware info
     --root_path                path to root folder puppet-cube-v2                         [./PathToPuppetCubeV2/../../]
     --use_cuda                 run cuda                                                   [USE_CUDA]     (true|1|false|0)
+    -d --device_count          number of gpu                                              [NUM_GPUS]     (1, NUM_GPUS)
     -l --log_level             logger/error level                                         [memory]       (critical|error|warning|info|all|extra|memory)
 
     -t --threads               number of threads used in the program                      [MAX_THREADS]  (1, MAX_THREADS)
@@ -149,6 +156,9 @@ bool GetTFromOptarg (T& num, T low, T upper, const std::string& option) {
 
 Settings::Settings (int argc, char *argv[]) {
     num_threads = std::thread::hardware_concurrency();
+    #ifdef USE_CUDA
+    device_count = GetCUDADeviceCount();
+    #endif  // USE_CUDA
 
     std::vector<std::string> arguments(argv, argv+argc);
 
@@ -177,6 +187,9 @@ Settings::Settings (int argc, char *argv[]) {
                 exit(0);
             case 'i':
                 log_info = true;
+                break;
+            case 'd':
+                GetTFromOptarg(device_count, 1, device_count, "DEVICE COUNT");
                 break;
             case 'l': {
                 std::string log_level = std::string(optarg);

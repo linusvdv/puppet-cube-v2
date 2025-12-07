@@ -6,19 +6,20 @@
 #include "cube.cuh"
 #include "cube.hpp"
 #include "cuda_memory_transfer.cuh"
+#include "settings.hpp"
 
 
-__device__ uint16_t* d_corner_orientations = nullptr;
-__device__ uint16_t* d_corner_positions = nullptr;
-__device__ uint16_t* d_corner_heuristics = nullptr;
+std::vector<DCube> d_cubes_on_diff_devices;
 
-__device__ uint16_t* d_edge_orientations = nullptr;
-__device__ uint32_t* d_edge_positions = nullptr;
-__device__ uint8_t* d_edge_heuristics = nullptr;
 
-__device__ DState* d_tablebase = nullptr;
-__device__ size_t d_tablebase_size = 0;
+void DCubeInitialization() {
+    d_cubes_on_diff_devices.assign(Settings::GetDeviceCount(), DCube());
+}
 
+
+DCube GetDCube(int gpu_device_idx) {
+    return d_cubes_on_diff_devices[gpu_device_idx];
+}
 
 __device__ uint8_t DGetRevRotation(uint8_t rotation) {
     if (rotation % 2 == 0) {
@@ -35,36 +36,47 @@ void DCube::UploadComputationToDevice(
 
     const std::vector<uint16_t>& edge_orientations,
     const std::vector<uint32_t>& edge_positions,
-    const std::vector<uint8_t>& edge_heuristics
-    ) {
+    const std::vector<uint8_t>& edge_heuristics,
+    int gpu_device_idx) {
+    // upload it to the correct device
+    cudaSetDevice(gpu_device_idx);
 
     // corner precomputation
-    UploadToDeviceSymbol(corner_orientations, d_corner_orientations);
-    UploadToDeviceSymbol(corner_positions, d_corner_positions);
-    UploadToDeviceSymbol(corner_heuristics, d_corner_heuristics);
+    UploadToDevice(corner_orientations, d_corner_orientations);
+    UploadToDevice(corner_positions, d_corner_positions);
+    UploadToDevice(corner_heuristics, d_corner_heuristics);
 
     // edge precomputation
-    UploadToDeviceSymbol(edge_orientations, d_edge_orientations);
-    UploadToDeviceSymbol(edge_positions, d_edge_positions);
-    UploadToDeviceSymbol(edge_heuristics, d_edge_heuristics);
+    UploadToDevice(edge_orientations, d_edge_orientations);
+    UploadToDevice(edge_positions, d_edge_positions);
+    UploadToDevice(edge_heuristics, d_edge_heuristics);
 }
 
 
-void UploadTablebaseToDevice(const std::vector<State>& tablebebase) {
-    UploadToDeviceSymbol(tablebebase, d_tablebase);
-    MemcpyToSymbol(tablebebase.size(), d_tablebase_size);
+void DCube::UploadTablebaseToDevice(const std::vector<State>& tablebebase) {
+    UploadToDevice(tablebebase, d_tablebase);
+    d_tablebase_size = tablebebase.size();
 }
 
-void UploadCubeComputationToDevice(
+void UploadCubeComputationToDevices(
     const std::vector<uint16_t>& corner_orientations,
     const std::vector<uint16_t>& corner_positions,
     const std::vector<uint16_t>& corner_heuristics,
 
     const std::vector<uint16_t>& edge_orientations,
     const std::vector<uint32_t>& edge_positions,
-    const std::vector<uint8_t>& edge_heuristics
-    ) {
-    DCube::UploadComputationToDevice(corner_orientations, corner_positions, corner_heuristics, edge_orientations, edge_positions, edge_heuristics);
+    const std::vector<uint8_t>& edge_heuristics) {
+    // upload on every device
+    for (int i = 0; i < Settings::GetDeviceCount(); i++) {
+        d_cubes_on_diff_devices[i].UploadComputationToDevice(corner_orientations, corner_positions, corner_heuristics, edge_orientations, edge_positions, edge_heuristics, i);
+    }
+}
+
+
+void UploadTablebaseToDevices(const std::vector<State>& tablebebase) {
+    for (int i = 0; i < Settings::GetDeviceCount(); i++) {
+        d_cubes_on_diff_devices[i].UploadTablebaseToDevice(tablebebase);
+    }
 }
 
 
@@ -104,25 +116,28 @@ size_t random_positions_size = 0;
 void UploadRandomPositionsToDevice(const std::vector<State>& random_positions) {
     UploadToDeviceSymbol(random_positions, d_random_positions);
     random_positions_size = random_positions.size();
-    MemcpyToSymbol(random_positions_size, d_random_positions_size);
+    cudaError_t err = cudaMemcpyToSymbol(d_random_positions_size, &random_positions_size, sizeof(random_positions_size));
+    if (err != cudaSuccess) {
+        LOG_CRITICAL(cudaGetErrorString(err));
+    }
 }
 
 
-__device__ void DCube::SetCurCornerHeuristic(const DState& state) {
+__device__ void DHeuristics::SetCurCornerHeuristic(const DState& state, const DCube& dcube) {
     uint16_t corner_orientation = state.hash_2 >> 20;      // 12 bites         NOLINT
     uint16_t corner_position = state.hash_1;               // 16 bites         NOLINT
-    cur_corner_heuristic_ = uint8_t(d_corner_heuristics[(corner_orientation*kNumCornerPositions) + corner_position] & ((uint16_t(1) << 8) - 1)); // NOLINT
+    cur_corner_heuristic_ = uint8_t(dcube.d_corner_heuristics[(corner_orientation*kNumCornerPositions) + corner_position] & ((uint16_t(1) << 8) - 1)); // NOLINT
 }
 
 
-__device__ void DCube::SetCurEdgeHeuristic1(const DState& state) {
+__device__ void DHeuristics::SetCurEdgeHeuristic1(const DState& state, const DCube& dcube) {
     uint32_t orientation = state.hash_3 >> 20; // NOLINT
     uint32_t position = state.hash_2 & ((uint32_t(1) << 20) - 1); // NOLINT
-    cur_edge_heuristic_1_ = d_edge_heuristics[(orientation*kNumEdgePositions) + position];
+    cur_edge_heuristic_1_ = dcube.d_edge_heuristics[(orientation*kNumEdgePositions) + position];
 }
 
 
-__device__ void DCube::SetCurEdgeHeuristic2(const DState& state) {
+__device__ void DHeuristics::SetCurEdgeHeuristic2(const DState& state, const DCube& dcube) {
     uint32_t orientation = state.hash_3 >> 20; // NOLINT
     orientation |= (__popc(orientation)%2) << (kNumEdges-1); // get last bit using even num bits parity
     uint32_t orientation_r = 0;
@@ -138,33 +153,33 @@ __device__ void DCube::SetCurEdgeHeuristic2(const DState& state) {
         position_r *= i+1;
         position_r += i - ((position / temp) % (i + 1)); // NOLINT
     }
-    cur_edge_heuristic_2_ = d_edge_heuristics[(orientation_r*kNumEdgePositions) + position_r];
+    cur_edge_heuristic_2_ = dcube.d_edge_heuristics[(orientation_r*kNumEdgePositions) + position_r];
 }
 
 
-__device__ uint8_t DCube::GetMaxHeuristic(const DState& state) {
+__device__ uint8_t DHeuristics::GetMaxHeuristic(const DState& state, const DCube& dcube) {
     if (cur_corner_heuristic_ == uint8_t(-1)) {
-        SetCurCornerHeuristic(state);
+        SetCurCornerHeuristic(state, dcube);
     }
     if (cur_edge_heuristic_1_ == uint8_t(-1)) {
-        SetCurEdgeHeuristic1(state);
+        SetCurEdgeHeuristic1(state, dcube);
     }
     if (cur_edge_heuristic_2_ == uint8_t(-1)) {
-        SetCurEdgeHeuristic2(state);
+        SetCurEdgeHeuristic2(state, dcube);
     }
     return max(max(cur_corner_heuristic_, cur_edge_heuristic_1_), cur_edge_heuristic_2_);
 }
 
 
-__device__ uint8_t DCube::GetAppHeuristic(const DState& state) {
+__device__ uint8_t DHeuristics::GetAppHeuristic(const DState& state, const DCube& dcube) {
     if (cur_corner_heuristic_ == uint8_t(-1)) {
-        SetCurCornerHeuristic(state);
+        SetCurCornerHeuristic(state, dcube);
     }
     if (cur_edge_heuristic_1_ == uint8_t(-1)) {
-        SetCurEdgeHeuristic1(state);
+        SetCurEdgeHeuristic1(state, dcube);
     }
     if (cur_edge_heuristic_2_ == uint8_t(-1)) {
-        SetCurEdgeHeuristic2(state);
+        SetCurEdgeHeuristic2(state, dcube);
     }
     return cur_corner_heuristic_ + cur_edge_heuristic_1_ + cur_edge_heuristic_2_;
 }

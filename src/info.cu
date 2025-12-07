@@ -3,12 +3,18 @@
 #include "logger.hpp"
 
 
-void GetDeviceInfo() {
+int GetCUDADeviceCount() {
     int device_count;
     cudaError_t err = cudaGetDeviceCount(&device_count);
     if (err != cudaSuccess) {
         LOG_CRITICAL(cudaGetErrorString(err));
     }
+    return device_count;
+}
+
+
+void GetDeviceInfo() {
+    int device_count = GetCUDADeviceCount();
 
     LOG_ALL("Device Count:", device_count);
     for (int dev = 0; dev < device_count; dev++) {

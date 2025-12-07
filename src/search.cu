@@ -1,3 +1,4 @@
+#include <cuda_device_runtime_api.h>
 #include <cassert>
 #include <cstdint>
 #include <queue>
@@ -19,7 +20,8 @@ constexpr uint8_t kLeafThreadSize = 2;
 
 
 __global__ void DeviceLeafSearch (uint64_t* d_num_positions_leafs, uint8_t* d_leaf_thread_idxs, const std::pair<DState, uint8_t>* d_starting_positions,
-                                  uint8_t* d_rotation_idxs, uint8_t* d_best_depths, URotations* d_urotations, uint8_t tb_depth, const uint64_t leaf_batch_size) {
+                                  uint8_t* d_rotation_idxs, uint8_t* d_best_depths, URotations* d_urotations, uint8_t tb_depth, const uint64_t leaf_batch_size,
+                                  DCube dcube) {
     // get current leaf thread idx
     size_t index = threadIdx.x + (size_t(blockIdx.x) * blockDim.x);
     if (index >= leaf_batch_size) {
@@ -38,11 +40,11 @@ __global__ void DeviceLeafSearch (uint64_t* d_num_positions_leafs, uint8_t* d_le
     // do the rotations such that state is again at the outcome state it was previously (somewhere in the tree)
     for (int i = 0; i < rotation_idx && rotation_idx != uint8_t(-1); i++) {
         if (rotations[i] > kNumRotations) {
-            state = DCube::Rotate(state, rotations[i] ^ uint8_t(1<<7)).state;
+            state = dcube.Rotate(state, rotations[i] ^ uint8_t(1<<7)).state;
         }
     }
     if (rotation_idx != uint8_t(-1) && rotations[rotation_idx] > kNumRotations) {
-        state = DCube::Rotate(state, rotations[rotation_idx] ^ uint8_t(1<<7)).state;
+        state = dcube.Rotate(state, rotations[rotation_idx] ^ uint8_t(1<<7)).state;
     }
 
     // make a constant number of position during each kernal function call
@@ -78,11 +80,11 @@ __global__ void DeviceLeafSearch (uint64_t* d_num_positions_leafs, uint8_t* d_le
             // do the rotations such that state is again at the outcome state it was previously (somewhere in the tree)
             for (int i = 0; i < rotation_idx && rotation_idx != uint8_t(-1); i++) {
                 if (rotations[i] > kNumRotations) {
-                    state = DCube::Rotate(state, rotations[i] ^ uint8_t(1<<7)).state;
+                    state = dcube.Rotate(state, rotations[i] ^ uint8_t(1<<7)).state;
                 }
             }
             if (rotation_idx != uint8_t(-1) && rotations[rotation_idx] > kNumRotations) {
-                state = DCube::Rotate(state, rotations[rotation_idx] ^ uint8_t(1<<7)).state;
+                state = dcube.Rotate(state, rotations[rotation_idx] ^ uint8_t(1<<7)).state;
             }
             continue;
         }
@@ -110,7 +112,7 @@ __global__ void DeviceLeafSearch (uint64_t* d_num_positions_leafs, uint8_t* d_le
         }
 
         // do the rotation
-        DRotateReturn next_pos = DCube::Rotate(state, rotation);
+        DRotateReturn next_pos = dcube.Rotate(state, rotation);
         // it is garantied that the undo rotation of a cube is always possible in this leaf search
         // if it is an illegal search skip this rotation
         if (!next_pos.isLegal) {
@@ -132,14 +134,14 @@ __global__ void DeviceLeafSearch (uint64_t* d_num_positions_leafs, uint8_t* d_le
         num_positions++;
 
         // not able to improve the current leaf search skip this node
-        DCube cube;
-        if (max(tb_depth, cube.GetMaxHeuristic(state)) + rotation_idx + depth_offset >= best_depth) {
+        DHeuristics heuristics;
+        if (max(tb_depth, heuristics.GetMaxHeuristic(state, dcube)) + rotation_idx + depth_offset >= best_depth) {
             rotations[rotation_idx] = kNumRotations;
             continue;
         }
 
         // check if the current state is in tablebase and is therefore a new best solution
-        if (DCube::DTablebaseContains(state)) {
+        if (dcube.DTablebaseContains(state)) {
             uint8_t depth = rotation_idx + tb_depth + depth_offset;
             best_depth = min(depth, best_depth);
             printf("NEW best: %d leaf_thread_idx %d\n", int(best_depth), int(leaf_thread_idx));
@@ -160,6 +162,17 @@ void DeviceLeafManager (std::stop_token& stocken, std::atomic<std::shared_ptr<ph
                         std::mutex& mtx, uint64_t& num_positions_leaf, VisitedMap& visited_leaf,
                         std::atomic<uint8_t>& atomic_best_depth, std::pair<State, uint8_t>& best_endstate_leafs,
                         const uint64_t& leaf_batch_size, const int& thread_idx) {
+    // set the device for this thread
+    int gpu_device_idx = thread_idx % Settings::GetDeviceCount();
+    cudaError_t err = cudaSetDevice(gpu_device_idx);
+    if (err != cudaSuccess) {
+        LOG_CRITICAL(cudaGetErrorString(err));
+    }
+
+    // create stream
+    cudaStream_t cuda_stream;
+    cudaStreamCreate(&cuda_stream);
+
     // Device informations will only be on the device
     std::vector<uint8_t> leaf_thread_idxs(leaf_batch_size, 0);
     uint8_t* d_leaf_thread_idxs;
@@ -343,13 +356,13 @@ void DeviceLeafManager (std::stop_token& stocken, std::atomic<std::shared_ptr<ph
 
         // only leaf_batch_size threads
         size_t grid_dim = ((leaf_batch_size-1)/kBlockDim)+1;
-        DeviceLeafSearch<<<grid_dim, kBlockDim>>>(d_num_positions_leafs, d_leaf_thread_idxs, d_starting_positions,
-                            d_rotation_idxs, d_best_depths, d_urotations, Settings::GetTBDepth(), leaf_batch_size);
+        DeviceLeafSearch<<<grid_dim, kBlockDim, 0, cuda_stream>>>(d_num_positions_leafs, d_leaf_thread_idxs, d_starting_positions,
+                            d_rotation_idxs, d_best_depths, d_urotations, Settings::GetTBDepth(), leaf_batch_size, GetDCube(gpu_device_idx));
         cudaError_t err = cudaGetLastError(); // launch of Device
         if (err != cudaSuccess) {
             LOG_CRITICAL("CUDA error:", cudaGetErrorString(err));
         }
-        err = cudaDeviceSynchronize(); // end of Device
+        err = cudaStreamSynchronize(cuda_stream); // end of kernal
         if (err != cudaSuccess) {
             LOG_CRITICAL("CUDA error:", cudaGetErrorString(err));
         }
@@ -372,4 +385,6 @@ void DeviceLeafManager (std::stop_token& stocken, std::atomic<std::shared_ptr<ph
 
     // free device only memory
     FreeCudaPointer(d_leaf_thread_idxs);
+
+    cudaStreamDestroy(cuda_stream);
 }

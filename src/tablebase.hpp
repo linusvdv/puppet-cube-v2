@@ -25,7 +25,7 @@ public:
         #ifdef USE_CUDA
         if (Settings::UseCuda()) {
             LOG_EXTRA("Start Tablebase Uploading Precomputation to Device");
-            UploadTablebaseToDevice(tablebase.back());
+            UploadTablebaseToDevices(tablebase.back());
             LOG_INFO("Tablebase Precomputation Uploaded to Device");
         }
         #endif // USE_CUDA

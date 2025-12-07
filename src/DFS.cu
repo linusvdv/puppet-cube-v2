@@ -18,7 +18,7 @@ struct DFSStack {
 };
 
 
-__global__ void DFSGlobal(DState* d_random_position, size_t num_random_position, size_t* d_num_nodes_gpu, size_t* d_num_tb_hits_gpu, int max_depth) {
+__global__ void DFSGlobal(DState* d_random_position, size_t num_random_position, size_t* d_num_nodes_gpu, size_t* d_num_tb_hits_gpu, int max_depth, DCube dcube) {
     size_t index = threadIdx.x + (size_t(blockIdx.x) * blockDim.x);
 
     if (index >= num_random_position) {
@@ -34,12 +34,12 @@ __global__ void DFSGlobal(DState* d_random_position, size_t num_random_position,
     size_t cur_num_tb_hits_gpu = 0;
 
     cur_num_nodes_gpu++;
-    if (DCube::DTablebaseContains(dfs_stack[dfs_stack_idx].state)) {
+    if (dcube.DTablebaseContains(dfs_stack[dfs_stack_idx].state)) {
         cur_num_tb_hits_gpu++;
     }
     while (dfs_stack_idx >= 0) {
         int8_t cur_depth = dfs_stack[dfs_stack_idx].depth;
-        DRotateReturn next = DCube::Rotate(dfs_stack[dfs_stack_idx].state, dfs_stack[dfs_stack_idx].rotation++);
+        DRotateReturn next = dcube.Rotate(dfs_stack[dfs_stack_idx].state, dfs_stack[dfs_stack_idx].rotation++);
 
         if (dfs_stack[dfs_stack_idx].rotation >= kNumRotations) {
             dfs_stack_idx--;
@@ -47,11 +47,11 @@ __global__ void DFSGlobal(DState* d_random_position, size_t num_random_position,
 
         if (next.isLegal) {
             cur_num_nodes_gpu++;
-            if (DCube::DTablebaseContains(next.state)) {
+            if (dcube.DTablebaseContains(next.state)) {
                 cur_num_tb_hits_gpu++;
             }
-            DCube cube;
-            cube.GetMaxHeuristic(next.state);
+            DHeuristics heuristics;
+            heuristics.GetMaxHeuristic(next.state, dcube);
             if (cur_depth+1 < max_depth) {
                 dfs_stack[++dfs_stack_idx] = {int8_t(cur_depth+1), 0, next.state};
             }
@@ -76,7 +76,8 @@ void GPUDFS(const std::vector<State>& random_position, std::vector<size_t>& num_
     size_t grid_dim = (random_position.size()/kBlockDim)+1;
     LOG_EXTRA("grid dim:", grid_dim, "block dim", kBlockDim);
 
-    DFSGlobal<<<grid_dim, kBlockDim>>>(d_random_position, random_position.size(), d_num_nodes_gpu, d_num_tb_hits_gpu, Settings::GetDFSDepth());
+    // only on gpu 0
+    DFSGlobal<<<grid_dim, kBlockDim>>>(d_random_position, random_position.size(), d_num_nodes_gpu, d_num_tb_hits_gpu, Settings::GetDFSDepth(), GetDCube(0));
     cudaError_t err = cudaDeviceSynchronize();
     if (err != cudaSuccess) {
         LOG_CRITICAL(cudaGetErrorString(err));
@@ -85,4 +86,6 @@ void GPUDFS(const std::vector<State>& random_position, std::vector<size_t>& num_
     // get result
     DownloadFromDevice(num_nodes_gpu, d_num_nodes_gpu);
     DownloadFromDevice(num_tb_hits_gpu, d_num_tb_hits_gpu);
+
+    FreeCudaPointer(d_random_position);
 }

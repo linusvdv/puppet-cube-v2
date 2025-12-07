@@ -141,7 +141,7 @@ void Cube::UploadComputationToDevice() {
     #ifdef USE_CUDA
     if (Settings::UseCuda()) {
         LOG_EXTRA("Start Cube Uploading Precomputation to Device");
-        UploadCubeComputationToDevice(corner_orientations, corner_positions, corner_heuristics, edge_orientations, edge_positions, edge_heuristics);
+        UploadCubeComputationToDevices(corner_orientations, corner_positions, corner_heuristics, edge_orientations, edge_positions, edge_heuristics);
         LOG_INFO("Cube Precomputation Uploaded to Device");
         LOG_MEMORY();
     }

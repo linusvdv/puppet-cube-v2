@@ -2,6 +2,7 @@
 #include "BCHTSet.hpp"
 #include "cube.cuh"
 #include "settings.hpp"
+#include "cuda_memory_transfer.cuh"
 
 
 __device__ constexpr uint64_t kDXORlow1 = 0x123456789abcdef0ULL;
@@ -46,10 +47,10 @@ extern size_t random_positions_size;
 
 
 constexpr size_t kBatching = 10;
-__global__ void DTimeBCHTtable(unsigned long long* hit, unsigned long long* miss) {
+__global__ void DTimeBCHTtable(unsigned long long* hit, unsigned long long* miss, DCube dcube) {
     size_t index = threadIdx.x + (blockIdx.x * blockDim.x);
     for (size_t i = index*kBatching; i < (index+1)*kBatching && i < d_random_positions_size; i++) {
-        if (DCube::DTablebaseContains(d_random_positions[i])) {
+        if (dcube.DTablebaseContains(d_random_positions[i])) {
             atomicAdd(hit, size_t(1));
         }
         else {
@@ -88,7 +89,7 @@ void TimeBCHTGPU() {
                 LOG_CRITICAL(cudaGetErrorString(err));
             }
 
-            DTimeBCHTtable<<<((random_positions_size/kBatching/kBlockDim)+1), kBlockDim>>>(d_hit, d_miss);
+            DTimeBCHTtable<<<((random_positions_size/kBatching/kBlockDim)+1), kBlockDim>>>(d_hit, d_miss, GetDCube(0));
             cudaError_t err = cudaGetLastError();
             if (err != cudaSuccess) {
                 LOG_CRITICAL("CUDA error:", cudaGetErrorString(err));
@@ -104,6 +105,9 @@ void TimeBCHTGPU() {
             }
             LOG_EXTRA(SkipSpace("run ["), SkipSpace(i+1), SkipSpace("/"), SkipSpace(kNumRuns), "]:", h_hit, "hits", h_miss, "misses");
         }
+
+        FreeCudaPointer(d_hit);
+        FreeCudaPointer(d_miss);
 
         std::chrono::time_point gpu_since_epoch = std::chrono::high_resolution_clock::now(); // get the duration since epoch
         std::chrono::milliseconds gpu_millis = std::chrono::duration_cast<std::chrono::milliseconds>(gpu_since_epoch - gpu_time);

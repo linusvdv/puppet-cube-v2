@@ -5,7 +5,10 @@
 #include "cube.hpp"
 
 
-void UploadCubeComputationToDevice(
+void DCubeInitialization();
+
+
+void UploadCubeComputationToDevices(
     const std::vector<uint16_t>& corner_orientations,
     const std::vector<uint16_t>& corner_positions,
     const std::vector<uint16_t>& corner_heuristics,
@@ -16,7 +19,7 @@ void UploadCubeComputationToDevice(
     );
 
 
-void UploadTablebaseToDevice(const std::vector<State>& tablebebase);
+void UploadTablebaseToDevices(const std::vector<State>& tablebebase);
 
 
 void UploadRandomPositionsToDevice(const std::vector<State>& random_positions);

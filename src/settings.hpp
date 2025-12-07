@@ -64,6 +64,10 @@ public:
         return use_cuda;
     }
 
+    static int GetDeviceCount() {
+        return device_count;
+    }
+
     static int GetMinCornerHeuristic() {
         return min_corner_heuristic;
     }
@@ -73,6 +77,7 @@ private:
     // this path should be equivalent to path/to/puppet-cube-v2/
     static std::string root_path;
     static bool use_cuda;
+    static int device_count;
 
     static bool log_info;
 
