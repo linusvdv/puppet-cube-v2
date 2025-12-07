@@ -14,6 +14,7 @@
 #include "settings.hpp"
 
 
+__device__ constexpr uint8_t kDLeafThreadSize = 2;
 constexpr uint8_t kLeafThreadSize = 2;
 
 
@@ -21,10 +22,10 @@ __global__ void DeviceLeafSearch (uint64_t* d_num_positions_leafs, uint8_t* d_le
                                   uint8_t* d_rotation_idxs, uint8_t* d_best_depths, URotations* d_urotations, uint8_t tb_depth, const uint64_t leaf_batch_size) {
     // get current leaf thread idx
     size_t index = threadIdx.x + (size_t(blockIdx.x) * blockDim.x);
-    uint64_t leaf_thread_idx = (kLeafThreadSize * index) + d_leaf_thread_idxs[index];
     if (index >= leaf_batch_size) {
         return;
     }
+    uint64_t leaf_thread_idx = (kDLeafThreadSize * index) + d_leaf_thread_idxs[index];
 
     // load from global memory
     uint8_t rotation_idx = d_rotation_idxs[leaf_thread_idx];
@@ -40,7 +41,7 @@ __global__ void DeviceLeafSearch (uint64_t* d_num_positions_leafs, uint8_t* d_le
             state = DCube::Rotate(state, rotations[i] ^ uint8_t(1<<7)).state;
         }
     }
-    if (rotations[rotation_idx] > kNumRotations) {
+    if (rotation_idx != uint8_t(-1) && rotations[rotation_idx] > kNumRotations) {
         state = DCube::Rotate(state, rotations[rotation_idx] ^ uint8_t(1<<7)).state;
     }
 
@@ -63,8 +64,8 @@ __global__ void DeviceLeafSearch (uint64_t* d_num_positions_leafs, uint8_t* d_le
             }
 
             // get new leaf_thread_idx
-            d_leaf_thread_idxs[index] = (d_leaf_thread_idxs[index] + 1) % kLeafThreadSize;
-            leaf_thread_idx = (kLeafThreadSize * index) + d_leaf_thread_idxs[index];
+            d_leaf_thread_idxs[index] = (d_leaf_thread_idxs[index] + 1) % kDLeafThreadSize;
+            leaf_thread_idx = (kDLeafThreadSize * index) + d_leaf_thread_idxs[index];
 
             // load from global memory
             rotation_idx = d_rotation_idxs[leaf_thread_idx];
@@ -80,7 +81,7 @@ __global__ void DeviceLeafSearch (uint64_t* d_num_positions_leafs, uint8_t* d_le
                     state = DCube::Rotate(state, rotations[i] ^ uint8_t(1<<7)).state;
                 }
             }
-            if (rotations[rotation_idx] > kNumRotations) {
+            if (rotation_idx != uint8_t(-1) && rotations[rotation_idx] > kNumRotations) {
                 state = DCube::Rotate(state, rotations[rotation_idx] ^ uint8_t(1<<7)).state;
             }
             continue;
@@ -151,7 +152,7 @@ __global__ void DeviceLeafSearch (uint64_t* d_num_positions_leafs, uint8_t* d_le
     d_urotations[leaf_thread_idx] = rotations; // not really necessary
     d_num_positions_leafs[leaf_thread_idx] = num_positions;
 
-    d_leaf_thread_idxs[index] = leaf_thread_idx % kLeafThreadSize;
+    d_leaf_thread_idxs[index] = leaf_thread_idx % kDLeafThreadSize;
 }
 
 
@@ -296,7 +297,10 @@ void DeviceLeafManager (std::stop_token& stocken, std::atomic<std::shared_ptr<ph
                 URotations urotation = urotations[cur_finished_split_idx];
 
                 uint8_t rotation = urotation[0] ^ uint8_t(1<<7); // as it is a rev move (else rotation_idx == 0)
-                assert(rotation < kNumRotations);
+                if (rotation >= kNumRotations) {
+                    LOG_EXTRA("UROTATIONS", urotation.data[0], urotation.data[1], urotation.data[2], urotation.data[3]);
+                    LOG_CRITICAL("Rotation is too big", int(rotation), "rotation_idx:", int(rotation_idxs[cur_finished_split_idx]));
+                }
 
                 // do the current rotation
                 std::pair<State, uint8_t> new_starting_position = {Cube::Rotate(starting_position.first, rotation).second, starting_position.second+1};

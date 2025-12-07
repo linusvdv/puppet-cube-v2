@@ -20,12 +20,19 @@ struct URotations {
         // write
         __host__ __device__
         void set(uint8_t v) {
-            *word = (*word & ~(uint64_t(0xFF) << shift)) |
-                    (uint64_t(v) << shift);
+            *word = (*word & ~(uint64_t(0xFF) << uint64_t(shift))) |
+                    (uint64_t(v) << uint64_t(shift));
         }
 
         __host__ __device__
         ByteRef& operator=(uint8_t v) { set(v); return *this; }
+
+
+        __host__ __device__
+        ByteRef& operator=(const ByteRef& other) {
+            set(uint8_t(other));
+            return *this;
+        }
 
         // prefix ++
         __host__ __device__
