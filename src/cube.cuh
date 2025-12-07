@@ -128,7 +128,7 @@ public:
         const std::vector<uint8_t>& edge_heuristics,
         int gpu_device_idx);
 
-    __host__ void UploadTablebaseToDevice(const std::vector<State>& tablebebase);
+    __host__ void UploadTablebaseToDevice(const std::vector<State>& tablebebase, int gpu_device_idx);
 
 
     __device__ DRotateReturn Rotate(const DState& prev_state, const uint8_t& rotation);

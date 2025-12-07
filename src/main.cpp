@@ -1,4 +1,3 @@
-#include "cube.cuh"
 #include "cube.hpp"
 #include "DFS.hpp"
 #include "info.hpp"

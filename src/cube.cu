@@ -53,7 +53,10 @@ void DCube::UploadComputationToDevice(
 }
 
 
-void DCube::UploadTablebaseToDevice(const std::vector<State>& tablebebase) {
+void DCube::UploadTablebaseToDevice(const std::vector<State>& tablebebase, int gpu_device_idx) {
+    // upload it to the correct device
+    cudaSetDevice(gpu_device_idx);
+
     UploadToDevice(tablebebase, d_tablebase);
     d_tablebase_size = tablebebase.size();
 }
@@ -75,7 +78,7 @@ void UploadCubeComputationToDevices(
 
 void UploadTablebaseToDevices(const std::vector<State>& tablebebase) {
     for (int i = 0; i < Settings::GetDeviceCount(); i++) {
-        d_cubes_on_diff_devices[i].UploadTablebaseToDevice(tablebebase);
+        d_cubes_on_diff_devices[i].UploadTablebaseToDevice(tablebebase, i);
     }
 }
 
