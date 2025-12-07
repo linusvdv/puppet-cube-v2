@@ -2,7 +2,6 @@
 #include <parallel_hashmap/phmap.h>
 
 #include "cube.hpp"
-#include "cuda_memory_transfer.cuh"
 #include "settings.hpp"
 #include "logger.hpp"
 

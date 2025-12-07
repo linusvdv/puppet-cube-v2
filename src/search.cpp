@@ -109,11 +109,13 @@ bool LeafSearch (const State& state, uint8_t depth, uint8_t& best_depth, std::pa
 
 void LeafManager (std::stop_token stocken, uint64_t& num_positions_leaf, VisitedMap& visited_leaf, std::atomic<uint8_t>& atomic_best_depth, std::pair<State, uint8_t>& best_endstate_leafs,
                   std::atomic<std::shared_ptr<phmap::flat_hash_map<State, uint8_t>>>& shared_leaf_states, [[maybe_unused]] const uint64_t& leaf_batch_size, const int& thread_idx, std::mutex& mtx) {
+    #ifdef USE_CUDA
     if (Settings::UseCuda()) {
         DeviceLeafManager(stocken, shared_leaf_states, mtx, num_positions_leaf, visited_leaf,
                           atomic_best_depth, best_endstate_leafs, leaf_batch_size, thread_idx);
         return;
     }
+    #endif
 
     std::shared_ptr<phmap::flat_hash_map<State, uint8_t>> local_buffer;
 

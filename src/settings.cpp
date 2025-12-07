@@ -262,7 +262,7 @@ Settings::Settings (int argc, char *argv[]) {
     #ifndef USE_CUDA
     if (use_cuda) {
         use_cuda = false;
-        LOG_WARNING("Cannot enable USE CUDA - compile with CUDA")
+        LOG_WARNING("Cannot enable USE CUDA - compile with CUDA");
     }
     #endif  // USE_CUDA
 
