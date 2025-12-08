@@ -1,4 +1,3 @@
-#include <cuda_device_runtime_api.h>
 #include <cassert>
 #include <cstdint>
 #include <queue>
@@ -15,11 +14,7 @@
 #include "settings.hpp"
 
 
-__device__ constexpr uint8_t kDLeafThreadSize = 2;
-constexpr uint8_t kLeafThreadSize = 2;
-
-
-__global__ void DeviceLeafSearch (uint64_t* d_num_positions_leafs, uint8_t* d_leaf_thread_idxs, const std::pair<DState, uint8_t>* d_starting_positions,
+__global__ void DeviceLeafSearch (uint64_t* d_num_positions_leafs, const std::pair<DState, uint8_t>* d_starting_positions,
                                   uint8_t* d_rotation_idxs, uint8_t* d_best_depths, URotations* d_urotations, uint8_t tb_depth, const uint64_t leaf_batch_size,
                                   DCube dcube) {
     // get current leaf thread idx
@@ -27,15 +22,14 @@ __global__ void DeviceLeafSearch (uint64_t* d_num_positions_leafs, uint8_t* d_le
     if (index >= leaf_batch_size) {
         return;
     }
-    uint64_t leaf_thread_idx = (kDLeafThreadSize * index) + d_leaf_thread_idxs[index];
 
     // load from global memory
-    uint8_t rotation_idx = d_rotation_idxs[leaf_thread_idx];
-    DState state = d_starting_positions[leaf_thread_idx].first;
-    uint8_t depth_offset = d_starting_positions[leaf_thread_idx].second;
-    uint8_t best_depth = d_best_depths[leaf_thread_idx];
-    URotations rotations = d_urotations[leaf_thread_idx];
-    uint64_t num_positions = d_num_positions_leafs[leaf_thread_idx];
+    uint8_t rotation_idx = d_rotation_idxs[index];
+    DState state = d_starting_positions[index].first;
+    uint8_t depth_offset = d_starting_positions[index].second;
+    uint8_t best_depth = d_best_depths[index];
+    URotations rotations = d_urotations[index];
+    uint64_t num_positions = d_num_positions_leafs[index];
 
     // do the rotations such that state is again at the outcome state it was previously (somewhere in the tree)
     for (int i = 0; i < rotation_idx && rotation_idx != uint8_t(-1); i++) {
@@ -49,44 +43,10 @@ __global__ void DeviceLeafSearch (uint64_t* d_num_positions_leafs, uint8_t* d_le
 
     // make a constant number of position during each kernal function call
     // this could be way to high
-    constexpr int kNumPosBatchSize = 10000;
+    constexpr int kNumPosBatchSize = 1000;
     for (int cur_pos_batch = 0; cur_pos_batch < kNumPosBatchSize || rotation_idx == 0; cur_pos_batch++) {
         if (rotation_idx == uint8_t(-1)) {
-            if (cur_pos_batch % 100 != 0) {
-                continue; // Not do every time the empty check as this is quite resource intensive
-            }
-
-            // newly solved position
-            if (d_rotation_idxs[leaf_thread_idx] != uint8_t(-1)) {
-                // save back to global memory;
-                d_rotation_idxs[leaf_thread_idx] = uint8_t(-1);
-                d_best_depths[leaf_thread_idx] = best_depth;
-                d_urotations[leaf_thread_idx] = rotations; // not really necessary
-                d_num_positions_leafs[leaf_thread_idx] = num_positions;
-            }
-
-            // get new leaf_thread_idx
-            d_leaf_thread_idxs[index] = (d_leaf_thread_idxs[index] + 1) % kDLeafThreadSize;
-            leaf_thread_idx = (kDLeafThreadSize * index) + d_leaf_thread_idxs[index];
-
-            // load from global memory
-            rotation_idx = d_rotation_idxs[leaf_thread_idx];
-            state = d_starting_positions[leaf_thread_idx].first;
-            depth_offset = d_starting_positions[leaf_thread_idx].second;
-            best_depth = d_best_depths[leaf_thread_idx];
-            rotations = d_urotations[leaf_thread_idx];
-            num_positions = d_num_positions_leafs[leaf_thread_idx];
-
-            // do the rotations such that state is again at the outcome state it was previously (somewhere in the tree)
-            for (int i = 0; i < rotation_idx && rotation_idx != uint8_t(-1); i++) {
-                if (rotations[i] > kNumRotations) {
-                    state = dcube.Rotate(state, rotations[i] ^ uint8_t(1<<7)).state;
-                }
-            }
-            if (rotation_idx != uint8_t(-1) && rotations[rotation_idx] > kNumRotations) {
-                state = dcube.Rotate(state, rotations[rotation_idx] ^ uint8_t(1<<7)).state;
-            }
-            continue;
+            break;
         }
 
         // the goal is to search further in the dfs (from the leaf position) and stop if an improvement to the best_depth is not posible any more
@@ -144,17 +104,15 @@ __global__ void DeviceLeafSearch (uint64_t* d_num_positions_leafs, uint8_t* d_le
         if (dcube.DTablebaseContains(state)) {
             uint8_t depth = rotation_idx + tb_depth + depth_offset;
             best_depth = min(depth, best_depth);
-            printf("NEW best: %d leaf_thread_idx %d\n", int(best_depth), int(leaf_thread_idx));
+            printf("NEW best: %d leaf_thread_idx %d\n", int(best_depth), int(index));
         }
     }
 
     // save back to global memory;
-    d_rotation_idxs[leaf_thread_idx] = rotation_idx;
-    d_best_depths[leaf_thread_idx] = best_depth;
-    d_urotations[leaf_thread_idx] = rotations; // not really necessary
-    d_num_positions_leafs[leaf_thread_idx] = num_positions;
-
-    d_leaf_thread_idxs[index] = leaf_thread_idx % kDLeafThreadSize;
+    d_rotation_idxs[index] = rotation_idx;
+    d_best_depths[index] = best_depth;
+    d_urotations[index] = rotations; // not really necessary
+    d_num_positions_leafs[index] = num_positions;
 }
 
 
@@ -173,17 +131,12 @@ void DeviceLeafManager (std::stop_token& stocken, std::atomic<std::shared_ptr<ph
     cudaStream_t cuda_stream;
     cudaStreamCreate(&cuda_stream);
 
-    // Device informations will only be on the device
-    std::vector<uint8_t> leaf_thread_idxs(leaf_batch_size, 0);
-    uint8_t* d_leaf_thread_idxs;
-    UploadToDevice(leaf_thread_idxs, d_leaf_thread_idxs);
-
     // updated for each position
-    std::vector<uint8_t> rotation_idxs(leaf_batch_size*kLeafThreadSize, uint8_t(-1));
-    std::vector<std::pair<State, uint8_t>> starting_positions(leaf_batch_size*kLeafThreadSize);
-    std::vector<uint8_t> best_depths(leaf_batch_size*kLeafThreadSize, atomic_best_depth);
-    std::vector<URotations> urotations(leaf_batch_size*kLeafThreadSize, {0, 0, 0, 0});
-    std::vector<uint64_t> num_positions_leafs(leaf_batch_size*kLeafThreadSize, 0);
+    std::vector<uint8_t> rotation_idxs(leaf_batch_size, uint8_t(-1));
+    std::vector<std::pair<State, uint8_t>> starting_positions(leaf_batch_size);
+    std::vector<uint8_t> best_depths(leaf_batch_size, atomic_best_depth);
+    std::vector<URotations> urotations(leaf_batch_size, {0, 0, 0, 0});
+    std::vector<uint64_t> num_positions_leafs(leaf_batch_size, 0);
 
     // device updated
     uint8_t* d_rotation_idxs;
@@ -209,7 +162,7 @@ void DeviceLeafManager (std::stop_token& stocken, std::atomic<std::shared_ptr<ph
         std::queue<uint64_t> finished_positions;
 
         uint8_t cur_best_depth = atomic_best_depth;
-        for (uint64_t i = 0; i < leaf_batch_size*kLeafThreadSize; i++) {
+        for (uint64_t i = 0; i < leaf_batch_size; i++) {
             // better solution
             if (best_depths[i] < cur_best_depth) {
                 // do a CPU search for this position
@@ -273,24 +226,24 @@ void DeviceLeafManager (std::stop_token& stocken, std::atomic<std::shared_ptr<ph
         }
         // update all best depths
         cur_best_depth = atomic_best_depth;
-        for (uint64_t i = 0; i < leaf_batch_size*kLeafThreadSize; i++) {
+        for (uint64_t i = 0; i < leaf_batch_size; i++) {
             best_depths[i] = cur_best_depth;
         }
 
         // finished all positions
-        if (finished_positions.size() == leaf_batch_size*kLeafThreadSize) {
+        if (finished_positions.size() == leaf_batch_size) {
             break;
         }
 
         if (!first_finished_position) {
             uint64_t last_splitable_cnt = 0;
-            while (finished_positions.size() >= kNumRotations-1 && last_splitable_cnt < leaf_batch_size*kLeafThreadSize) {
+            while (finished_positions.size() >= kNumRotations-1 && last_splitable_cnt < leaf_batch_size) {
                 if (rotation_idxs[cur_finished_split_idx] == uint8_t(-1) ||
                     rotation_idxs[cur_finished_split_idx] == 0) {
                     last_splitable_cnt++;
 
                     cur_finished_split_idx++;
-                    cur_finished_split_idx %= leaf_batch_size*kLeafThreadSize;
+                    cur_finished_split_idx %= leaf_batch_size;
                     continue;
                 }
                 last_splitable_cnt = 0;
@@ -356,7 +309,7 @@ void DeviceLeafManager (std::stop_token& stocken, std::atomic<std::shared_ptr<ph
 
         // only leaf_batch_size threads
         size_t grid_dim = ((leaf_batch_size-1)/kBlockDim)+1;
-        DeviceLeafSearch<<<grid_dim, kBlockDim, 0, cuda_stream>>>(d_num_positions_leafs, d_leaf_thread_idxs, d_starting_positions,
+        DeviceLeafSearch<<<grid_dim, kBlockDim, 0, cuda_stream>>>(d_num_positions_leafs, d_starting_positions,
                             d_rotation_idxs, d_best_depths, d_urotations, Settings::GetTBDepth(), leaf_batch_size, GetDCube(gpu_device_idx));
         cudaError_t err = cudaGetLastError(); // launch of Device
         if (err != cudaSuccess) {
@@ -382,9 +335,6 @@ void DeviceLeafManager (std::stop_token& stocken, std::atomic<std::shared_ptr<ph
     FreeCudaPointer(d_best_depths);
     FreeCudaPointer(d_urotations);
     FreeCudaPointer(d_num_positions_leafs);
-
-    // free device only memory
-    FreeCudaPointer(d_leaf_thread_idxs);
 
     cudaStreamDestroy(cuda_stream);
 }
