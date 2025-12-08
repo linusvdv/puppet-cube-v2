@@ -1,5 +1,4 @@
-#include <cstdint>
-
+#pragma once
 
 constexpr int kURotationSize = 32;
 
@@ -7,100 +6,30 @@ constexpr int kURotationSize = 32;
 struct URotations {
     uint64_t data[4];
 
-    struct ByteRef {
-        uint64_t* word;
-        uint8_t   shift;
-
-        // read
-        __host__ __device__
-        operator uint8_t() const {
-            return uint8_t((*word >> shift) & 0xFF);
-        }
-
-        // write
-        __host__ __device__
-        void set(uint8_t v) {
-            *word = (*word & ~(uint64_t(0xFF) << uint64_t(shift))) |
-                    (uint64_t(v) << uint64_t(shift));
-        }
-
-        __host__ __device__
-        ByteRef& operator=(uint8_t v) { set(v); return *this; }
-
-
-        __host__ __device__
-        ByteRef& operator=(const ByteRef& other) {
-            set(uint8_t(other));
-            return *this;
-        }
-
-        // prefix ++
-        __host__ __device__
-        ByteRef& operator++() {
-            set(uint8_t(*this + 1));
-            return *this;
-        }
-
-        // postfix ++
-        __host__ __device__
-        uint8_t operator++(int) {
-            uint8_t old = *this;
-            set(uint8_t(old + 1));
-            return old;
-        }
-
-        // prefix --
-        __host__ __device__
-        ByteRef& operator--() {
-            set(uint8_t(*this - 1));
-            return *this;
-        }
-
-        // postfix --
-        __host__ __device__
-        uint8_t operator--(int) {
-            uint8_t old = *this;
-            set(uint8_t(old - 1));
-            return old;
-        }
-
-        // unary operators
-        __host__ __device__
-        uint8_t operator~() const { return uint8_t(~uint8_t(*this)); }
-
-        __host__ __device__
-        uint8_t operator+() const { return uint8_t(*this); }
-
-        __host__ __device__
-        uint8_t operator-() const { return uint8_t(-uint8_t(*this)); }
-
-
-        // compound assignment operators
-
-        __host__ __device__ ByteRef& operator+=(uint8_t v) { set(uint8_t(*this + v)); return *this; }
-        __host__ __device__ ByteRef& operator-=(uint8_t v) { set(uint8_t(*this - v)); return *this; }
-        __host__ __device__ ByteRef& operator*=(uint8_t v) { set(uint8_t(*this * v)); return *this; }
-        __host__ __device__ ByteRef& operator/=(uint8_t v) { set(uint8_t(*this / v)); return *this; }
-        __host__ __device__ ByteRef& operator%=(uint8_t v) { set(uint8_t(*this % v)); return *this; }
-
-        __host__ __device__ ByteRef& operator&=(uint8_t v) { set(uint8_t(*this & v)); return *this; }
-        __host__ __device__ ByteRef& operator|=(uint8_t v) { set(uint8_t(*this | v)); return *this; }
-        __host__ __device__ ByteRef& operator^=(uint8_t v) { set(uint8_t(*this ^ v)); return *this; }
-
-        __host__ __device__ ByteRef& operator<<=(uint8_t v) { set(uint8_t(*this << v)); return *this; }
-        __host__ __device__ ByteRef& operator>>=(uint8_t v) { set(uint8_t(*this >> v)); return *this; }
-
-    };
-
-    // non-const index
-    __host__ __device__
-    ByteRef operator[](size_t idx) {
-        return ByteRef{ &data[idx / 8], uint8_t((idx % 8) * 8) };
-    }
-
     // const index
     __host__ __device__
-    uint8_t operator[](size_t idx) const {
-        return uint8_t(data[idx/8] >> ((idx % 8) * 8));
+    uint8_t At(size_t idx) const {
+        return data[idx/8] >> ((idx % 8) * 8);
+    }
+
+    __host__ __device__
+    void BitOR(size_t idx, uint8_t value) {
+        data[idx/8] |= uint64_t(value) << ((idx % 8) * 8);
+    }
+
+    __host__ __device__
+    void BitXOR(size_t idx, uint8_t value) {
+        data[idx/8] ^= uint64_t(value) << ((idx % 8) * 8);
+    }
+
+    __host__ __device__
+    void Set(size_t idx, uint8_t value) {
+        data[idx/8] &= ~(uint64_t(uint8_t(-1)) << ((idx % 8) * 8));
+        BitOR(idx, value);
+    }
+
+    __host__ __device__
+    void Add(size_t idx, uint8_t value) {
+        Set(idx, At(idx)+value);
     }
 };

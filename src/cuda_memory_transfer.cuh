@@ -34,9 +34,28 @@ inline void MemcpyToDevice(const std::vector<T1>& data, T2*& pointer) {
 }
 
 
+template<typename T1, typename T2>
+requires SameDataTypeStructure<T1, T2>
+inline void MemcpyToDeviceStream(const std::vector<T1>& data, T2*& pointer, const cudaStream_t& cuda_stream) {
+    cudaError_t err = cudaMemcpyAsync(pointer, data.data(), sizeof(T1)*data.size(), cudaMemcpyHostToDevice, cuda_stream);
+    if (err != cudaSuccess) {
+        LOG_CRITICAL(cudaGetErrorString(err));
+    }
+}
+
+
 template<typename T>
 inline void MemcpyToSymbol(const T& data, T& d_pointer) {
     cudaError_t err = cudaMemcpyToSymbol(d_pointer, &data, sizeof(T));
+    if (err != cudaSuccess) {
+        LOG_CRITICAL(cudaGetErrorString(err));
+    }
+}
+
+
+template<typename T>
+inline void HostRegister(std::vector<T>& data) {
+    cudaError_t err = cudaHostRegister(data.data(), data.size() * sizeof(T), cudaHostRegisterDefault);
     if (err != cudaSuccess) {
         LOG_CRITICAL(cudaGetErrorString(err));
     }
@@ -47,6 +66,16 @@ template<typename T1, typename T2>
 requires SameDataTypeStructure<T1, T2>
 inline void MemcpyFromDevice(std::vector<T1>& data, T2*& pointer) {
     cudaError_t err = cudaMemcpy(data.data(), pointer, sizeof(T1)*data.size(), cudaMemcpyDeviceToHost);
+    if (err != cudaSuccess) {
+        LOG_CRITICAL(cudaGetErrorString(err));
+    }
+}
+
+
+template<typename T1, typename T2>
+requires SameDataTypeStructure<T1, T2>
+inline void MemcpyFromDeviceStream(std::vector<T1>& data, T2*& pointer, const cudaStream_t& cuda_stream) {
+    cudaError_t err = cudaMemcpyAsync(data.data(), pointer, sizeof(T1)*data.size(), cudaMemcpyDeviceToHost, cuda_stream);
     if (err != cudaSuccess) {
         LOG_CRITICAL(cudaGetErrorString(err));
     }
