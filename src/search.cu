@@ -178,6 +178,13 @@ void DeviceLeafManager (std::stop_token& stocken, std::atomic<std::shared_ptr<ph
                 LeafSearch(starting_positions[i].first, starting_positions[i].second, cur_best_depth,
                            best_endstate_leafs, visited_leaf,
                            num_positions_leaf, atomic_best_depth, thread_idx);
+                auto find_visited = visited_leaf.find(starting_positions[i].first);
+                if (find_visited == visited_leaf.end()) {
+                    visited_leaf.insert(starting_positions[i]); // found new solution
+                }
+                else if (find_visited->second > starting_positions[i].second) {
+                    find_visited->second = starting_positions[i].second;
+                }
                 // mark as finished
                 rotation_idxs[i] = uint8_t(-1);
             }
@@ -263,7 +270,7 @@ void DeviceLeafManager (std::stop_token& stocken, std::atomic<std::shared_ptr<ph
                 // insert into visited_leaf such that it can be traced back
                 auto find_visited = visited_leaf.find(starting_position.first);
                 if (find_visited == visited_leaf.end()) {
-                    visited_leaf.insert({starting_position.first, starting_position.second}); // found new solution
+                    visited_leaf.insert(starting_position); // found new solution
                 }
                 else if (find_visited->second > starting_position.second) {
                     find_visited->second = starting_position.second;

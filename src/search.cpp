@@ -29,13 +29,13 @@ struct PQSearch {
 };
 
 
-void SolveTB(std::stack<Rotations>& tb_rotations, int tb_layer, State state) {
+void SolveTB(std::vector<Rotations>& tb_rotations, int tb_layer, State state) {
     for (int layer = tb_layer - 1; layer >= 0; layer--) {
         for (uint8_t rotation = 0; rotation < kNumRotations; rotation++) {
             State next_state = Cube::Rotate(state, rotation).second;
             if (BCHTSetContains(Tablebase::tablebase[layer], next_state)) {
                 state = next_state;
-                tb_rotations.push(Rotations(GetRevRotation(rotation)));
+                tb_rotations.push_back(Rotations(rotation));
                 break;
             }
         }
@@ -43,19 +43,19 @@ void SolveTB(std::stack<Rotations>& tb_rotations, int tb_layer, State state) {
 }
 
 
-void SolveSearch(std::vector<Rotations>& search_rotations, int depth, State state, const VisitedMap& visited_search, const std::vector<VisitedMap>& visited_leaf_threads) {
+void SolveSearch(std::stack<Rotations>& search_rotations, int depth, State state, const VisitedMap& visited_search, const std::vector<VisitedMap>& visited_leaf_threads) {
     for (int i = depth-1; i >= 0; i--) {
         for (uint8_t rotation = 0; rotation < kNumRotations; rotation++) {
             State next_state = Cube::Rotate(state, rotation).second;
             if (auto vis = visited_search.find(next_state); vis != visited_search.end() && vis->second == i) {
-                search_rotations.push_back(Rotations(GetRevRotation(rotation)));
+                search_rotations.push(Rotations(GetRevRotation(rotation)));
                 state = next_state;
                 break;
             }
             bool stopped = false;
             for (const VisitedMap& visited_leaf : visited_leaf_threads) {
                 if (auto vis = visited_leaf.find(next_state); vis != visited_leaf.end() && vis->second == i) {
-                    search_rotations.push_back(Rotations(GetRevRotation(rotation)));
+                    search_rotations.push(Rotations(GetRevRotation(rotation)));
                     state = next_state;
                     stopped = true;
                     break;
@@ -352,21 +352,27 @@ void SearchManager () {
 
             // already in TB
             if (atomic_best_depth <= Settings::GetTBDepth()) {
-                std::stack<Rotations> tb_rotations;
+                std::vector<Rotations> tb_rotations;
                 SolveTB(tb_rotations, atomic_best_depth, best_endstate.first);
                 LOG_EXTRA(tb_rotations);
             }
             // mix of TB and Search
             else {
                 // Tablebase
-                std::stack<Rotations> tb_rotations;
+                std::vector<Rotations> tb_rotations;
                 SolveTB(tb_rotations, Settings::GetTBDepth(), best_endstate.first);
 
                 // Search
-                std::vector<Rotations> search_rotations;
+                std::stack<Rotations> search_rotations;
                 SolveSearch(search_rotations, atomic_best_depth-Settings::GetTBDepth(), best_endstate.first, visited_search, visited_leaf_threads);
 
-                LOG_EXTRA(tb_rotations, search_rotations);
+                if (search_rotations.size() + tb_rotations.size() != atomic_best_depth) {
+                    LOG_WARNING("Not all rotations");
+                    LOG_EXTRA("search_rotations", search_rotations);
+                    LOG_EXTRA("tb_rotations", tb_rotations);
+                }
+
+                LOG_EXTRA("solution moves:", search_rotations, tb_rotations);
             }
         }
         else {

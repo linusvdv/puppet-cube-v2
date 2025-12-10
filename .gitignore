@@ -46,3 +46,5 @@ performance_test/*
 
 .venv
 __pycache__
+analyser/*.txt
+analyser/*.xy
