@@ -126,7 +126,7 @@ public:
     Cube(){}
 
     uint8_t GetMaxHeuristic(const State& state);
-    uint8_t GetAppHeuristic(const State& state);
+    float GetAppHeuristic(const State& state);
 
     static uint16_t GetCurCornerHeuristic(const State& state);
 

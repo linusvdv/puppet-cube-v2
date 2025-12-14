@@ -72,6 +72,10 @@ public:
         return min_corner_heuristic;
     }
 
+    static float GetHeuristicFactor() {
+        return heuristic_factor;
+    }
+
 
 private:
     // this path should be equivalent to path/to/puppet-cube-v2/
@@ -94,6 +98,8 @@ private:
     static size_t num_runs;
 
     static int min_corner_heuristic;
+
+    static float heuristic_factor;
 
     // tb_depth
     // tb_depth_gpu

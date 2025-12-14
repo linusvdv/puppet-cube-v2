@@ -65,6 +65,7 @@ if __name__ == "__main__":
     trend_fit = np.polyval(coeffs_fit, y)
     rmse_fit = np.sqrt(np.mean((y_fit - trend_fit)**2))
     print("rmse_fit", rmse_fit)
+
     coeffs_sum = np.polyfit(y, y_sum, 1)
     trend_sum = np.polyval(coeffs_sum, y)
     rmse_sum = np.sqrt(np.mean((y_sum - trend_sum)**2))

@@ -1,4 +1,5 @@
 #include <atomic>
+#include <compare>
 #include <cstdint>
 #include <mutex>
 #include <queue>
@@ -21,11 +22,11 @@
 
 
 struct PQSearch {
-    uint8_t value;
+    float value;
     uint8_t depth;
     State state;
 
-    std::strong_ordering operator<=>(const PQSearch&) const = default;
+    std::partial_ordering operator<=>(const PQSearch&) const = default;
 };
 
 
@@ -83,7 +84,7 @@ bool LeafSearch (const State& state, uint8_t depth, uint8_t& best_depth, std::pa
         }
     }
     Cube cube;
-    if (std::max(cube.GetMaxHeuristic(state), Settings::GetTBDepth()) + depth >= best_depth) {
+    if (std::max(cube.GetMaxHeuristic(state), uint8_t(Settings::GetTBDepth()+1)) + depth >= best_depth) {
         return false;
     }
     bool is_solution = false;
@@ -164,7 +165,7 @@ void Search (uint64_t& num_positions_search, VisitedMap& visited_search, std::at
     // priority queue sorted after the heuristic value
     std::priority_queue<PQSearch, std::vector<PQSearch>, std::greater<>> pq_search;
     Cube start_cube;
-    pq_search.push({start_cube.GetMaxHeuristic(starting_position), 0, starting_position});
+    pq_search.push({start_cube.GetAppHeuristic(starting_position), 0, starting_position});
     visited_search.insert({starting_position, 0});
     num_positions_search++;
 
@@ -179,39 +180,42 @@ void Search (uint64_t& num_positions_search, VisitedMap& visited_search, std::at
         // rotate to the next position
         for (uint8_t rotation = 0; rotation < kNumRotations; rotation++) {
             std::pair<bool, State> next_state = Cube::Rotate(pq_top.state, rotation);
+            // illegal move
             if (!next_state.first) {
                 continue;
             }
+            uint8_t next_depth = pq_top.depth + 1;
 
             // tablebase
-            uint8_t depth = pq_top.depth + 1 + Settings::GetTBDepth();
+            uint8_t full_depth = next_depth + Settings::GetTBDepth();
             if (BCHTSetContains(Tablebase::tablebase.back(), next_state.second)) {
-                if (depth < best_depth) {
+                if (full_depth < best_depth) {
                     // set new enstate
-                    best_endstate_search = {next_state.second, depth};
-                    AtomicMin(atomic_best_depth, depth);
+                    best_endstate_search = {next_state.second, full_depth};
+                    AtomicMin(atomic_best_depth, full_depth);
 
                     best_depth = atomic_best_depth;
 
-                    visited_search[next_state.second] = depth;
-                    LOG_EXTRA("best sol:", int(depth), "num_positions:", num_positions_search);
+                    visited_search[next_state.second] = full_depth;
+                    LOG_EXTRA("best sol:", int(full_depth), "num_positions:", num_positions_search);
                     LOG_MEMORY();
                 }
             }
 
             // due to the heuristic it is not possible to solve the current state in fewer moves than the current best solution
+            // tablebase lookup already happend
             Cube next_cube;
-            if (std::max(next_cube.GetMaxHeuristic(next_state.second), Settings::GetTBDepth()) + pq_top.depth + 1 >= best_depth) {
+            if (std::max(next_cube.GetMaxHeuristic(next_state.second), uint8_t(Settings::GetTBDepth()+1)) + next_depth >= best_depth) { // TODO: check
                 continue;
             }
 
             // add to visited states
             auto find_visited = visited_search.find(next_state.second);
             if (find_visited == visited_search.end()) {
-                visited_search.insert({next_state.second, pq_top.depth + 1});
+                visited_search.insert({next_state.second, next_depth});
             }
-            else if (pq_top.depth + 1 < find_visited->second) {
-                find_visited->second = pq_top.depth + 1;
+            else if (next_depth < find_visited->second) {
+                find_visited->second = next_depth;
             }
             else {
                 continue;
@@ -219,13 +223,13 @@ void Search (uint64_t& num_positions_search, VisitedMap& visited_search, std::at
 
             num_positions_search++;
 
-            if (next_cube.GetMaxHeuristic(next_state.second) + pq_top.depth + 1 > best_depth - 4 && best_depth < 30 + Settings::GetTBDepth()) {
+            if (next_cube.GetMaxHeuristic(next_state.second) + next_depth > best_depth - 4 && best_depth < 30 + Settings::GetTBDepth()) {
                 auto find_local_buffer = local_buffer->find(next_state.second);
                 if (find_local_buffer == local_buffer->end()) {
-                    local_buffer->insert({next_state.second, pq_top.depth+1});
+                    local_buffer->insert({next_state.second, next_depth});
                 }
-                else {
-                    find_local_buffer->second = pq_top.depth+1;
+                else if (find_local_buffer->second > next_depth) {
+                    find_local_buffer->second = next_depth;
                 }
 
                 // swap local buffer with shared leaf states when it is swaped with an empty one
@@ -242,21 +246,19 @@ void Search (uint64_t& num_positions_search, VisitedMap& visited_search, std::at
                 }
             }
             else {
-                pq_search.push({uint8_t(next_cube.GetAppHeuristic(next_state.second)+pq_top.depth+1), uint8_t(pq_top.depth+1), next_state.second});
+                pq_search.push({next_cube.GetAppHeuristic(next_state.second)+float(next_depth), next_depth, next_state.second});
             }
         }
     }
 
     // swap local buffer with shared leaf states when it is swaped with an empty one
-    if (local_buffer->size() >= leaf_batch_size) {
-        auto shared_data = shared_leaf_states.load(std::memory_order_acquire);
-        while (!shared_data->empty()) {
-            std::this_thread::yield(); // prevent busy spin burn
-            shared_data = shared_leaf_states.load(std::memory_order_acquire);
-        }
-
-        local_buffer = shared_leaf_states.exchange(local_buffer, std::memory_order_acq_rel);
+    auto shared_data = shared_leaf_states.load(std::memory_order_acquire);
+    while (!shared_data->empty()) {
+        std::this_thread::yield(); // prevent busy spin burn
+        shared_data = shared_leaf_states.load(std::memory_order_acquire);
     }
+
+    local_buffer = shared_leaf_states.exchange(local_buffer, std::memory_order_acq_rel);
 }
 
 

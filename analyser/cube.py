@@ -66,6 +66,9 @@ class Cube:
 
         self.GetHeuristic()
 
+    def __str__(self) -> str:
+        return f"{self.corner_orientation}, {self.corner_position}, {self.edge_orientation}, {self.edge_position_1}, {self.edge_position_2}"
+
 
     def GetHeuristic(self):
         self.heuristic_corner = int(Cube.corner_heuristics[self.corner_orientation*Cube.kNumCornerPositions + self.corner_position] & ((1 << 8) - 1))

@@ -200,7 +200,7 @@ uint8_t Cube::GetMaxHeuristic(const State& state) {
 }
 
 
-uint8_t Cube::GetAppHeuristic(const State& state) {
+float Cube::GetAppHeuristic(const State& state) {
     if (cur_corner_heuristic_ == uint8_t(-1)) {
         SetCurCornerHeuristic(state);
     }
@@ -210,6 +210,13 @@ uint8_t Cube::GetAppHeuristic(const State& state) {
     if (cur_edge_heuristic_2_ == uint8_t(-1)) {
         SetCurEdgeHeuristic2(state);
     }
+    constexpr float kFitA = 0.449;
+    constexpr float kFitB = 0.444;
+    constexpr float kFitC = 0.072;
+    constexpr float kFitD = 0.409;
+    constexpr float kFitE = -2.277;
     // this part can be adjusted
-    return cur_corner_heuristic_ + cur_edge_heuristic_1_ + cur_edge_heuristic_2_;
+    return (kFitA * cur_corner_heuristic_ + kFitB * cur_edge_heuristic_1_ + kFitB * cur_edge_heuristic_2_
+        + kFitC * std::min({cur_corner_heuristic_, cur_edge_heuristic_1_, cur_edge_heuristic_2_})
+        + kFitD * std::max({cur_corner_heuristic_, cur_edge_heuristic_1_, cur_edge_heuristic_2_}) + kFitE) * Settings::GetHeuristicFactor();
 }

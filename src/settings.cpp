@@ -32,6 +32,7 @@ int Settings::tb_depth = 6;  // NOLINT
 int Settings::tb_depth_gpu = 8;  // NOLINT
 bool Settings::log_info = false;
 int Settings::min_corner_heuristic = 0;
+float Settings::heuristic_factor = 1.55;
 
 
 static struct option long_options[] = {
@@ -49,6 +50,7 @@ static struct option long_options[] = {
     {"num_positions", required_argument, NULL, 'p'},
     {"num_runs", required_argument, NULL, 'r'},
     {"min_corner_heuristic", required_argument, NULL, 'm'},
+    {"heuristic_factor", required_argument, NULL, 0},
 
     {"BCHT", no_argument, NULL, 'B'},
 
@@ -82,6 +84,7 @@ list of options
     -p --num_positions         max number of positions used in the search                 [1e7]          (0, 1e18)
     -r --num_runs              number of runs                                             [10]           (0, 1e18)
     -m --min_corner_heuristic  all starting position have at least this corner heuristic  [0]            (0, 27)
+    --heuristic_factor         effects the time to find the first and optimal solution    [1.55]         (0.8, 100)
 
     -B --BCHT                  time BCHT with comparison to phmap
 
@@ -128,6 +131,9 @@ bool GetTFromOptarg (T& num, T low, T upper, const std::string& option) {
         }
         else if constexpr (std::is_same_v<T, size_t>) {
             new_num = std::stoull(optarg);
+        }
+        else if constexpr (std::is_same_v<T, float>) {
+            new_num = std::stof(optarg);
         }
         else {
             static_assert(std::false_type::value, "unsupported type");
@@ -258,6 +264,9 @@ Settings::Settings (int argc, char *argv[]) {
                 }
                 if (std::string(long_options[option_index].name) == "use_cuda") {
                     GetBoolFromOptarg(use_cuda, "USE CUDA");
+                }
+                if (std::string(long_options[option_index].name) == "heuristic_factor") {
+                    GetTFromOptarg(heuristic_factor, float(0.8), float(100.0), "HEURISTIC FACROR");
                 }
                 break;
             case '?':

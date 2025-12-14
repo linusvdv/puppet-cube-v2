@@ -118,6 +118,9 @@ void Logger::Log (LoggerLevel level, const std::source_location& source_location
             if constexpr (kIsSkippedSpace<std::decay_t<Args>>) {
                 oss << args.value;
             }
+            else if constexpr (std::is_same_v<std::remove_cvref_t<decltype(args)>, uint8_t>) {
+                oss << int(args) << ' ';
+            }
             else if constexpr (std::is_same_v<std::remove_cvref_t<decltype(args)>, std::stack<Rotations>>) {
                 std::stack<Rotations> rotations_cpy = args;
                 while (!rotations_cpy.empty()) {

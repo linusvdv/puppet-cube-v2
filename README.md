@@ -57,6 +57,7 @@ list of options
     -p --num_positions         max number of positions used in the search                 [1e7]          (0, 1e18)
     -r --num_runs              number of runs                                             [10]           (0, 1e18)
     -m --min_corner_heuristic  all starting position have at least this corner heuristic  [0]            (0, 27)
+    --heuristic_factor         effects the time to find the first and optimal solution    [1.55]         (0.5, 100)
 
     -B --BCHT                  time BCHT with comparison to phmap
 

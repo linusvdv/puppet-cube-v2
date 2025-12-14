@@ -97,16 +97,16 @@ __global__ void DeviceLeafSearch (uint64_t* d_num_positions_leafs, const std::pa
 
         // not able to improve the current leaf search skip this node
         DHeuristics heuristics;
-        if (max(tb_depth, heuristics.GetMaxHeuristic(state, dcube)) + rotation_idx + depth_offset >= best_depth) {
-            rotations.Set(rotation_idx, kNumRotations);
-            continue;
-        }
-
         // check if the current state is in tablebase and is therefore a new best solution
         if (dcube.DTablebaseContains(state)) {
             uint8_t depth = rotation_idx + tb_depth + depth_offset;
             best_depth = min(depth, best_depth);
             printf("NEW best: %d leaf_thread_idx %d\n", int(best_depth), int(index));
+        }
+
+        if (max(tb_depth+1, heuristics.GetMaxHeuristic(state, dcube)) + rotation_idx + depth_offset >= best_depth) {
+            rotations.Set(rotation_idx, kNumRotations);
+            continue;
         }
     }
 
@@ -303,6 +303,8 @@ void DeviceLeafManager (std::stop_token& stocken, std::atomic<std::shared_ptr<ph
                     if (!next_rot.first) {
                         continue;
                     }
+                    // FIX: tb lookup
+
                     // new empty index
                     int next_idx = finished_positions.front();
                     finished_positions.pop();
