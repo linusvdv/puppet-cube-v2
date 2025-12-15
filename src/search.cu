@@ -6,6 +6,7 @@
 #include <stop_token>
 #include <vector>
 
+#include "BCHTSet.hpp"
 #include "cube.cuh"
 #include "cube.hpp"
 #include "logger.hpp"
@@ -14,6 +15,7 @@
 #include "search.hpp"
 #include "search_rotations.cuh"
 #include "settings.hpp"
+#include "tablebase.hpp"
 
 
 __global__ void DeviceLeafSearch (uint64_t* d_num_positions_leafs, const std::pair<DState, uint8_t>* d_starting_positions,
@@ -101,7 +103,8 @@ __global__ void DeviceLeafSearch (uint64_t* d_num_positions_leafs, const std::pa
         if (dcube.DTablebaseContains(state)) {
             uint8_t depth = rotation_idx + tb_depth + depth_offset;
             best_depth = min(depth, best_depth);
-            printf("NEW best: %d leaf_thread_idx %d\n", int(best_depth), int(index));
+            rotations.Set(rotation_idx, kNumRotations);
+            continue;
         }
 
         if (max(tb_depth+1, heuristics.GetMaxHeuristic(state, dcube)) + rotation_idx + depth_offset >= best_depth) {
@@ -303,7 +306,18 @@ void DeviceLeafManager (std::stop_token& stocken, std::atomic<std::shared_ptr<ph
                     if (!next_rot.first) {
                         continue;
                     }
-                    // FIX: tb lookup
+
+                    if (BCHTSetContains(Tablebase::tablebase.back(), next_rot.second)) {
+                        uint8_t tot_depth = starting_position.second+1 + Settings::GetTBDepth();
+                        if (tot_depth < std::min(uint8_t(atomic_best_depth), cur_best_depth)) {
+                            best_endstate_leafs = {next_rot.second, tot_depth};
+                            cur_best_depth = std::min(cur_best_depth, tot_depth);
+                            AtomicMin(atomic_best_depth, tot_depth);
+                            LOG_EXTRA("best sol", SkipSpace(thread_idx), ":", int(best_endstate_leafs.second), "leaf_search:", num_positions_leaf);
+                            LOG_MEMORY();
+                            continue;
+                        }
+                    }
 
                     // new empty index
                     int next_idx = finished_positions.front();
