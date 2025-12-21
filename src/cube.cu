@@ -102,6 +102,19 @@ __device__ DRotateReturn DCube::Rotate(const DState& prev_state, const uint8_t& 
 }
 
 
+__device__ bool DCube::RotateRef(DState& state, const uint8_t& rotation) {
+    if (kDLegalMoveIndex[rotation] != 0 && ((d_corner_heuristics[(state.corner_orientation*kDNumCornerPositions) + state.corner_position] >> kDLegalMoveIndex[rotation]) & 1) == 0) {
+        return false;
+    }
+    state.corner_orientation = d_corner_orientations[(state.corner_orientation*kDNumRotations) + rotation];
+    state.corner_position = d_corner_positions[(state.corner_position*kDNumRotations) + rotation];
+    state.edge_orientation = d_edge_orientations[(state.edge_orientation*kDNumRotations) + rotation];
+    state.edge_position_1 = d_edge_positions[(state.edge_position_1*kDNumRotations) + rotation];
+    state.edge_position_2 = d_edge_positions[(state.edge_position_2*kDNumRotations) + rotation];
+    return true;
+}
+
+
 __device__ bool DCube::DTablebaseContains(const DState& state) {
     return DBCHTSetContains(d_tablebase, d_tablebase_size, state);
 }

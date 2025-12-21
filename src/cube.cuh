@@ -132,6 +132,7 @@ public:
 
 
     __device__ DRotateReturn Rotate(const DState& prev_state, const uint8_t& rotation);
+    __device__ bool RotateRef(DState& state, const uint8_t& rotation);
 
     __device__ bool DTablebaseContains(const DState& state);
 

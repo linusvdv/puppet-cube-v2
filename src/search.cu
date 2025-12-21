@@ -76,14 +76,12 @@ __global__ void DeviceLeafSearch (uint64_t* d_num_positions_leafs, const std::pa
         }
 
         // do the rotation
-        DRotateReturn next_pos = dcube.Rotate(state, rotation);
         // it is garantied that the undo rotation of a cube is always possible in this leaf search
         // if it is an illegal search skip this rotation
-        if (!next_pos.isLegal) {
+        if (!dcube.RotateRef(state, rotation)) {
             rotations.Add(rotation_idx, 1);
             continue;
         }
-        state = next_pos.state;
         // prepare the next rotation
         rotations.BitXOR(rotation_idx, 1<<7);  // NOLINT
 
