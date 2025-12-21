@@ -120,20 +120,16 @@ constexpr std::array<uint8_t, kNumRotations> kLegalMoveIndex = {
 
 
 std::pair<bool, State> Cube::Rotate(const State& prev_state, const uint8_t& rotation) {
-    uint16_t corner_orientation = prev_state.hash_2 >> 20;      // 12 bites         NOLINT
-    uint16_t corner_position = prev_state.hash_1;               // 16 bites         NOLINT
-    uint16_t edge_orientation = prev_state.hash_3 >> 20;        // 11 bites         NOLINT
-    uint32_t edge_position_1 = prev_state.hash_2 & ((1<<20)-1); // 20 bites         NOLINT
-    uint32_t edge_position_2 = prev_state.hash_3 & ((1<<20)-1); // 20 bites         NOLINT
-    if (kLegalMoveIndex[rotation] != 0 && ((corner_heuristics[(corner_orientation*kNumCornerPositions) + corner_position] >> kLegalMoveIndex[rotation]) & 1) == 0) {
+    if (kLegalMoveIndex[rotation] != 0 && ((corner_heuristics[(prev_state.corner_orientation*kNumCornerPositions) + prev_state.corner_position] >> kLegalMoveIndex[rotation]) & 1) == 0) {
         return {false, prev_state};
     }
-    corner_orientation = corner_orientations[(corner_orientation*kNumRotations) + rotation];
-    corner_position = corner_positions[(corner_position*kNumRotations) + rotation];
-    edge_orientation = edge_orientations[(edge_orientation*kNumRotations) + rotation];
-    edge_position_1 = edge_positions[(edge_position_1*kNumRotations) + rotation];
-    edge_position_2 = edge_positions[(edge_position_2*kNumRotations) + rotation];
-    return {true, State(corner_orientation, corner_position, edge_orientation, edge_position_1, edge_position_2)};
+    State next_state;
+    next_state.corner_orientation = corner_orientations[(prev_state.corner_orientation*kNumRotations) + rotation];
+    next_state.corner_position = corner_positions[(prev_state.corner_position*kNumRotations) + rotation];
+    next_state.edge_orientation = edge_orientations[(prev_state.edge_orientation*kNumRotations) + rotation];
+    next_state.edge_position_1 = edge_positions[(prev_state.edge_position_1*kNumRotations) + rotation];
+    next_state.edge_position_2 = edge_positions[(prev_state.edge_position_2*kNumRotations) + rotation];
+    return {true, next_state};
 }
 
 
@@ -150,9 +146,7 @@ void Cube::UploadComputationToDevice() {
 
 
 uint16_t Cube::GetCurCornerHeuristic(const State& state) {
-    uint16_t corner_orientation = state.hash_2 >> 20;      // 12 bites         NOLINT
-    uint16_t corner_position = state.hash_1;               // 16 bites         NOLINT
-    return uint8_t(corner_heuristics[(corner_orientation*kNumCornerPositions) + corner_position] & ((uint16_t(1) << 8) - 1)); // NOLINT
+    return uint8_t(corner_heuristics[(state.corner_orientation*kNumCornerPositions) + state.corner_position] & ((uint16_t(1) << 8) - 1)); // NOLINT
 }
 
 
@@ -161,26 +155,24 @@ void Cube::SetCurCornerHeuristic(const State& state) {
 }
 
 void Cube::SetCurEdgeHeuristic1(const State& state) {
-    uint32_t orientation = state.hash_3 >> 20; // NOLINT
-    uint32_t position = state.hash_2 & ((uint32_t(1) << 20) - 1); // NOLINT
-    cur_edge_heuristic_1_ = edge_heuristics[(orientation*kNumEdgePositions) + position];
+    cur_edge_heuristic_1_ = edge_heuristics[(state.edge_orientation*kNumEdgePositions) + state.edge_position_1];
 }
 
 void Cube::SetCurEdgeHeuristic2(const State& state) {
-    uint32_t orientation = state.hash_3 >> 20; // NOLINT
+    uint32_t orientation = state.edge_orientation;
     orientation |= (std::popcount(orientation)%2) << (kNumEdges-1); // get last bit using even num bits parity
     uint32_t orientation_r = 0;
     for (int i = 1; i < kNumEdges; i++) {
         orientation_r |= ((orientation >> i) & uint32_t(1)) << (kNumEdges-1-i);
     }
 
-    uint32_t position = state.hash_3 & ((uint32_t(1) << 20) - 1); // NOLINT
+    uint32_t position = state.edge_position_2;
     uint32_t position_r = 0;
     uint32_t temp = kNumEdgePositions;
     for (int i = kNumEdges-1; i >= 6; i--) { // NOLINT
         temp /= i+1;
         position_r *= i+1;
-        position_r += i - ((position / temp) % (i + 1)); // NOLINT
+        position_r += i - ((position / temp) % (i + 1));
     }
     cur_edge_heuristic_2_ = edge_heuristics[(orientation_r*kNumEdgePositions) + position_r];
 }

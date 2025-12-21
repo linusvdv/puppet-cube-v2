@@ -55,36 +55,36 @@ __device__ constexpr uint64_t kDMulB = 0x9e3779b97f4a7c15ULL;
 
 // 10 bytes
 struct DState {
-    uint16_t hash_1 = -1;
-    uint32_t hash_2 = -1;
-    uint32_t hash_3 = -1;
+    uint16_t corner_orientation = -1;  // 12 bites
+    uint16_t corner_position = -1;     // 16 bites
+    uint16_t edge_orientation = -1;    // 11 bites
+    uint32_t edge_position_1 = -1;     // 20 bites
+    uint32_t edge_position_2 = -1;     // 20 bites
 
-    __device__ constexpr DState(const uint16_t& corner_orientation,  // 12 bytes
-                                const uint16_t& corner_position,     // 16 bytes
-                                const uint16_t& edge_orientation,    // 11 bytes
-                                const uint32_t& edge_position_1,     // 20 bytes
-                                const uint32_t& edge_position_2) {   // 20 bytes
-        // hash 1
-        hash_1 = corner_position; // 16 bytes
 
-        // hash 2
-        hash_2 = corner_orientation; // 12 bytes
-        hash_2 <<= 20; // NOLINT
-        hash_2 |= edge_position_1; // 20 bytes
+    __device__ constexpr DState(const uint16_t& corner_orientation,  // 12 bites
+                                const uint16_t& corner_position,     // 16 bites
+                                const uint16_t& edge_orientation,    // 11 bites
+                                const uint32_t& edge_position_1,     // 20 bites
+                                const uint32_t& edge_position_2)     // 20 bites
+        : corner_orientation(corner_orientation),
+          corner_position(corner_position),
+          edge_orientation(edge_orientation),
+          edge_position_1(edge_position_1),
+          edge_position_2(edge_position_2)
+    {}
 
-        // hash 3
-        hash_3 = edge_orientation; // 11 bytes
-        hash_3 <<= 20; // NOLINT
-        hash_3 |= edge_position_2; // 20 bytes
-    }
 
     // Default not legal State
     __device__ constexpr DState() {}
 
+
     DState(const State& host_state) {
-        hash_1 = host_state.hash_1;
-        hash_2 = host_state.hash_2;
-        hash_3 = host_state.hash_3;
+        corner_orientation = host_state.corner_orientation;
+        corner_position = host_state.corner_position;
+        edge_orientation = host_state.edge_orientation;
+        edge_position_1 = host_state.edge_position_1;
+        edge_position_2 = host_state.edge_position_2;
     }
 
 
@@ -102,7 +102,7 @@ struct DState {
 
     template<uint64_t hash_low, uint64_t hash_high>
     __device__ uint64_t SplitMix64() const {
-        return Mix64(uint64_t(hash_1) ^ hash_low) ^ Mix64(((uint64_t(hash_2) << 32) | uint64_t(hash_3)) ^ hash_high);
+        return Mix64(uint64_t(corner_position) ^ hash_low) ^ Mix64(((uint64_t(corner_orientation) << 52) | (uint64_t(edge_position_1) << 32) | (uint64_t(edge_orientation) << 20) | uint64_t(edge_position_2)) ^ hash_high);
     }
 };
 

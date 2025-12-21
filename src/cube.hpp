@@ -53,28 +53,23 @@ uint8_t GetRevRotation(uint8_t rotation);
 
 // 10 bytes
 struct State {
-    uint16_t hash_1 = -1;
-    uint32_t hash_2 = -1;
-    uint32_t hash_3 = -1;
+    uint16_t corner_orientation = -1;
+    uint16_t corner_position = -1;
+    uint16_t edge_orientation = -1;
+    uint32_t edge_position_1 = -1;
+    uint32_t edge_position_2 = -1;
 
     constexpr State(const uint16_t& corner_orientation,  // 12 bites
                     const uint16_t& corner_position,     // 16 bites
                     const uint16_t& edge_orientation,    // 11 bites
                     const uint32_t& edge_position_1,     // 20 bites
-                    const uint32_t& edge_position_2) {   // 20 bites
-        // hash 1
-        hash_1 = corner_position;    // 16 bites
-
-        // hash 2
-        hash_2 = corner_orientation; // 12 bites
-        hash_2 <<= 20; // NOLINT
-        hash_2 |= edge_position_1;   // 20 bites
-
-        // hash 3
-        hash_3 = edge_orientation;   // 11 bites
-        hash_3 <<= 20; // NOLINT
-        hash_3 |= edge_position_2;   // 20 bites
-    }
+                    const uint32_t& edge_position_2)     // 20 bites
+        : corner_orientation(corner_orientation),
+          corner_position(corner_position),
+          edge_orientation(edge_orientation),
+          edge_position_1(edge_position_1),
+          edge_position_2(edge_position_2)
+    {}
 
     // Default not legal State
     constexpr State() {}
@@ -100,7 +95,7 @@ struct State {
 
     template<uint64_t hash_low, uint64_t hash_high>
     uint64_t SplitMix64() const {
-        return Mix64(uint64_t(hash_1) ^ hash_low) ^ Mix64(((uint64_t(hash_2) << 32) | uint64_t(hash_3)) ^ hash_high); // NOLINT
+        return Mix64(uint64_t(corner_position) ^ hash_low) ^ Mix64(((uint64_t(corner_orientation) << 52) | (uint64_t(edge_position_1) << 32) | (uint64_t(edge_orientation) << 20) | uint64_t(edge_position_2)) ^ hash_high);
     }
 
     // Used for phmap
