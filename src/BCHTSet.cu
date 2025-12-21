@@ -11,25 +11,25 @@ __device__ constexpr uint64_t kDXORlow2 = 0x0f1e2d3c4b5a6978ULL;
 __device__ constexpr uint64_t kDXORhigh2 = 0x87654321abcdef09ULL;
 
 
-__device__ bool DBCHTSetContains(const DState* d_tablebase, const size_t& d_tablebase_size, const DState& key) {
+__device__ bool DBCHTSetContains(const DStatePacked* d_tablebase, const size_t& d_tablebase_size, const DState& key) {
     uint32_t num_buckets = d_tablebase_size / kBucketSize;
     uint64_t h_1 = key.SplitMix64<kDXORlow1, kDXORhigh1>()%num_buckets;
     for (int j = 0; j < kBucketSize; j++) {
-        DState tb_data = d_tablebase[(h_1*kBucketSize) + j];
-        if (tb_data == key) {
+        DStatePacked tb_data = d_tablebase[(h_1*kBucketSize) + j];
+        if (IsSameState(key, tb_data)) {
             return true;
         }
-        if (tb_data == DState()) {
+        if (tb_data == DStatePacked()) {
             return false;
         }
     }
     uint64_t h_2 = key.SplitMix64<kDXORlow2, kDXORhigh2>()%num_buckets;
     for (int j = 0; j < kBucketSize; j++) {
-        DState tb_data = d_tablebase[(h_2*kBucketSize) + j];
-        if (tb_data == key) {
+        DStatePacked tb_data = d_tablebase[(h_2*kBucketSize) + j];
+        if (IsSameState(key, tb_data)) {
             return true;
         }
-        if (tb_data == DState()) {
+        if (tb_data == DStatePacked()) {
             return false;
         }
     }

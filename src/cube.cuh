@@ -1,6 +1,7 @@
 // Same as cube.hpp for GPU
 #pragma once
 #include <compare>
+#include <cstdint>
 #include <cuda.h>
 #include <cuda_runtime_api.h>
 
@@ -55,36 +56,34 @@ __device__ constexpr uint64_t kDMulB = 0x9e3779b97f4a7c15ULL;
 
 // 10 bytes
 struct DState {
-    uint16_t hash_1 = -1;
-    uint32_t hash_2 = -1;
-    uint32_t hash_3 = -1;
+    uint16_t corner_orientation = -1;  // 12 bites
+    uint16_t corner_position = -1;     // 16 bites
+    uint16_t edge_orientation = -1;    // 11 bites
+    uint32_t edge_position_1 = -1;     // 20 bites
+    uint32_t edge_position_2 = -1;     // 20 bites
 
-    __device__ constexpr DState(const uint16_t& corner_orientation,  // 12 bytes
-                                const uint16_t& corner_position,     // 16 bytes
-                                const uint16_t& edge_orientation,    // 11 bytes
-                                const uint32_t& edge_position_1,     // 20 bytes
-                                const uint32_t& edge_position_2) {   // 20 bytes
-        // hash 1
-        hash_1 = corner_position; // 16 bytes
 
-        // hash 2
-        hash_2 = corner_orientation; // 12 bytes
-        hash_2 <<= 20; // NOLINT
-        hash_2 |= edge_position_1; // 20 bytes
-
-        // hash 3
-        hash_3 = edge_orientation; // 11 bytes
-        hash_3 <<= 20; // NOLINT
-        hash_3 |= edge_position_2; // 20 bytes
-    }
+    __device__ constexpr DState(const uint16_t& corner_orientation,  // 12 bites
+                                const uint16_t& corner_position,     // 16 bites
+                                const uint16_t& edge_orientation,    // 11 bites
+                                const uint32_t& edge_position_1,     // 20 bites
+                                const uint32_t& edge_position_2)     // 20 bites
+        : corner_orientation(corner_orientation),
+          corner_position(corner_position),
+          edge_orientation(edge_orientation),
+          edge_position_1(edge_position_1),
+          edge_position_2(edge_position_2)
+    {}
 
     // Default not legal State
-    __device__ constexpr DState() {}
+    __host__ __device__ constexpr DState() {}
 
     DState(const State& host_state) {
-        hash_1 = host_state.hash_1;
-        hash_2 = host_state.hash_2;
-        hash_3 = host_state.hash_3;
+        corner_orientation = host_state.hash_2 >> 20;      // 12 bites         NOLINT
+        corner_position = host_state.hash_1;               // 16 bites         NOLINT
+        edge_orientation = host_state.hash_3 >> 20;        // 11 bites         NOLINT
+        edge_position_1 = host_state.hash_2 & ((1<<20)-1); // 20 bites         NOLINT
+        edge_position_2 = host_state.hash_3 & ((1<<20)-1); // 20 bites         NOLINT
     }
 
 
@@ -100,11 +99,20 @@ struct DState {
         return num;
     }
 
+
     template<uint64_t hash_low, uint64_t hash_high>
     __device__ uint64_t SplitMix64() const {
-        return Mix64(uint64_t(hash_1) ^ hash_low) ^ Mix64(((uint64_t(hash_2) << 32) | uint64_t(hash_3)) ^ hash_high);
+        return Mix64(uint64_t(corner_position) ^ hash_low) ^ Mix64(((uint64_t(corner_orientation) << 52) | (uint64_t(edge_position_1) << 32) | (uint64_t(edge_orientation) << 20) | uint64_t(edge_position_2)) ^ hash_high);
+    }
+
+
+    __host__ State ToState() const {
+        return State(corner_orientation, corner_position, edge_orientation, edge_position_1, edge_position_2);
     }
 };
+
+
+__device__ bool IsSameState(const DState& state, const State& state_packed);
 
 
 __device__ constexpr DState kDSolvedState = DState(0, 0, 0, 0, kDNumEdgePositions-1);
@@ -128,10 +136,10 @@ public:
         const std::vector<uint8_t>& edge_heuristics,
         int gpu_device_idx);
 
-    __host__ void UploadTablebaseToDevice(const std::vector<State>& tablebebase, int gpu_device_idx);
+    __host__ void UploadTablebaseToDevice(const std::vector<State>& tablebase, int gpu_device_idx);
 
 
-    __device__ DRotateReturn Rotate(const DState& prev_state, const uint8_t& rotation);
+    __device__ bool RotateRef(DState& state, const uint8_t& rotation) const;
 
     __device__ bool DTablebaseContains(const DState& state);
 
@@ -143,7 +151,7 @@ public:
     uint32_t* d_edge_positions = nullptr;
     uint8_t* d_edge_heuristics = nullptr;
 
-    DState* d_tablebase = nullptr;
+    DStatePacked* d_tablebase = nullptr;
     size_t d_tablebase_size = 0;
 };
 

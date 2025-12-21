@@ -38,11 +38,11 @@ __global__ void DeviceLeafSearch (uint64_t* d_num_positions_leafs, const std::pa
     // do the rotations such that state is again at the outcome state it was previously (somewhere in the tree)
     for (int i = 0; i < rotation_idx && rotation_idx != uint8_t(-1); i++) {
         if (rotations.At(i) > kNumRotations) {
-            state = dcube.Rotate(state, rotations.At(i) ^ uint8_t(1<<7)).state;
+            dcube.RotateRef(state, rotations.At(i) ^ uint8_t(1<<7));
         }
     }
     if (rotation_idx != uint8_t(-1) && rotations.At(rotation_idx) > kNumRotations) {
-        state = dcube.Rotate(state, rotations.At(rotation_idx) ^ uint8_t(1<<7)).state;
+        dcube.RotateRef(state, rotations.At(rotation_idx) ^ uint8_t(1<<7));
     }
 
     // make a constant number of position during each kernal function call
@@ -75,15 +75,13 @@ __global__ void DeviceLeafSearch (uint64_t* d_num_positions_leafs, const std::pa
             rotation = DGetRevRotation(rotation);
         }
 
-        // do the rotation
-        DRotateReturn next_pos = dcube.Rotate(state, rotation);
         // it is garantied that the undo rotation of a cube is always possible in this leaf search
         // if it is an illegal search skip this rotation
-        if (!next_pos.isLegal) {
+        if (!dcube.RotateRef(state, rotation)) {
             rotations.Add(rotation_idx, 1);
             continue;
         }
-        state = next_pos.state;
+
         // prepare the next rotation
         rotations.BitXOR(rotation_idx, 1<<7);  // NOLINT
 
@@ -138,7 +136,7 @@ void DeviceLeafManager (std::stop_token& stocken, std::atomic<std::shared_ptr<ph
 
     // updated for each position
     std::vector<uint8_t> rotation_idxs(leaf_batch_size, uint8_t(-1));
-    std::vector<std::pair<State, uint8_t>> starting_positions(leaf_batch_size);
+    std::vector<std::pair<DState, uint8_t>> starting_positions(leaf_batch_size);
     std::vector<uint8_t> best_depths(leaf_batch_size, atomic_best_depth);
     std::vector<URotations> urotations(leaf_batch_size, {0, 0, 0, 0});
     std::vector<uint64_t> num_positions_leafs(leaf_batch_size, 0);
@@ -177,13 +175,14 @@ void DeviceLeafManager (std::stop_token& stocken, std::atomic<std::shared_ptr<ph
         for (uint64_t i = 0; i < leaf_batch_size; i++) {
             // better solution
             if (best_depths[i] < cur_best_depth) {
+                State host_state = starting_positions[i].first.ToState();
                 // do a CPU search for this position
-                LeafSearch(starting_positions[i].first, starting_positions[i].second, cur_best_depth,
+                LeafSearch(host_state, starting_positions[i].second, cur_best_depth,
                            best_endstate_leafs, visited_leaf,
                            num_positions_leaf, atomic_best_depth, thread_idx);
-                auto find_visited = visited_leaf.find(starting_positions[i].first);
+                auto find_visited = visited_leaf.find(host_state);
                 if (find_visited == visited_leaf.end()) {
-                    visited_leaf.insert(starting_positions[i]); // found new solution
+                    visited_leaf.insert({host_state, starting_positions[i].second}); // found new solution
                 }
                 else if (find_visited->second > starting_positions[i].second) {
                     find_visited->second = starting_positions[i].second;
@@ -239,7 +238,7 @@ void DeviceLeafManager (std::stop_token& stocken, std::atomic<std::shared_ptr<ph
             // write new position
             num_positions_leafs[i]++; // add starting position
             rotation_idxs[i] = 0;
-            starting_positions[i] = local_position_queue.front();
+            starting_positions[i] = {DState(local_position_queue.front().first), local_position_queue.front().second};
             local_position_queue.pop();
             urotations[i] = {0, 0, 0, 0};
         }
@@ -269,11 +268,12 @@ void DeviceLeafManager (std::stop_token& stocken, std::atomic<std::shared_ptr<ph
 
                 // split up
                 // it is guarantied that rotation_idx > 0
-                std::pair<State, uint8_t> starting_position = starting_positions[cur_finished_split_idx];
+                std::pair<DState, uint8_t> starting_position = starting_positions[cur_finished_split_idx];
+                State host_state = starting_position.first.ToState();
                 // insert into visited_leaf such that it can be traced back
-                auto find_visited = visited_leaf.find(starting_position.first);
+                auto find_visited = visited_leaf.find(host_state);
                 if (find_visited == visited_leaf.end()) {
-                    visited_leaf.insert(starting_position); // found new solution
+                    visited_leaf.insert({host_state, starting_position.second}); // found new solution
                 }
                 else if (find_visited->second > starting_position.second) {
                     find_visited->second = starting_position.second;
@@ -288,7 +288,7 @@ void DeviceLeafManager (std::stop_token& stocken, std::atomic<std::shared_ptr<ph
                 }
 
                 // do the current rotation
-                std::pair<State, uint8_t> new_starting_position = {Cube::Rotate(starting_position.first, rotation).second, starting_position.second+1};
+                std::pair<State, uint8_t> new_starting_position = {Cube::Rotate(host_state, rotation).second, starting_position.second+1};
 
                 // shift urotation by a move
                 URotations new_urotation = {0, 0, 0, 0};
@@ -302,7 +302,7 @@ void DeviceLeafManager (std::stop_token& stocken, std::atomic<std::shared_ptr<ph
                 rotation_idxs[cur_finished_split_idx]--;
 
                 for (int rot = rotation+1; rot < kNumRotations; rot++) {
-                    std::pair<bool, State> next_rot = Cube::Rotate(starting_position.first, rot);
+                    std::pair<bool, State> next_rot = Cube::Rotate(host_state, rot);
                     if (!next_rot.first) {
                         continue;
                     }

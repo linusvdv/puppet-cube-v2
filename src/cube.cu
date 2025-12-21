@@ -53,12 +53,12 @@ void DCube::UploadComputationToDevice(
 }
 
 
-void DCube::UploadTablebaseToDevice(const std::vector<State>& tablebebase, int gpu_device_idx) {
+void DCube::UploadTablebaseToDevice(const std::vector<State>& tablebase, int gpu_device_idx) {
     // upload it to the correct device
     cudaSetDevice(gpu_device_idx);
 
-    UploadToDevice(tablebebase, d_tablebase);
-    d_tablebase_size = tablebebase.size();
+    UploadToDevice(tablebase, d_tablebase);
+    d_tablebase_size = tablebase.size();
 }
 
 void UploadCubeComputationToDevices(
@@ -88,21 +88,16 @@ __device__ constexpr uint8_t kDLegalMoveIndex[kDNumRotations] = {
 };
 
 
-__device__ DRotateReturn DCube::Rotate(const DState& prev_state, const uint8_t& rotation) {
-    uint16_t corner_orientation = prev_state.hash_2 >> 20;      // 12 bites         NOLINT
-    uint16_t corner_position = prev_state.hash_1;               // 16 bites         NOLINT
-    uint16_t edge_orientation = prev_state.hash_3 >> 20;        // 11 bites         NOLINT
-    uint32_t edge_position_1 = prev_state.hash_2 & ((1<<20)-1); // 20 bites         NOLINT
-    uint32_t edge_position_2 = prev_state.hash_3 & ((1<<20)-1); // 20 bites         NOLINT
-    if (kDLegalMoveIndex[rotation] != 0 && ((d_corner_heuristics[(corner_orientation*kDNumCornerPositions) + corner_position] >> kDLegalMoveIndex[rotation]) & 1) == 0) {
-        return {false, prev_state};
+__device__ bool DCube::RotateRef(DState& state, const uint8_t& rotation) const {
+    if (kDLegalMoveIndex[rotation] != 0 && ((d_corner_heuristics[(state.corner_orientation*kDNumCornerPositions) + state.corner_position] >> kDLegalMoveIndex[rotation]) & 1) == 0) {
+        return false;
     }
-    corner_orientation = d_corner_orientations[(corner_orientation*kDNumRotations) + rotation];
-    corner_position = d_corner_positions[(corner_position*kDNumRotations) + rotation];
-    edge_orientation = d_edge_orientations[(edge_orientation*kDNumRotations) + rotation];
-    edge_position_1 = d_edge_positions[(edge_position_1*kDNumRotations) + rotation];
-    edge_position_2 = d_edge_positions[(edge_position_2*kDNumRotations) + rotation];
-    return {true, DState(corner_orientation, corner_position, edge_orientation, edge_position_1, edge_position_2)};
+    state.corner_orientation = d_corner_orientations[(state.corner_orientation*kDNumRotations) + rotation];
+    state.corner_position = d_corner_positions[(state.corner_position*kDNumRotations) + rotation];
+    state.edge_orientation = d_edge_orientations[(state.edge_orientation*kDNumRotations) + rotation];
+    state.edge_position_1 = d_edge_positions[(state.edge_position_1*kDNumRotations) + rotation];
+    state.edge_position_2 = d_edge_positions[(state.edge_position_2*kDNumRotations) + rotation];
+    return true;
 }
 
 
@@ -117,7 +112,13 @@ size_t random_positions_size = 0;
 
 
 void UploadRandomPositionsToDevice(const std::vector<State>& random_positions) {
-    UploadToDeviceSymbol(random_positions, d_random_positions);
+    std::vector<DState> dstate_random_positions;
+    dstate_random_positions.reserve(random_positions.size());
+    for (const State& state : random_positions) {
+        dstate_random_positions.emplace_back(state);
+    }
+
+    UploadToDeviceSymbol(dstate_random_positions, d_random_positions);
     random_positions_size = random_positions.size();
     cudaError_t err = cudaMemcpyToSymbol(d_random_positions_size, &random_positions_size, sizeof(random_positions_size));
     if (err != cudaSuccess) {
@@ -127,28 +128,24 @@ void UploadRandomPositionsToDevice(const std::vector<State>& random_positions) {
 
 
 __device__ void DHeuristics::SetCurCornerHeuristic(const DState& state, const DCube& dcube) {
-    uint16_t corner_orientation = state.hash_2 >> 20;      // 12 bites         NOLINT
-    uint16_t corner_position = state.hash_1;               // 16 bites         NOLINT
-    cur_corner_heuristic_ = uint8_t(dcube.d_corner_heuristics[(corner_orientation*kNumCornerPositions) + corner_position] & ((uint16_t(1) << 8) - 1)); // NOLINT
+    cur_corner_heuristic_ = uint8_t(dcube.d_corner_heuristics[(state.corner_orientation*kNumCornerPositions) + state.corner_position] & ((uint16_t(1) << 8) - 1)); // NOLINT
 }
 
 
 __device__ void DHeuristics::SetCurEdgeHeuristic1(const DState& state, const DCube& dcube) {
-    uint32_t orientation = state.hash_3 >> 20; // NOLINT
-    uint32_t position = state.hash_2 & ((uint32_t(1) << 20) - 1); // NOLINT
-    cur_edge_heuristic_1_ = dcube.d_edge_heuristics[(orientation*kNumEdgePositions) + position];
+    cur_edge_heuristic_1_ = dcube.d_edge_heuristics[(state.edge_orientation*kNumEdgePositions) + state.edge_position_1];
 }
 
 
 __device__ void DHeuristics::SetCurEdgeHeuristic2(const DState& state, const DCube& dcube) {
-    uint32_t orientation = state.hash_3 >> 20; // NOLINT
+    uint32_t orientation = state.edge_orientation; // NOLINT
     orientation |= (__popc(orientation)%2) << (kNumEdges-1); // get last bit using even num bits parity
     uint32_t orientation_r = 0;
     for (int i = 1; i < kNumEdges; i++) {
         orientation_r |= ((orientation >> i) & uint32_t(1)) << (kNumEdges-1-i);
     }
 
-    uint32_t position = state.hash_3 & ((uint32_t(1) << 20) - 1); // NOLINT
+    uint32_t position = state.edge_position_2; // NOLINT
     uint32_t position_r = 0;
     uint32_t temp = kNumEdgePositions;
     for (int i = kNumEdges-1; i >= 6; i--) { // NOLINT
@@ -185,4 +182,18 @@ __device__ uint8_t DHeuristics::GetAppHeuristic(const DState& state, const DCube
         SetCurEdgeHeuristic2(state, dcube);
     }
     return cur_corner_heuristic_ + cur_edge_heuristic_1_ + cur_edge_heuristic_2_;
+}
+
+
+__device__ bool IsSameState(const DState& state, const DStatePacked& state_packed) {
+    if (state_packed.hash_1 != state.corner_position) {
+        return false;
+    }
+    if (state_packed.hash_2 != ((uint32_t(state.corner_orientation) << 20) | uint32_t(state.edge_position_1))) {
+        return false;
+    }
+    if (state_packed.hash_2 != ((uint32_t(state.edge_orientation) << 20) | uint32_t(state.edge_position_2))) {
+        return false;
+    }
+    return true;
 }

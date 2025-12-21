@@ -39,13 +39,14 @@ __global__ void DFSGlobal(DState* d_random_position, size_t num_random_position,
     }
     while (dfs_stack_idx >= 0) {
         int8_t cur_depth = dfs_stack[dfs_stack_idx].depth;
-        DRotateReturn next = dcube.Rotate(dfs_stack[dfs_stack_idx].state, dfs_stack[dfs_stack_idx].rotation++);
+        DFSStack next = dfs_stack[dfs_stack_idx];
+        bool is_legal = dcube.RotateRef(next.state, dfs_stack[dfs_stack_idx].rotation++);
 
         if (dfs_stack[dfs_stack_idx].rotation >= kNumRotations) {
             dfs_stack_idx--;
         }
 
-        if (next.isLegal) {
+        if (is_legal) {
             cur_num_nodes_gpu++;
             if (dcube.DTablebaseContains(next.state)) {
                 cur_num_tb_hits_gpu++;
@@ -68,7 +69,14 @@ void GPUDFS(const std::vector<State>& random_position, std::vector<size_t>& num_
     size_t* d_num_nodes_gpu = nullptr;
     size_t* d_num_tb_hits_gpu = nullptr;
     LOG_MEMORY();
-    UploadToDevice(random_position, d_random_position);
+
+    std::vector<DState> dstate_random_position;
+    dstate_random_position.reserve(random_position.size());
+    for (const State& state : random_position) {
+        dstate_random_position.emplace_back(state);
+    }
+
+    UploadToDevice(dstate_random_position, d_random_position);
     UploadToDevice(num_nodes_gpu, d_num_nodes_gpu);
     UploadToDevice(num_tb_hits_gpu, d_num_tb_hits_gpu);
     LOG_MEMORY();
