@@ -31,5 +31,5 @@ public:
         #endif // USE_CUDA
     }
 
-    static std::vector<std::vector<State>> tablebase;
+    static std::vector<std::vector<PackedState>> tablebase;
 };

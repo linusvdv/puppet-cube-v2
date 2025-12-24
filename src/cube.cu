@@ -53,7 +53,7 @@ void DCube::UploadComputationToDevice(
 }
 
 
-void DCube::UploadTablebaseToDevice(const std::vector<State>& tablebebase, int gpu_device_idx) {
+void DCube::UploadTablebaseToDevice(const std::vector<PackedState>& tablebebase, int gpu_device_idx) {
     // upload it to the correct device
     cudaSetDevice(gpu_device_idx);
 
@@ -76,7 +76,7 @@ void UploadCubeComputationToDevices(
 }
 
 
-void UploadTablebaseToDevices(const std::vector<State>& tablebebase) {
+void UploadTablebaseToDevices(const std::vector<PackedState>& tablebebase) {
     for (int i = 0; i < Settings::GetDeviceCount(); i++) {
         d_cubes_on_diff_devices[i].UploadTablebaseToDevice(tablebebase, i);
     }
@@ -190,4 +190,11 @@ __device__ uint8_t DHeuristics::GetAppHeuristic(const DState& state, const DCube
         SetCurEdgeHeuristic2(state, dcube);
     }
     return cur_corner_heuristic_ + cur_edge_heuristic_1_ + cur_edge_heuristic_2_;
+}
+
+
+__device__ bool IsSameDState(const DState& d_state, const PackedState& packed_state) {
+    return packed_state.hash_1 == d_state.corner_position &&
+           packed_state.hash_2 == ((uint32_t(d_state.corner_orientation) << 20) | d_state.edge_position_1) &&
+           packed_state.hash_3 == ((uint32_t(d_state.edge_orientation) << 20) | d_state.edge_position_2);
 }

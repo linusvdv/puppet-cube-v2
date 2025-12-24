@@ -19,7 +19,7 @@ void UploadCubeComputationToDevices(
     );
 
 
-void UploadTablebaseToDevices(const std::vector<State>& tablebebase);
+void UploadTablebaseToDevices(const std::vector<PackedState>& tablebebase);
 
 
 void UploadRandomPositionsToDevice(const std::vector<State>& random_positions);

@@ -212,3 +212,20 @@ float Cube::GetAppHeuristic(const State& state) {
         + kFitC * std::min({cur_corner_heuristic_, cur_edge_heuristic_1_, cur_edge_heuristic_2_})
         + kFitD * std::max({cur_corner_heuristic_, cur_edge_heuristic_1_, cur_edge_heuristic_2_}) + kFitE) * Settings::GetHeuristicFactor();
 }
+
+
+bool IsSameState(const State& d_state, const PackedState& packed_state) {
+    return packed_state.hash_1 == d_state.corner_position &&
+           packed_state.hash_2 == ((uint32_t(d_state.corner_orientation) << 20) | d_state.edge_position_1) &&
+           packed_state.hash_3 == ((uint32_t(d_state.edge_orientation) << 20) | d_state.edge_position_2);
+}
+
+
+State PackedStateToState(const PackedState& packed_state) {
+    return State(
+        packed_state.hash_2 >> 20,
+        packed_state.hash_1,
+        packed_state.hash_3 >> 20,
+        packed_state.hash_2 & ((uint32_t(1) << 20)-1),
+        packed_state.hash_3 & ((uint32_t(1) << 20)-1));
+}

@@ -128,7 +128,7 @@ public:
         const std::vector<uint8_t>& edge_heuristics,
         int gpu_device_idx);
 
-    __host__ void UploadTablebaseToDevice(const std::vector<State>& tablebebase, int gpu_device_idx);
+    __host__ void UploadTablebaseToDevice(const std::vector<PackedState>& tablebebase, int gpu_device_idx);
 
 
     __device__ DRotateReturn Rotate(const DState& prev_state, const uint8_t& rotation);
@@ -144,9 +144,12 @@ public:
     uint32_t* d_edge_positions = nullptr;
     uint8_t* d_edge_heuristics = nullptr;
 
-    DState* d_tablebase = nullptr;
+    PackedState* d_tablebase = nullptr;
     size_t d_tablebase_size = 0;
 };
+
+
+__device__ bool IsSameDState(const DState& d_state, const PackedState& packed_state);
 
 
 class DHeuristics {

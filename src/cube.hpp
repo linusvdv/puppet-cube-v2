@@ -105,6 +105,38 @@ struct State {
 };
 
 
+struct PackedState {
+    uint16_t hash_1 = -1;
+    uint32_t hash_2 = -1;
+    uint32_t hash_3 = -1;
+
+    std::strong_ordering operator<=>(const PackedState&) const = default;
+
+    PackedState(State state) {
+        // hash 1
+        hash_1 = state.corner_position;    // 16 bites
+
+        // hash 2
+        hash_2 = state.corner_orientation; // 12 bites
+        hash_2 <<= 20; // NOLINT
+        hash_2 |= state.edge_position_1;   // 20 bites
+
+        // hash 3
+        hash_3 = state.edge_orientation;   // 11 bites
+        hash_3 <<= 20; // NOLINT
+        hash_3 |= state.edge_position_2;   // 20 bites
+    }
+
+    PackedState() {}
+};
+
+
+bool IsSameState(const State& d_state, const PackedState& packed_state);
+
+
+State PackedStateToState(const PackedState& packed_state);
+
+
 constexpr State kSolvedState = State(0, 0, 0, 0, kNumEdgePositions-1);
 
 

@@ -9,7 +9,7 @@ constexpr int kBucketSize = 2;
 constexpr float kLoadFacor = 0.8;
 
 
-std::vector<State> BuildBCHTSet(const TablebasePrecomputation& tablebase);
+std::vector<PackedState> BuildBCHTSet(const TablebasePrecomputation& tablebase);
 
 
-bool BCHTSetContains(const std::vector<State>& table, const State& key);
+bool BCHTSetContains(const std::vector<PackedState>& table, const State& key);

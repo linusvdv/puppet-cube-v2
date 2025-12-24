@@ -10,25 +10,25 @@
 #include "logger.hpp"
 
 
-bool BCHTSetContains(const std::vector<State>& table, const State& key) {
+bool BCHTSetContains(const std::vector<PackedState>& table, const State& key) {
     uint32_t num_buckets = table.size() / kBucketSize;
     uint64_t h_1 = key.SplitMix64<State::kXORlow1, State::kXORhigh1>()%num_buckets;
     for (int j = 0; j < kBucketSize; j++) {
-        State tb_data = table[(h_1*kBucketSize) + j];
-        if (tb_data == key) {
+        PackedState tb_data = table[(h_1*kBucketSize) + j];
+        if (IsSameState(key, tb_data)) {
             return true;
         }
-        if (tb_data == State()) {
+        if (tb_data.hash_1 == uint16_t(-1) && tb_data.hash_2 == uint32_t(-1) && tb_data.hash_3 == uint32_t(-1)) {
             return false;
         }
     }
     uint64_t h_2 = key.SplitMix64<State::kXORlow2, State::kXORhigh2>()%num_buckets;
     for (int j = 0; j < kBucketSize; j++) {
-        State tb_data = table[(h_2*kBucketSize) + j];
-        if (tb_data == key) {
+        PackedState tb_data = table[(h_2*kBucketSize) + j];
+        if (IsSameState(key, tb_data)) {
             return true;
         }
-        if (tb_data == State()) {
+        if (tb_data.hash_1 == uint16_t(-1) && tb_data.hash_2 == uint32_t(-1) && tb_data.hash_3 == uint32_t(-1)) {
             return false;
         }
     }
@@ -36,11 +36,11 @@ bool BCHTSetContains(const std::vector<State>& table, const State& key) {
 }
 
 
-int GetBucketIndex(const State& cube, uint32_t hash, uint32_t num_buckets) {
-    if (cube.SplitMix64<State::kXORlow1, State::kXORhigh1>()%num_buckets == hash) {
+int GetBucketIndex(const PackedState& cube, uint32_t hash, uint32_t num_buckets) {
+    if (PackedStateToState(cube).SplitMix64<State::kXORlow1, State::kXORhigh1>()%num_buckets == hash) {
         return 0;
     }
-    if (cube.SplitMix64<State::kXORlow2, State::kXORhigh2>()%num_buckets == hash) {
+    if (PackedStateToState(cube).SplitMix64<State::kXORlow2, State::kXORhigh2>()%num_buckets == hash) {
         return 1;
     }
     LOG_CRITICAL("hash and bucket do not fit");
@@ -48,7 +48,7 @@ int GetBucketIndex(const State& cube, uint32_t hash, uint32_t num_buckets) {
 }
 
 
-bool BfsInsert(std::vector<State>& table, uint32_t num_buckets, const State& key) {
+bool BfsInsert(std::vector<PackedState>& table, uint32_t num_buckets, const State& key) {
     std::array<uint32_t, 2> start_buckets = {
         uint32_t(key.SplitMix64<State::kXORlow1, State::kXORhigh1>()%num_buckets),
         uint32_t(key.SplitMix64<State::kXORlow2, State::kXORhigh2>()%num_buckets)
@@ -57,8 +57,8 @@ bool BfsInsert(std::vector<State>& table, uint32_t num_buckets, const State& key
     // Layer 0: try direct insert
     for (uint32_t bucket : start_buckets) {
         for (int i = 0; i < kBucketSize; i++) {
-            if (table[(bucket*kBucketSize) + i] == State()) {
-                table[(bucket*kBucketSize) + i] = key;
+            if (table[(bucket*kBucketSize) + i] == PackedState()) {
+                table[(bucket*kBucketSize) + i] = PackedState(key);
                 GetBucketIndex(table[(bucket*kBucketSize) + i], bucket, num_buckets);
                 return true;
             }
@@ -107,7 +107,7 @@ bool BfsInsert(std::vector<State>& table, uint32_t num_buckets, const State& key
 
                 int prev_bucket_index = GetBucketIndex(table[hash_idx], current_buckets[j], num_buckets);
                 int diff = j - prev_bucket_index;
-                p_q.push({current.first + diff, {table[hash_idx], hash_idx}});
+                p_q.push({current.first + diff, {PackedStateToState(table[hash_idx]), hash_idx}});
                 parents[hash_idx] = current.second.second;
             }
         }
@@ -118,9 +118,9 @@ bool BfsInsert(std::vector<State>& table, uint32_t num_buckets, const State& key
 
 
 constexpr size_t kMinBuckets = 100;
-std::vector<State> BuildBCHTSet(const TablebasePrecomputation& tablebase) {
+std::vector<PackedState> BuildBCHTSet(const TablebasePrecomputation& tablebase) {
     size_t num_buckets = std::max(size_t(std::ceil(double(tablebase.size()) / kBucketSize / kLoadFacor)), kMinBuckets);
-    std::vector<State> table(num_buckets*kBucketSize, State());
+    std::vector<PackedState> table(num_buckets*kBucketSize, State());
     LOG_EXTRA("Creating BCHT with load factor:", SkipSpace(tablebase.size() / double(table.size()) * 100), "%");
 
     size_t cnt = 0;

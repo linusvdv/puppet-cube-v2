@@ -12,12 +12,12 @@
 #include "tablebase.hpp"
 
 
-std::vector<std::vector<State>> Tablebase::tablebase = {};
+std::vector<std::vector<PackedState>> Tablebase::tablebase = {};
 
 
-void TablebaseSearch (const std::vector<State>& previous, const std::vector<State>& current, TablebasePrecomputation& next, int thread_idx, int num_threads) {
+void TablebaseSearch (const std::vector<PackedState>& previous, const std::vector<PackedState>& current, TablebasePrecomputation& next, int thread_idx, int num_threads) {
     int count = 0;
-    for (const State& position : current) {
+    for (const PackedState& position : current) {
         count++;
         if (count%num_threads != thread_idx) {
             continue;
@@ -26,7 +26,7 @@ void TablebaseSearch (const std::vector<State>& previous, const std::vector<Stat
             continue;
         }
         for (uint8_t rotation = 0; rotation < kNumRotations; rotation++) {
-            std::pair<bool, State> next_position = Cube::Rotate(position, rotation);
+            std::pair<bool, State> next_position = Cube::Rotate(PackedStateToState(position), rotation);
             if (!next_position.first) {
                 continue;
             }
@@ -55,7 +55,7 @@ void PhmapTiming(const TablebasePrecomputation& tablebase_precomputation, const 
 }
 
 
-void BCHTTiming(const std::vector<State>& tablebase_layer, const std::vector<State>& random_positions, size_t thread_idx, size_t num_threads) {
+void BCHTTiming(const std::vector<PackedState>& tablebase_layer, const std::vector<State>& random_positions, size_t thread_idx, size_t num_threads) {
     size_t hit = 0;
     size_t miss = 0;
     size_t rp_size = random_positions.size();
@@ -71,22 +71,22 @@ void BCHTTiming(const std::vector<State>& tablebase_layer, const std::vector<Sta
 }
 
 
-std::vector<State> TimeTablebaseCPU(std::vector<std::vector<State>>& tablebase, TablebasePrecomputation& tablebase_precomputation) {
+std::vector<State> TimeTablebaseCPU(std::vector<std::vector<PackedState>>& tablebase, TablebasePrecomputation& tablebase_precomputation) {
     // only time largest tb_depth
 
     LOG_EXTRA("Create test data for timing tablebase CPU");
     std::vector<State> random_positions;
-    for (const State& state : tablebase[Settings::GetTBDepth()]) {
-        if (state == State()) {
+    for (const PackedState& state : tablebase[Settings::GetTBDepth()]) {
+        if (state.hash_1 == uint16_t(-1) && state.hash_2 == uint32_t(-1) && state.hash_3 == uint32_t(-1)) {
             continue;
         }
-        random_positions.push_back(state);
+        random_positions.push_back(PackedStateToState(state));
     }
-    for (const State& state : tablebase[Settings::GetTBDepth()-1]) {
-        if (state == State()) {
+    for (const PackedState& state : tablebase[Settings::GetTBDepth()-1]) {
+        if (state.hash_1 == uint16_t(-1) && state.hash_2 == uint32_t(-1) && state.hash_3 == uint32_t(-1)) {
             continue;
         }
-        random_positions.push_back(state);
+        random_positions.push_back(PackedStateToState(state));
     }
 
     for (size_t i = 0; i < random_positions.size(); i++) {
@@ -154,7 +154,7 @@ std::string GetFilePath (std::string file_name, int depth) {
     return Settings::GetRootPath() + "precomputation/" + file_name + "_" + std::to_string(depth) + ".bin";
 }
 
-bool ExistsPrecomputation(std::vector<std::vector<State>>& tablebase, int depth) {
+bool ExistsPrecomputation(std::vector<std::vector<PackedState>>& tablebase, int depth) {
     std::string file_path = GetFilePath("tablebase", depth);
     if (std::FILE* file = std::fopen(file_path.c_str(), "rb")) {
         size_t size = 0;
@@ -164,7 +164,7 @@ bool ExistsPrecomputation(std::vector<std::vector<State>>& tablebase, int depth)
         tablebase.push_back({});
         tablebase.back().resize(size);
 
-        if (std::fread(tablebase.back().data(), sizeof(State), size, file) == size) {
+        if (std::fread(tablebase.back().data(), sizeof(PackedState), size, file) == size) {
             LOG_ALL(SkipSpace("Tablebase depth ["), SkipSpace(depth), SkipSpace("/"), SkipSpace(int(Settings::GetTBDepth())), "] read from file");
             LOG_MEMORY();
         }
@@ -179,7 +179,7 @@ bool ExistsPrecomputation(std::vector<std::vector<State>>& tablebase, int depth)
 }
 
 
-void SavePrecomputation(std::vector<State>& tablebase_layer, int depth) {
+void SavePrecomputation(std::vector<PackedState>& tablebase_layer, int depth) {
     std::string file_path = GetFilePath("tablebase", depth);
     if (std::FILE* file = std::fopen(file_path.c_str(), "wb")) {
         size_t size = tablebase_layer.size();
@@ -187,7 +187,7 @@ void SavePrecomputation(std::vector<State>& tablebase_layer, int depth) {
             LOG_ERROR(SkipSpace("Tablebase depth ["), SkipSpace(depth), SkipSpace("/"), SkipSpace(int(Settings::GetTBDepth())), "] failed to write to file");
             return;
         }
-        if (std::fwrite(tablebase_layer.data(), sizeof(State), size, file) != size) {
+        if (std::fwrite(tablebase_layer.data(), sizeof(PackedState), size, file) != size) {
             LOG_ERROR(SkipSpace("Tablebase depth ["), SkipSpace(depth), SkipSpace("/"), SkipSpace(int(Settings::GetTBDepth())), "] failed to write full file");
             return;
         }
@@ -200,12 +200,12 @@ void SavePrecomputation(std::vector<State>& tablebase_layer, int depth) {
 
 
 void Tablebase::Initialize() {
-    std::vector<State> empty_tb_pre = BuildBCHTSet(TablebasePrecomputation({}));
-    std::vector<State> starting_position_tb = BuildBCHTSet(TablebasePrecomputation({kSolvedState}));
+    std::vector<PackedState> empty_tb_pre = BuildBCHTSet(TablebasePrecomputation({}));
+    std::vector<PackedState> starting_position_tb = BuildBCHTSet(TablebasePrecomputation({kSolvedState}));
 
     tablebase.reserve(Settings::GetTBDepth()+1);
     tablebase.push_back(starting_position_tb);
-    std::pair<std::reference_wrapper<std::vector<State>>, std::reference_wrapper<std::vector<State>>> previous_tables = {empty_tb_pre, starting_position_tb};
+    std::pair<std::reference_wrapper<std::vector<PackedState>>, std::reference_wrapper<std::vector<PackedState>>> previous_tables = {empty_tb_pre, starting_position_tb};
 
     TablebasePrecomputation tablebase_layer;
     for (int i = 1; i <= Settings::GetTBDepth(); i++) {
@@ -236,9 +236,9 @@ void Tablebase::Initialize() {
     if (Settings::GetTestBCHT()) {
         LOG_EXTRA("Needs to generate phmap");
         if (tablebase_layer.empty()) {
-            for (const State& state : tablebase.back()) {
-                if (state != State()) {
-                    tablebase_layer.insert(state);
+            for (const PackedState& state : tablebase.back()) {
+                if (state.hash_1 != uint16_t(-1) || state.hash_2 != uint32_t(-1) || state.hash_3 != uint32_t(-1)) {
+                    tablebase_layer.insert(PackedStateToState(state));
                 }
             }
         }

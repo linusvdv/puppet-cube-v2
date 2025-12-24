@@ -223,7 +223,9 @@ void Search (uint64_t& num_positions_search, VisitedMap& visited_search, std::at
 
             num_positions_search++;
 
-            if (next_cube.GetMaxHeuristic(next_state.second) + next_depth > best_depth - 4 && best_depth < 30 + Settings::GetTBDepth()) {
+            if (std::max(next_cube.GetMaxHeuristic(next_state.second), uint8_t(Settings::GetTBDepth()+1)) + next_depth > best_depth - 4 &&
+                best_depth < 30 + Settings::GetTBDepth() + next_depth &&  // fits in the rotation registers
+                next_depth > 5) {  // more than 5 moves need to be done
                 auto find_local_buffer = local_buffer->find(next_state.second);
                 if (find_local_buffer == local_buffer->end()) {
                     local_buffer->insert({next_state.second, next_depth});
