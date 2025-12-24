@@ -121,6 +121,203 @@ __global__ void DeviceLeafSearch (uint64_t* d_num_positions_leafs, const std::pa
 }
 
 
+// add new starting_positions from cpu
+bool AddStartingPositions (std::queue<std::pair<State, uint8_t>>& local_position_queue, const uint64_t& leaf_batch_size,
+                           std::stop_token& stocken, std::atomic<std::shared_ptr<phmap::flat_hash_map<State, uint8_t>>>& shared_leaf_states, std::mutex& mtx,
+                           std::vector<std::pair<State, uint8_t>>& starting_positions,
+                           std::vector<uint8_t>& rotation_idxs,
+                           std::vector<uint64_t>& num_positions_leafs
+                           ) {
+    for (uint64_t i = 0; i < leaf_batch_size; i++) {
+        // not yet finished with calculation
+        if (rotation_idxs[i] != uint8_t(-1)) {
+            continue;
+        }
+
+        // get new cpu data
+        if (local_position_queue.empty()) {
+            std::shared_ptr<phmap::flat_hash_map<State, uint8_t>> local_buffer;
+            while (true) {
+                {
+                    // load from shared threads
+                    std::lock_guard lock(mtx);
+                    local_buffer = shared_leaf_states.load(std::memory_order_acquire);
+                    if (local_buffer->size() > 0) {
+                        std::shared_ptr<phmap::flat_hash_map<State, uint8_t>> new_empty_buffer = std::make_shared<phmap::flat_hash_map<State, uint8_t>>();
+                        local_buffer = shared_leaf_states.exchange(new_empty_buffer, std::memory_order_acquire);
+                        break;
+                    }
+                }
+                // check if CPU search is already finished
+                // it is guarantied that there is no positions in shared_leaf_states comeing after this point
+                if (stocken.stop_requested()) {
+                    return true;
+                }
+                std::this_thread::yield(); // prevent busy spin burn
+            }
+
+            // insert all elements into local_position_queue
+            for (const auto& new_pos : *local_buffer) {
+                local_position_queue.push(new_pos);
+            }
+        }
+
+        // write new position
+        num_positions_leafs[i]++; // add starting position
+        rotation_idxs[i] = 0;
+        starting_positions[i] = local_position_queue.front();
+        local_position_queue.pop();
+    }
+    return false;
+}
+
+
+// split starting positions that are left in finished starting_positions
+void SplitStartingPositions (uint64_t& cur_split_idx, const uint64_t& leaf_batch_size, VisitedMap& visited_leaf,
+                             std::atomic<uint8_t>& atomic_best_depth, std::pair<State, uint8_t>& best_endstate_leafs, const int& thread_idx,
+                             std::vector<uint8_t>& rotation_idxs,
+                             std::vector<URotations>& urotations,
+                             std::vector<std::pair<State, uint8_t>>& starting_positions,
+                             std::vector<uint64_t>& num_positions_leafs, uint64_t num_positions_leaf
+                             ) {
+    uint64_t finished_cnt = 0;
+    std::vector<bool> finished(leaf_batch_size, false);
+    for (uint64_t i = 0; i < leaf_batch_size; i++) {
+        if (rotation_idxs[i] == uint8_t(-1)) {
+            finished[i] = true;
+            finished_cnt++;
+        }
+    }
+
+    int next_idx = 0;
+
+    uint64_t stop_split_idx = (cur_split_idx + leaf_batch_size - 1) % leaf_batch_size;
+    while (stop_split_idx != cur_split_idx && finished_cnt > kNumRotations) {
+        if (finished[cur_split_idx]) {
+            cur_split_idx++;
+            cur_split_idx %= leaf_batch_size;
+            continue;
+        }
+
+        if (rotation_idxs[cur_split_idx] == uint8_t(-1) ||
+            rotation_idxs[cur_split_idx] == 0) {
+            // LOG_WARNING("Should never occur", rotation_idxs[cur_split_idx]);
+            cur_split_idx++;
+            cur_split_idx %= leaf_batch_size;
+            continue;
+        }
+
+        // split up
+        // it is guarantied that rotation_idx > 0
+        std::pair<State, uint8_t> starting_position = starting_positions[cur_split_idx];
+        // insert into visited_leaf such that it can be traced back
+        auto find_visited = visited_leaf.find(starting_position.first);
+        if (find_visited == visited_leaf.end()) {
+            visited_leaf.insert(starting_position); // found new solution
+        }
+        else if (find_visited->second > starting_position.second) {
+            find_visited->second = starting_position.second;
+        }
+
+        URotations urotation = urotations[cur_split_idx];
+
+        uint8_t rotation = urotation.At(0) ^ uint8_t(1<<7); // as it is a rev move (else rotation_idx == 0)
+        if (rotation >= kNumRotations) {
+            LOG_EXTRA("UROTATIONS", urotation.data[0], urotation.data[1], urotation.data[2], urotation.data[3]);
+            LOG_CRITICAL("Rotation is too big", int(rotation), "rotation_idx:", int(rotation_idxs[cur_split_idx]));
+        }
+
+        // do the current rotation
+        std::pair<State, uint8_t> new_starting_position = {Cube::Rotate(starting_position.first, rotation).second, starting_position.second+1};
+
+        // shift urotation by a move
+        URotations new_urotation = {0, 0, 0, 0};
+        for (int i = 0; i < kURotationSize-1; i++) {
+            new_urotation.Set(i, urotation.At(i+1));
+        }
+
+        // update old starting state
+        starting_positions[cur_split_idx] = new_starting_position;
+        urotations[cur_split_idx] = new_urotation;
+        rotation_idxs[cur_split_idx]--;
+
+        for (int rot = rotation+1; rot < kNumRotations; rot++) {
+            std::pair<bool, State> next_rot = Cube::Rotate(starting_position.first, rot);
+            if (!next_rot.first) {
+                continue;
+            }
+
+            if (BCHTSetContains(Tablebase::tablebase.back(), next_rot.second)) {
+                uint8_t tot_depth = starting_position.second+1 + Settings::GetTBDepth();
+                if (tot_depth < uint8_t(atomic_best_depth)) {
+                    best_endstate_leafs = {next_rot.second, tot_depth};
+                    AtomicMin(atomic_best_depth, tot_depth);
+                    LOG_EXTRA("best sol", SkipSpace(thread_idx), ":", int(best_endstate_leafs.second), "leaf_search:", num_positions_leaf);
+                    LOG_MEMORY();
+                    continue;
+                }
+            }
+
+            // it is guarantied that there is a next idx
+            while (!finished[next_idx]) {
+                next_idx++;
+            }
+
+            // ability to trace back the real starting position of a new best solution
+            starting_positions[next_idx] = {next_rot.second, starting_position.second+1};
+            urotations[next_idx] = {0, 0, 0, 0};
+            rotation_idxs[next_idx] = 0;
+            num_positions_leafs[next_idx] = 1;
+
+            next_idx++;
+            finished_cnt--;
+        }
+    }
+}
+
+// remove the associated data from finished starting_positions
+// handel new found best solutions
+void FinishedStartingPositions (std::atomic<uint8_t>& atomic_best_depth, const uint64_t& leaf_batch_size, VisitedMap& visited_leaf,
+                                std::pair<State, uint8_t>& best_endstate_leafs, uint64_t& num_positions_leaf, const int& thread_idx,
+                                std::vector<uint8_t>& rotation_idxs,
+                                std::vector<std::pair<State, uint8_t>>& starting_positions,
+                                std::vector<uint8_t>& best_depths,
+                                std::vector<URotations>& urotations,
+                                std::vector<uint64_t>& num_positions_leafs
+                                ) {
+    uint8_t cur_best_depth = atomic_best_depth;
+    for (uint64_t i = 0; i < leaf_batch_size; i++) {
+        // better solution
+        if (best_depths[i] < cur_best_depth) {
+            // do a CPU search for this position
+            LeafSearch(starting_positions[i].first, starting_positions[i].second, cur_best_depth,
+                        best_endstate_leafs, visited_leaf,
+                        num_positions_leaf, atomic_best_depth, thread_idx);
+            auto find_visited = visited_leaf.find(starting_positions[i].first);
+            if (find_visited == visited_leaf.end()) {
+                visited_leaf.insert(starting_positions[i]); // found new solution
+            }
+            else if (find_visited->second > starting_positions[i].second) {
+                find_visited->second = starting_positions[i].second;
+            }
+            // mark as finished
+            rotation_idxs[i] = uint8_t(-1);
+        }
+
+        // not yet finished with calculation
+        if (rotation_idxs[i] != uint8_t(-1)) {
+            continue;
+        }
+
+        // finished with calculation
+        num_positions_leaf += num_positions_leafs[i];
+        num_positions_leafs[i] = 0;
+
+        urotations[i] = {0, 0, 0, 0};
+    }
+}
+
+
 void DeviceLeafManager (std::stop_token& stocken, std::atomic<std::shared_ptr<phmap::flat_hash_map<State, uint8_t>>>& shared_leaf_states,
                         std::mutex& mtx, uint64_t& num_positions_leaf, VisitedMap& visited_leaf,
                         std::atomic<uint8_t>& atomic_best_depth, std::pair<State, uint8_t>& best_endstate_leafs,
@@ -166,169 +363,31 @@ void DeviceLeafManager (std::stop_token& stocken, std::atomic<std::shared_ptr<ph
 
     // local buffer
     std::queue<std::pair<State, uint8_t>> local_position_queue;
-    bool first_finished_position = true;
 
-    uint64_t cur_finished_split_idx = 0;
+    // split positions
+    uint64_t cur_split_idx = 0;
 
     while (true) {
-        std::queue<uint64_t> finished_positions;
+        bool cpu_stop = AddStartingPositions(local_position_queue, leaf_batch_size, stocken, shared_leaf_states, mtx, starting_positions, rotation_idxs, num_positions_leafs);
 
-        uint8_t cur_best_depth = atomic_best_depth;
-        for (uint64_t i = 0; i < leaf_batch_size; i++) {
-            // better solution
-            if (best_depths[i] < cur_best_depth) {
-                // do a CPU search for this position
-                LeafSearch(starting_positions[i].first, starting_positions[i].second, cur_best_depth,
-                           best_endstate_leafs, visited_leaf,
-                           num_positions_leaf, atomic_best_depth, thread_idx);
-                auto find_visited = visited_leaf.find(starting_positions[i].first);
-                if (find_visited == visited_leaf.end()) {
-                    visited_leaf.insert(starting_positions[i]); // found new solution
-                }
-                else if (find_visited->second > starting_positions[i].second) {
-                    find_visited->second = starting_positions[i].second;
-                }
-                // mark as finished
-                rotation_idxs[i] = uint8_t(-1);
-            }
-
-            // not yet finished with calculation
-            if (rotation_idxs[i] != uint8_t(-1)) {
-                continue;
-            }
-
-            // finished with calculation
-            num_positions_leaf += num_positions_leafs[i];
-            num_positions_leafs[i] = 0;
-
-            if (local_position_queue.empty()) {
-                std::shared_ptr<phmap::flat_hash_map<State, uint8_t>> local_buffer;
-                while (true) {
-                    {
-                        // load from shared threads
-                        std::lock_guard lock(mtx);
-                        local_buffer = shared_leaf_states.load(std::memory_order_acquire);
-                        if (local_buffer->size() > 0) {
-                            std::shared_ptr<phmap::flat_hash_map<State, uint8_t>> new_empty_buffer = std::make_shared<phmap::flat_hash_map<State, uint8_t>>();
-                            local_buffer = shared_leaf_states.exchange(new_empty_buffer, std::memory_order_acquire);
-                            break;
-                        }
-                    }
-                    // check if CPU search is already finished
-                    if (stocken.stop_requested()) {
-                        finished_positions.push(i);
-                        if (first_finished_position) {
-                            first_finished_position = false;
-                        }
-                        break;
-                    }
-                    std::this_thread::yield(); // prevent busy spin burn
-                }
-
-                // insert all elements into local_position_queue
-                for (const auto& new_pos : *local_buffer) {
-                    local_position_queue.push(new_pos);
-                }
-            }
-
-            // write new position
-            if (local_position_queue.empty()) {
-                continue;
-            }
-
-            // write new position
-            num_positions_leafs[i]++; // add starting position
-            rotation_idxs[i] = 0;
-            starting_positions[i] = local_position_queue.front();
-            local_position_queue.pop();
-            urotations[i] = {0, 0, 0, 0};
-        }
         // update all best depths
-        cur_best_depth = atomic_best_depth;
+        uint8_t cur_best_depth = atomic_best_depth;
         for (uint64_t i = 0; i < leaf_batch_size; i++) {
             best_depths[i] = cur_best_depth;
         }
 
-        // finished all positions
-        if (finished_positions.size() == leaf_batch_size) {
-            break;
-        }
-
-        if (!first_finished_position) {
-            uint64_t last_splitable_cnt = 0;
-            while (finished_positions.size() >= kNumRotations-1 && last_splitable_cnt < leaf_batch_size) {
-                if (rotation_idxs[cur_finished_split_idx] == uint8_t(-1) ||
-                    rotation_idxs[cur_finished_split_idx] == 0) {
-                    last_splitable_cnt++;
-
-                    cur_finished_split_idx++;
-                    cur_finished_split_idx %= leaf_batch_size;
-                    continue;
+        // check finished all positions
+        if (cpu_stop) {
+            bool has_work = false;
+            for (uint64_t i = 0; i < leaf_batch_size; i++) {
+                // not yet finished with calculation
+                if (rotation_idxs[i] != uint8_t(-1)) {
+                    has_work = true;
+                    break;
                 }
-                last_splitable_cnt = 0;
-
-                // split up
-                // it is guarantied that rotation_idx > 0
-                std::pair<State, uint8_t> starting_position = starting_positions[cur_finished_split_idx];
-                // insert into visited_leaf such that it can be traced back
-                auto find_visited = visited_leaf.find(starting_position.first);
-                if (find_visited == visited_leaf.end()) {
-                    visited_leaf.insert(starting_position); // found new solution
-                }
-                else if (find_visited->second > starting_position.second) {
-                    find_visited->second = starting_position.second;
-                }
-
-                URotations urotation = urotations[cur_finished_split_idx];
-
-                uint8_t rotation = urotation.At(0) ^ uint8_t(1<<7); // as it is a rev move (else rotation_idx == 0)
-                if (rotation >= kNumRotations) {
-                    LOG_EXTRA("UROTATIONS", urotation.data[0], urotation.data[1], urotation.data[2], urotation.data[3]);
-                    LOG_CRITICAL("Rotation is too big", int(rotation), "rotation_idx:", int(rotation_idxs[cur_finished_split_idx]));
-                }
-
-                // do the current rotation
-                std::pair<State, uint8_t> new_starting_position = {Cube::Rotate(starting_position.first, rotation).second, starting_position.second+1};
-
-                // shift urotation by a move
-                URotations new_urotation = {0, 0, 0, 0};
-                for (int i = 0; i < kURotationSize-1; i++) {
-                    new_urotation.Set(i, urotation.At(i+1));
-                }
-
-                // update old starting state
-                starting_positions[cur_finished_split_idx] = new_starting_position;
-                urotations[cur_finished_split_idx] = new_urotation;
-                rotation_idxs[cur_finished_split_idx]--;
-
-                for (int rot = rotation+1; rot < kNumRotations; rot++) {
-                    std::pair<bool, State> next_rot = Cube::Rotate(starting_position.first, rot);
-                    if (!next_rot.first) {
-                        continue;
-                    }
-
-                    if (BCHTSetContains(Tablebase::tablebase.back(), next_rot.second)) {
-                        uint8_t tot_depth = starting_position.second+1 + Settings::GetTBDepth();
-                        if (tot_depth < std::min(uint8_t(atomic_best_depth), cur_best_depth)) {
-                            best_endstate_leafs = {next_rot.second, tot_depth};
-                            cur_best_depth = std::min(cur_best_depth, tot_depth);
-                            AtomicMin(atomic_best_depth, tot_depth);
-                            LOG_EXTRA("best sol", SkipSpace(thread_idx), ":", int(best_endstate_leafs.second), "leaf_search:", num_positions_leaf);
-                            LOG_MEMORY();
-                            continue;
-                        }
-                    }
-
-                    // new empty index
-                    int next_idx = finished_positions.front();
-                    finished_positions.pop();
-
-                    // ability to trace back the real starting position of a new best solution
-                    starting_positions[next_idx] = {next_rot.second, starting_position.second+1};
-                    urotations[next_idx] = {0, 0, 0, 0};
-                    rotation_idxs[next_idx] = 0;
-                    num_positions_leafs[next_idx] = 1;
-                }
+            }
+            if (!has_work) {
+                break;
             }
         }
 
@@ -359,6 +418,9 @@ void DeviceLeafManager (std::stop_token& stocken, std::atomic<std::shared_ptr<ph
         if (err != cudaSuccess) {
             LOG_CRITICAL("CUDA error:", cudaGetErrorString(err));
         }
+
+        FinishedStartingPositions(atomic_best_depth, leaf_batch_size, visited_leaf, best_endstate_leafs, num_positions_leaf, thread_idx, rotation_idxs, starting_positions, best_depths, urotations, num_positions_leafs);
+        SplitStartingPositions(cur_split_idx, leaf_batch_size, visited_leaf, atomic_best_depth, best_endstate_leafs, thread_idx, rotation_idxs, urotations, starting_positions, num_positions_leafs, num_positions_leaf);
     }
 
     LOG_EXTRA(SkipSpace("#"), thread_idx, "finished with all kernels");
