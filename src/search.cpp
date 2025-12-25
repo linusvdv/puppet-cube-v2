@@ -1,8 +1,6 @@
 #include <atomic>
-#include <compare>
 #include <cstdint>
 #include <mutex>
-#include <queue>
 #include <stack>
 #include <thread>
 
@@ -21,15 +19,6 @@
 #endif  // USE_CUDA
 
 
-struct PQSearch {
-    float value;
-    uint8_t depth;
-    State state;
-
-    std::partial_ordering operator<=>(const PQSearch&) const = default;
-};
-
-
 void SolveTB(std::vector<Rotations>& tb_rotations, int tb_layer, State state) {
     for (int layer = tb_layer - 1; layer >= 0; layer--) {
         for (uint8_t rotation = 0; rotation < kNumRotations; rotation++) {
@@ -41,6 +30,20 @@ void SolveTB(std::vector<Rotations>& tb_rotations, int tb_layer, State state) {
             }
         }
     }
+}
+
+
+// check if the state is already in tablebase
+// return layer
+// else return -1
+int GetTBLayer(const State& state) {
+    for (int i = 0; i <= Settings::GetTBDepth(); i++) {
+        if (BCHTSetContains(Tablebase::tablebase[i], state)) {
+            LOG_EXTRA("Position in tablebase");
+            return i;
+        }
+    }
+    return -1;
 }
 
 
@@ -110,16 +113,7 @@ bool LeafSearch (const State& state, uint8_t depth, uint8_t& best_depth, std::pa
 
 void LeafManager (std::stop_token stocken, uint64_t& num_positions_leaf, VisitedMap& visited_leaf, std::atomic<uint8_t>& atomic_best_depth, std::pair<State, uint8_t>& best_endstate_leafs,
                   std::atomic<std::shared_ptr<phmap::flat_hash_map<State, uint8_t>>>& shared_leaf_states, [[maybe_unused]] const uint64_t& leaf_batch_size, const int& thread_idx, std::mutex& mtx) {
-    #ifdef USE_CUDA
-    if (Settings::UseCuda()) {
-        DeviceLeafManager(stocken, shared_leaf_states, mtx, num_positions_leaf, visited_leaf,
-                          atomic_best_depth, best_endstate_leafs, leaf_batch_size, thread_idx);
-        return;
-    }
-    #endif
-
     std::shared_ptr<phmap::flat_hash_map<State, uint8_t>> local_buffer;
-
     while (!stocken.stop_requested()) {
         bool is_new = false;
         {
@@ -147,125 +141,93 @@ void LeafManager (std::stop_token stocken, uint64_t& num_positions_leaf, Visited
 }
 
 
-void Search (uint64_t& num_positions_search, VisitedMap& visited_search, std::atomic<uint8_t>& atomic_best_depth,
-             std::pair<State, uint8_t>& best_endstate_search, const State& starting_position,
-             std::atomic<std::shared_ptr<phmap::flat_hash_map<State, uint8_t>>>& shared_leaf_states, const uint64_t& leaf_batch_size) {
-    uint8_t best_depth = atomic_best_depth;
-
-    // check if it already in tablebase
-    for (int i = 0; i <= Settings::GetTBDepth(); i++) {
-        if (BCHTSetContains(Tablebase::tablebase[i], starting_position)) {
-            LOG_EXTRA("Position in tablebase");
-            atomic_best_depth = i;
-            best_endstate_search = {starting_position, i};
-            return;
-        }
-    }
-
-    // priority queue sorted after the heuristic value
-    std::priority_queue<PQSearch, std::vector<PQSearch>, std::greater<>> pq_search;
-    Cube start_cube;
-    pq_search.push({start_cube.GetAppHeuristic(starting_position), 0, starting_position});
-    visited_search.insert({starting_position, 0});
-    num_positions_search++;
-
+// This is a BFS search
+void Search (uint64_t& num_positions_search, VisitedMap visited_search, std::atomic<uint8_t>& atomic_best_depth, std::pair<State, uint8_t>& best_endstate_search,
+               const State& starting_position, std::atomic<std::shared_ptr<phmap::flat_hash_map<State, uint8_t>>>& shared_leaf_states,
+               const uint64_t& leaf_batch_size, uint8_t depth) {
     // local buffer for leaf search
     std::shared_ptr<phmap::flat_hash_map<State, uint8_t>> local_buffer = std::make_shared<phmap::flat_hash_map<State, uint8_t>>();
 
-    // start of search
-    while (!pq_search.empty()) {
-        PQSearch pq_top = pq_search.top();
-        pq_search.pop();
+    // BFS layer
+    phmap::flat_hash_set<State> cur_states;
+    cur_states.insert(starting_position);
+    visited_search.insert({starting_position, 0});
 
-        // rotate to the next position
-        for (uint8_t rotation = 0; rotation < kNumRotations; rotation++) {
-            std::pair<bool, State> next_state = Cube::Rotate(pq_top.state, rotation);
-            // illegal move
-            if (!next_state.first) {
-                continue;
-            }
-            uint8_t next_depth = pq_top.depth + 1;
+    for (uint8_t cur_depth = 0; cur_depth < depth; cur_depth++) {
+        // new bfs layer
+        phmap::flat_hash_set<State> next_states;
 
-            // tablebase
-            uint8_t full_depth = next_depth + Settings::GetTBDepth();
-            if (BCHTSetContains(Tablebase::tablebase.back(), next_state.second)) {
-                if (full_depth < best_depth) {
-                    // set new enstate
-                    best_endstate_search = {next_state.second, full_depth};
-                    AtomicMin(atomic_best_depth, full_depth);
+        // iterate over all states
+        for (const State& state : cur_states) {
+            // rotate to the next position
+            for (uint8_t rotation = 0; rotation < kNumRotations; rotation++) {
+                std::pair<bool, State> next_state = Cube::Rotate(state, rotation);
+                // illegal move
+                if (!next_state.first) {
+                    continue;
+                }
+                // already visited
+                if (visited_search.contains(next_state.second)) {
+                    continue;
+                }
+                num_positions_search++;
 
-                    best_depth = atomic_best_depth;
-
-                    visited_search[next_state.second] = full_depth;
-                    LOG_EXTRA("best sol:", int(full_depth), "num_positions:", num_positions_search);
-                    LOG_MEMORY();
+                // in tablebase
+                if (BCHTSetContains(Tablebase::tablebase.back(), next_state.second)) {
+                    best_endstate_search = {next_state.second, cur_depth+1};
+                    visited_search.insert({next_state.second, cur_depth+1});
+                    atomic_best_depth = cur_depth+1+Settings::GetTBDepth();
+                    LOG_EXTRA("found solution of length ", Settings::GetTBDepth()+cur_depth+1);
                     return;
                 }
-            }
 
-            // due to the heuristic it is not possible to solve the current state in fewer moves than the current best solution
-            // tablebase lookup already happend
-            Cube next_cube;
-            if (std::max(next_cube.GetMaxHeuristic(next_state.second), uint8_t(Settings::GetTBDepth()+1)) + next_depth >= best_depth) {
-                continue;
-            }
-
-            // add to visited states
-            auto find_visited = visited_search.find(next_state.second);
-            if (find_visited == visited_search.end()) {
-                visited_search.insert({next_state.second, next_depth});
-            }
-            else if (next_depth < find_visited->second) {
-                find_visited->second = next_depth;
-            }
-            else {
-                continue;
-            }
-
-            num_positions_search++;
-
-            if (std::max(next_cube.GetMaxHeuristic(next_state.second), uint8_t(Settings::GetTBDepth()+1)) + next_depth > best_depth - 4 &&
-                best_depth < 30 + Settings::GetTBDepth() + next_depth &&  // fits in the rotation registers
-                next_depth > 5 &&  // more than 5 moves need to be already made
-                best_depth - next_depth - Settings::GetTBDepth() < 10) { // less than 10 to go
-
-                auto find_local_buffer = local_buffer->find(next_state.second);
-                if (find_local_buffer == local_buffer->end()) {
-                    local_buffer->insert({next_state.second, next_depth});
-                }
-                else if (find_local_buffer->second > next_depth) {
-                    find_local_buffer->second = next_depth;
+                // due to the heuristic it is not possible to solve the current state in fewer moves than the current best solution
+                // tablebase lookup already happend
+                Cube next_cube;
+                if (std::max(next_cube.GetMaxHeuristic(next_state.second), uint8_t(Settings::GetTBDepth()+1)) + cur_depth + 1 >= depth) {
+                    continue;
                 }
 
-                // swap local buffer with shared leaf states when it is swaped with an empty one
-                if (local_buffer->size() >= leaf_batch_size) {
-                    auto shared_data = shared_leaf_states.load(std::memory_order_acquire);
-                    while (!shared_data->empty()) {
-                        std::this_thread::yield(); // prevent busy spin burn
-                        shared_data = shared_leaf_states.load(std::memory_order_acquire);
+                visited_search.insert({next_state.second, cur_depth+1});
+
+                // send the position to GPU search
+                if (std::max(next_cube.GetMaxHeuristic(next_state.second), uint8_t(Settings::GetTBDepth()+1)) + cur_depth + 1 >= depth - 3 &&
+                    depth < 30 + Settings::GetTBDepth() + cur_depth + 1 &&  // fits in the rotation registers
+                    cur_depth + 1 > 5 &&  // more than 5 moves need to be already made
+                    depth - cur_depth - 1 - Settings::GetTBDepth() < 10) { // less than 10 to go
+
+                    auto find_local_buffer = local_buffer->find(next_state.second);
+                    if (find_local_buffer == local_buffer->end()) {
+                        local_buffer->insert({next_state.second, cur_depth + 1});
+                    }
+                    else if (find_local_buffer->second > cur_depth + 1) {
+                        find_local_buffer->second = cur_depth + 1;
                     }
 
-                    local_buffer = shared_leaf_states.exchange(local_buffer, std::memory_order_acq_rel);
+                    // swap local buffer with shared leaf states when it is swaped with an empty one
+                    if (local_buffer->size() >= leaf_batch_size) {
+                        auto shared_data = shared_leaf_states.load(std::memory_order_acquire);
+                        while (!shared_data->empty()) {
+                            std::this_thread::yield(); // prevent busy spin burn
+                            shared_data = shared_leaf_states.load(std::memory_order_acquire);
+                        }
 
-                    if (atomic_best_depth < best_depth) {
+                        local_buffer = shared_leaf_states.exchange(local_buffer, std::memory_order_acq_rel);
+                    }
+
+                    if (atomic_best_depth < depth) {
                         return;
                     }
+                    continue;
                 }
-            }
-            else {
-                pq_search.push({next_cube.GetAppHeuristic(next_state.second)+float(next_depth), next_depth, next_state.second});
+
+                next_states.insert(next_state.second);
             }
         }
-    }
 
-    // swap local buffer with shared leaf states when it is swaped with an empty one
-    auto shared_data = shared_leaf_states.load(std::memory_order_acquire);
-    while (!shared_data->empty()) {
-        std::this_thread::yield(); // prevent busy spin burn
-        shared_data = shared_leaf_states.load(std::memory_order_acquire);
+        // swap new and old bfs layer
+        std::swap(cur_states, next_states);
     }
-
-    local_buffer = shared_leaf_states.exchange(local_buffer, std::memory_order_acq_rel);
 }
 
 
@@ -273,6 +235,8 @@ void SearchManager () {
     if (Settings::GetNumRuns() <= 0) {
         return;
     }
+
+    uint64_t leaf_batch_size = kBlockDim * 46 * 16;
 
     // start timing
     std::chrono::time_point start_time = std::chrono::high_resolution_clock::now();
@@ -287,16 +251,28 @@ void SearchManager () {
     uint64_t acc_depth = 0;
 
     for (size_t i = 0; i < random_positions.size(); i++) {
+        // already in TB
+        if (GetTBLayer(random_positions[i]) >= 0) {
+            std::vector<Rotations> tb_rotations;
+            SolveTB(tb_rotations, GetTBLayer(random_positions[i]), random_positions[i]);
+            LOG_EXTRA("Proven optimal solution");
+            LOG_EXTRA("Position already in tablebase");
+            LOG_EXTRA("solution moves:", tb_rotations);
+            LOG_ALL(SkipSpace("["), SkipSpace(i+1), SkipSpace("/"), SkipSpace(Settings::GetNumRuns()), "] Depth:", GetTBLayer(random_positions[i]), "num_positions: 0");
+            continue;
+        }
 
+        // information purposes
         uint64_t total_num_positions = 0;
         uint64_t num_positions_search = 0;
         uint64_t num_positions_leaf = 0;
 
+        // construction of optimal solution
         std::atomic<uint8_t> atomic_best_depth = uint8_t(-1);
+        std::pair<State, uint8_t> best_endstate_search = {State(), -1};
+        std::vector<std::pair<State, uint8_t>> best_endstate_leaf_threads(Settings::GetNumThreads(), {State(), -1});
 
-        std::pair<State, uint8_t> best_endstate_search_final = {State(), -1};
-        std::pair<State, uint8_t> best_endstate_leaf_final = {State(), -1};
-
+        // these need to be exchanged of every deepening step
         std::vector<VisitedMap> visited_leaf_threads_final(Settings::GetNumThreads());
         VisitedMap visited_search_final;
 
@@ -306,32 +282,39 @@ void SearchManager () {
             std::make_shared<phmap::flat_hash_map<State, uint8_t>>(),
             std::memory_order_release
         );
-        uint64_t leaf_batch_size = kBlockDim * 46 * 16;
 
         // Start LeafManager on a seperate thread
         Cube heuristic;
         int max_heuristic = heuristic.GetMaxHeuristic(random_positions[i]);
-        for (int id_best_depth = max_heuristic+1; true; id_best_depth++) {
-            LOG_EXTRA("Start with depth", id_best_depth);
-            atomic_best_depth = id_best_depth;
-
+        for (int id_depth = max_heuristic+1; true; id_depth++) {
+            LOG_EXTRA("Start with depth", id_depth);
+            atomic_best_depth = id_depth;
             VisitedMap visited_search;
             std::vector<VisitedMap> visited_leaf_threads(Settings::GetNumThreads());
-            std::pair<State, uint8_t> best_endstate_search = {State(), -1};
-            std::pair<State, uint8_t> best_endstate_leaf = {State(), -1};
-            std::vector<std::pair<State, uint8_t>> best_endstate_leaf_threads(Settings::GetNumThreads(), {State(), -1});
 
             std::vector<std::jthread> leaf_manager_threads;
             std::vector<uint64_t> num_positions_leaf_threads(Settings::GetNumThreads(), 0);
             std::mutex mtx;
-            for (int i = 0; i < Settings::GetNumThreads(); i++) {
-                leaf_manager_threads.push_back(std::jthread(LeafManager, std::ref(num_positions_leaf_threads[i]), std::ref(visited_leaf_threads[i]),
-                                                            std::ref(atomic_best_depth), std::ref(best_endstate_leaf_threads[i]),
-                                                            std::ref(shared_leaf_states), leaf_batch_size, i, std::ref(mtx)));
+            #ifdef USE_CUDA
+            if (Settings::UseCuda()) {
+                for (int i = 0; i < Settings::GetNumThreads(); i++) {
+                    leaf_manager_threads.push_back(std::jthread(DeviceLeafManager, std::ref(shared_leaf_states), std::ref(mtx),
+                                                                std::ref(num_positions_leaf_threads[i]), std::ref(visited_leaf_threads[i]),
+                                                                std::ref(atomic_best_depth), std::ref(best_endstate_leaf_threads[i]), leaf_batch_size, i));
+                }
+            }
+            #endif
+            // is always off if it is compiled without cuda
+            if (!Settings::UseCuda()) {
+                for (int i = 0; i < Settings::GetNumThreads(); i++) {
+                    leaf_manager_threads.push_back(std::jthread(LeafManager, std::ref(num_positions_leaf_threads[i]), std::ref(visited_leaf_threads[i]),
+                                                                std::ref(atomic_best_depth), std::ref(best_endstate_leaf_threads[i]),
+                                                                std::ref(shared_leaf_states), leaf_batch_size, i, std::ref(mtx)));
+                }
             }
 
             // Search
-            Search(num_positions_search, visited_search, atomic_best_depth, best_endstate_search, random_positions[i], shared_leaf_states, leaf_batch_size);
+            Search(num_positions_search, visited_search, atomic_best_depth, best_endstate_search, random_positions[i], shared_leaf_states, leaf_batch_size, id_depth);
 
             // wait until all shared position are empty
             auto shared_data = shared_leaf_states.load(std::memory_order_acquire);
@@ -347,65 +330,37 @@ void SearchManager () {
             for (int i = 0; i < Settings::GetNumThreads(); i++) {
                 leaf_manager_threads[i].join();
                 num_positions_leaf += num_positions_leaf_threads[i];
-                if (best_endstate_leaf.second > best_endstate_leaf_threads[i].second) {
-                    best_endstate_leaf = best_endstate_leaf_threads[i];
-                }
             }
 
             // found optimal solution
-            if (atomic_best_depth < id_best_depth) {
+            if (atomic_best_depth < id_depth) {
                 LOG_EXTRA("Proven optimal solution");
                 std::swap(visited_leaf_threads_final, visited_leaf_threads);
                 std::swap(visited_search_final, visited_search);
-                std::swap(best_endstate_leaf_final, best_endstate_leaf);
-                std::swap(best_endstate_search_final, best_endstate_search);
                 break;
             }
         }
 
         total_num_positions = num_positions_search + num_positions_leaf;
-
-        // Construct solution
         acc_depth += atomic_best_depth;
         acc_total_num_positions += total_num_positions;
-        if (atomic_best_depth != uint8_t(-1)) {
-            // state between search and tablebase
-            std::pair<State, uint8_t> best_endstate;
-            if (best_endstate_search_final.second <= best_endstate_leaf_final.second) {
-                best_endstate = best_endstate_search_final;
-            }
-            else {
-                best_endstate = best_endstate_leaf_final;
-            }
 
-            // already in TB
-            if (atomic_best_depth <= Settings::GetTBDepth()) {
-                std::vector<Rotations> tb_rotations;
-                SolveTB(tb_rotations, atomic_best_depth, best_endstate.first);
-                LOG_EXTRA(tb_rotations);
-            }
-            // mix of TB and Search
-            else {
-                // Tablebase
-                std::vector<Rotations> tb_rotations;
-                SolveTB(tb_rotations, Settings::GetTBDepth(), best_endstate.first);
-
-                // Search
-                std::stack<Rotations> search_rotations;
-                SolveSearch(search_rotations, atomic_best_depth-Settings::GetTBDepth(), best_endstate.first, visited_search_final, visited_leaf_threads_final);
-
-                if (search_rotations.size() + tb_rotations.size() != atomic_best_depth) {
-                    LOG_WARNING("Not all rotations");
-                    LOG_EXTRA("search_rotations", search_rotations);
-                    LOG_EXTRA("tb_rotations", tb_rotations);
-                }
-
-                LOG_EXTRA("solution moves:", search_rotations, tb_rotations);
+        // Construct solution
+        std::pair<State, uint8_t> best_endstate = best_endstate_search;
+        for (int i = 0; i < Settings::GetNumThreads(); i++) {
+            if (best_endstate_leaf_threads[i].second < best_endstate.second) {
+                best_endstate = best_endstate_leaf_threads[i];
             }
         }
-        else {
-            LOG_EXTRA("Solution not found!");
-        }
+
+        // Tablebase
+        std::vector<Rotations> tb_rotations;
+        SolveTB(tb_rotations, Settings::GetTBDepth(), best_endstate.first);
+        // Search
+        std::stack<Rotations> search_rotations;
+        SolveSearch(search_rotations, atomic_best_depth-Settings::GetTBDepth(), best_endstate.first, visited_search_final, visited_leaf_threads_final);
+
+        LOG_EXTRA("solution moves:", search_rotations, tb_rotations);
 
         LOG_ALL(SkipSpace("["), SkipSpace(i+1), SkipSpace("/"), SkipSpace(Settings::GetNumRuns()), "] Depth:", int(atomic_best_depth), "num_positions:", total_num_positions);
         LOG_EXTRA("total number positions:", total_num_positions, "search positions", num_positions_search, "leaf positions", num_positions_leaf);
