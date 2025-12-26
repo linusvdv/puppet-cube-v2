@@ -362,7 +362,9 @@ void SearchManager () {
             {
                 std::vector<std::jthread> frontier_search_threads;
                 for (int i = 0; i < Settings::GetNumThreads(); i++) {
-                    FrontierSearch(num_positions_search, visited_search, atomic_best_depth, mtx_send, best_endstate_search, shared_leaf_states, leaf_batch_size, id_depth, cur_frontier, next_frontier, i);
+                    frontier_search_threads.push_back(std::jthread(FrontierSearch, std::ref(num_positions_search), std::ref(visited_search), std::ref(atomic_best_depth),
+                                                                   std::ref(mtx_send), std::ref(best_endstate_search), std::ref(shared_leaf_states), std::ref(leaf_batch_size),
+                                                                   id_depth, std::ref(cur_frontier), std::ref(next_frontier), i));
                 }
             }
             std::swap(cur_frontier, next_frontier);
