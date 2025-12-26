@@ -34,7 +34,7 @@ int Settings::num_threads;                      // automatic detection
 int Settings::num_gpu_upload_threads;           // automatic detection
 int Settings::num_gputhreads;                   // automatic detection
 int Settings::num_positions_per_batch = 1000;   // NOLINT
-int Settings::num_parallel_batches = 10;        // NOLINT
+int Settings::num_parallel_batches = 100;       // NOLINT
 
 // tablebase
 int Settings::tb_depth = 6;                     // NOLINT

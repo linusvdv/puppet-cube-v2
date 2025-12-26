@@ -123,11 +123,17 @@ __global__ void DeviceLeafSearch (uint64_t* d_num_positions_leafs, const std::pa
 
 // add new starting_positions from cpu
 bool AddStartingPositions (std::queue<std::pair<State, uint8_t>>& local_position_queue,
-                           std::stop_token& stocken, std::atomic<std::shared_ptr<phmap::flat_hash_map<State, uint8_t>>>& shared_leaf_states, std::mutex& mtx,
+                           std::stop_token& stocken, SharedLeafStates& shared_leaf_states,
                            std::vector<std::pair<State, uint8_t>>& starting_positions,
                            std::vector<uint8_t>& rotation_idxs,
                            std::vector<uint64_t>& num_positions_leafs
                            ) {
+    // check if CPU search is already finished
+    // it is guarantied that there is no positions in shared_leaf_states comeing after this point
+    if (stocken.stop_requested()) {
+        return true;
+    }
+
     for (int i = 0; i < Settings::GetNumGPUThreads(); i++) {
         // not yet finished with calculation
         if (rotation_idxs[i] != uint8_t(-1)) {
@@ -137,23 +143,9 @@ bool AddStartingPositions (std::queue<std::pair<State, uint8_t>>& local_position
         // get new cpu data
         if (local_position_queue.empty()) {
             std::shared_ptr<phmap::flat_hash_map<State, uint8_t>> local_buffer;
-            while (true) {
-                {
-                    // load from shared threads
-                    std::lock_guard lock(mtx);
-                    local_buffer = shared_leaf_states.load(std::memory_order_acquire);
-                    if (local_buffer->size() > 0) {
-                        std::shared_ptr<phmap::flat_hash_map<State, uint8_t>> new_empty_buffer = std::make_shared<phmap::flat_hash_map<State, uint8_t>>();
-                        local_buffer = shared_leaf_states.exchange(new_empty_buffer, std::memory_order_acquire);
-                        break;
-                    }
-                }
-                // check if CPU search is already finished
-                // it is guarantied that there is no positions in shared_leaf_states comeing after this point
-                if (stocken.stop_requested()) {
-                    return true;
-                }
-                std::this_thread::yield(); // prevent busy spin burn
+            // this may fail
+            if (!shared_leaf_states.try_dequeue(local_buffer)) {
+                break;
             }
 
             // insert all elements into local_position_queue
@@ -318,8 +310,8 @@ void FinishedStartingPositions (std::atomic<uint8_t>& atomic_best_depth, Visited
 }
 
 
-void DeviceLeafManager (std::stop_token stocken, std::atomic<std::shared_ptr<phmap::flat_hash_map<State, uint8_t>>>& shared_leaf_states,
-                        std::mutex& mtx, uint64_t& num_positions_leaf, VisitedMap& visited_leaf,
+void DeviceLeafManager (std::stop_token stocken, SharedLeafStates& shared_leaf_states,
+                        uint64_t& num_positions_leaf, VisitedMap& visited_leaf,
                         std::atomic<uint8_t>& atomic_best_depth, std::pair<State, uint8_t>& best_endstate_leafs,
                         const int& thread_idx) {
     // set the device for this thread
@@ -368,7 +360,7 @@ void DeviceLeafManager (std::stop_token stocken, std::atomic<std::shared_ptr<phm
     uint64_t cur_split_idx = 0;
 
     while (true) {
-        bool cpu_stop = AddStartingPositions(local_position_queue, stocken, shared_leaf_states, mtx, starting_positions, rotation_idxs, num_positions_leafs);
+        bool cpu_stop = AddStartingPositions(local_position_queue, stocken, shared_leaf_states, starting_positions, rotation_idxs, num_positions_leafs);
 
         // update all best depths
         uint8_t cur_best_depth = atomic_best_depth;
