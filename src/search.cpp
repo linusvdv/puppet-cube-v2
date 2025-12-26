@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <atomic>
 #include <cstdint>
 #include <mutex>
@@ -17,6 +18,9 @@
 #ifdef USE_CUDA
 #include "search_bridge.hpp"
 #endif  // USE_CUDA
+
+
+using Frontier = phmap::parallel_flat_hash_map<State, uint8_t, phmap::priv::hash_default_hash<State>, phmap::priv::hash_default_eq<State>, phmap::priv::Allocator<std::pair<State, uint8_t>>, 8, std::mutex>;
 
 
 void SolveTB(std::vector<Rotations>& tb_rotations, int tb_layer, State state) {
@@ -141,20 +145,29 @@ void LeafManager (std::stop_token stocken, uint64_t& num_positions_leaf, Visited
 }
 
 
-void FrontierInsert(phmap::flat_hash_map<State, uint8_t>& next_frontier, const State& state, uint8_t cur_depth) {
-    auto find_frontier = next_frontier.find(state);
-    if (find_frontier == next_frontier.end()) {
-        next_frontier[state] = cur_depth;
-    }
-    else if (find_frontier->second > cur_depth) {
-        find_frontier->second = cur_depth;
-    }
+void FrontierInsert(Frontier& next_frontier, const State& state, uint8_t cur_depth) {
+    next_frontier.try_emplace_l(state,
+                                [cur_depth](Frontier::value_type& existing) {
+                                    existing.second = std::min(cur_depth, existing.second);
+                                },
+                                cur_depth
+                                );
 }
 
 
-void DFSNextFrontierSearch (const State& state, VisitedMap& visited_search, phmap::flat_hash_map<State, uint8_t>& next_frontier,
+void VisitedMapInsert(VisitedMap& visited_map, const State& state, uint8_t cur_depth) {
+    visited_map.try_emplace_l(state,
+                              [cur_depth](VisitedMap::value_type& existing) {
+                              existing.second = std::min(cur_depth, existing.second);
+                              },
+                              cur_depth
+                              );
+}
+
+
+void DFSNextFrontierSearch (const State& state, VisitedMap& visited_search, Frontier& next_frontier,
                             std::atomic<uint8_t>& atomic_best_depth, std::pair<State, uint8_t>& best_endstate_search,
-                            std::shared_ptr<phmap::flat_hash_map<State, uint8_t>>& local_buffer,
+                            std::shared_ptr<phmap::flat_hash_map<State, uint8_t>>& local_buffer, std::mutex& mtx_send,
                             std::atomic<std::shared_ptr<phmap::flat_hash_map<State, uint8_t>>>& shared_leaf_states,
                             uint64_t& num_positions_search, const uint64_t& leaf_batch_size, uint8_t cur_depth, uint8_t depth) {
     if (atomic_best_depth < depth) {
@@ -211,6 +224,7 @@ void DFSNextFrontierSearch (const State& state, VisitedMap& visited_search, phma
 
             // swap local buffer with shared leaf states when it is swaped with an empty one
             if (local_buffer->size() >= leaf_batch_size) {
+                std::lock_guard lock(mtx_send);
                 auto shared_data = shared_leaf_states.load(std::memory_order_acquire);
                 while (!shared_data->empty()) {
                     std::this_thread::yield(); // prevent busy spin burn
@@ -225,15 +239,10 @@ void DFSNextFrontierSearch (const State& state, VisitedMap& visited_search, phma
         }
 
         // insert into visited_search
-        if (find_visited == visited_search.end()) {
-            visited_search.insert({next_state.second, cur_depth+1});
-        }
-        else if (find_visited->second > cur_depth+1) {
-            find_visited->second = cur_depth+1;
-        }
+        VisitedMapInsert(visited_search, next_state.second, cur_depth+1);
 
         // Do further DFS
-        DFSNextFrontierSearch(next_state.second, visited_search, next_frontier, atomic_best_depth, best_endstate_search, local_buffer, shared_leaf_states, num_positions_search, leaf_batch_size, cur_depth+1, depth);
+        DFSNextFrontierSearch(next_state.second, visited_search, next_frontier, atomic_best_depth, best_endstate_search, local_buffer, mtx_send, shared_leaf_states, num_positions_search, leaf_batch_size, cur_depth+1, depth);
     }
 
     if (frontier_insert) {
@@ -242,19 +251,20 @@ void DFSNextFrontierSearch (const State& state, VisitedMap& visited_search, phma
 }
 
 
-void FrontierSearch (uint64_t& num_positions_search, VisitedMap& visited_search, std::atomic<uint8_t>& atomic_best_depth, std::pair<State, uint8_t>& best_endstate_search,
+void FrontierSearch (uint64_t& num_positions_search, VisitedMap& visited_search, std::atomic<uint8_t>& atomic_best_depth, std::mutex& mtx_send, std::pair<State, uint8_t>& best_endstate_search,
                std::atomic<std::shared_ptr<phmap::flat_hash_map<State, uint8_t>>>& shared_leaf_states,
-               const uint64_t& leaf_batch_size, uint8_t depth, phmap::flat_hash_map<State, uint8_t>& cur_frontier) {
+               const uint64_t& leaf_batch_size, uint8_t depth, Frontier& cur_frontier, Frontier& next_frontier, int thread_idx) {
     // local buffer for leaf search
     std::shared_ptr<phmap::flat_hash_map<State, uint8_t>> local_buffer = std::make_shared<phmap::flat_hash_map<State, uint8_t>>();
 
     // BFS layer
-    phmap::flat_hash_map<State, uint8_t> next_frontier;
+    int idx = 0;
     for (const std::pair<const State, uint8_t>& position : cur_frontier) {
-        DFSNextFrontierSearch(position.first, visited_search, next_frontier, atomic_best_depth, best_endstate_search, local_buffer, shared_leaf_states, num_positions_search, leaf_batch_size, position.second, depth);
+        if (idx % Settings::GetNumThreads() == thread_idx) {
+            DFSNextFrontierSearch(position.first, visited_search, next_frontier, atomic_best_depth, best_endstate_search, local_buffer, mtx_send, shared_leaf_states, num_positions_search, leaf_batch_size, position.second, depth);
+        }
+        idx++;
     }
-
-    std::swap(cur_frontier, next_frontier);
 }
 
 
@@ -277,15 +287,15 @@ void SearchManager () {
     uint64_t acc_total_num_positions = 0;
     uint64_t acc_depth = 0;
 
-    for (size_t i = 0; i < random_positions.size(); i++) {
+    for (size_t random_positions_idx = 0; random_positions_idx < random_positions.size(); random_positions_idx++) {
         // already in TB
-        if (GetTBLayer(random_positions[i]) >= 0) {
+        if (GetTBLayer(random_positions[random_positions_idx]) >= 0) {
             std::vector<Rotations> tb_rotations;
-            SolveTB(tb_rotations, GetTBLayer(random_positions[i]), random_positions[i]);
+            SolveTB(tb_rotations, GetTBLayer(random_positions[random_positions_idx]), random_positions[random_positions_idx]);
             LOG_EXTRA("Proven optimal solution");
             LOG_EXTRA("Position already in tablebase");
             LOG_EXTRA("solution moves:", tb_rotations);
-            LOG_ALL(SkipSpace("["), SkipSpace(i+1), SkipSpace("/"), SkipSpace(Settings::GetNumRuns()), "] Depth:", GetTBLayer(random_positions[i]), "num_positions: 0");
+            LOG_ALL(SkipSpace("["), SkipSpace(random_positions_idx+1), SkipSpace("/"), SkipSpace(Settings::GetNumRuns()), "] Depth:", GetTBLayer(random_positions[random_positions_idx]), "num_positions: 0");
             continue;
         }
 
@@ -304,10 +314,10 @@ void SearchManager () {
 
         // keep over the different depths
         // the frontier is moved to the position exactly before the cuts (stop because of max_heuristic or send to gpu)
-        phmap::flat_hash_map<State, uint8_t> cur_frontier;
-        cur_frontier[random_positions[i]] = 0;
+        Frontier cur_frontier;
+        cur_frontier[random_positions[random_positions_idx]] = 0;
         VisitedMap visited_search;
-        visited_search[random_positions[i]] = 0;
+        visited_search[random_positions[random_positions_idx]] = 0;
 
         // sening data from search to LeafManager
         std::atomic<std::shared_ptr<phmap::flat_hash_map<State, uint8_t>>> shared_leaf_states;
@@ -318,20 +328,21 @@ void SearchManager () {
 
         // go over the different depths (iterative deepening)
         Cube heuristic;
-        int max_heuristic = heuristic.GetMaxHeuristic(random_positions[i]);
+        int max_heuristic = heuristic.GetMaxHeuristic(random_positions[random_positions_idx]);
         for (int id_depth = max_heuristic+1; true; id_depth++) {
             LOG_EXTRA("Start with depth", id_depth);
             atomic_best_depth = id_depth;
 
             // Start LeafManagers on seperate threads
             std::vector<std::jthread> leaf_manager_threads;
-            std::mutex mtx;
+            std::mutex mtx_recieve;
+            std::mutex mtx_send;
             std::vector<VisitedMap> visited_leaf_threads(Settings::GetNumThreads());
             std::vector<uint64_t> num_positions_leaf_threads(Settings::GetNumThreads(), 0);
             #ifdef USE_CUDA
             if (Settings::UseCuda()) {
                 for (int i = 0; i < Settings::GetNumThreads(); i++) {
-                    leaf_manager_threads.push_back(std::jthread(DeviceLeafManager, std::ref(shared_leaf_states), std::ref(mtx),
+                    leaf_manager_threads.push_back(std::jthread(DeviceLeafManager, std::ref(shared_leaf_states), std::ref(mtx_recieve),
                                                                 std::ref(num_positions_leaf_threads[i]), std::ref(visited_leaf_threads[i]),
                                                                 std::ref(atomic_best_depth), std::ref(best_endstate_leaf_threads[i]), leaf_batch_size, i));
                 }
@@ -342,12 +353,19 @@ void SearchManager () {
                 for (int i = 0; i < Settings::GetNumThreads(); i++) {
                     leaf_manager_threads.push_back(std::jthread(LeafManager, std::ref(num_positions_leaf_threads[i]), std::ref(visited_leaf_threads[i]),
                                                                 std::ref(atomic_best_depth), std::ref(best_endstate_leaf_threads[i]),
-                                                                std::ref(shared_leaf_states), leaf_batch_size, i, std::ref(mtx)));
+                                                                std::ref(shared_leaf_states), leaf_batch_size, i, std::ref(mtx_recieve)));
                 }
             }
 
             // Search
-            FrontierSearch(num_positions_search, visited_search, atomic_best_depth, best_endstate_search, shared_leaf_states, leaf_batch_size, id_depth, cur_frontier);
+            Frontier next_frontier;
+            {
+                std::vector<std::jthread> frontier_search_threads;
+                for (int i = 0; i < Settings::GetNumThreads(); i++) {
+                    FrontierSearch(num_positions_search, visited_search, atomic_best_depth, mtx_send, best_endstate_search, shared_leaf_states, leaf_batch_size, id_depth, cur_frontier, next_frontier, i);
+                }
+            }
+            std::swap(cur_frontier, next_frontier);
 
             // wait until all shared position are empty
             auto shared_data = shared_leaf_states.load(std::memory_order_acquire);
@@ -394,7 +412,7 @@ void SearchManager () {
 
         LOG_EXTRA("solution moves:", search_rotations, tb_rotations);
 
-        LOG_ALL(SkipSpace("["), SkipSpace(i+1), SkipSpace("/"), SkipSpace(Settings::GetNumRuns()), "] Depth:", int(atomic_best_depth), "num_positions:", total_num_positions);
+        LOG_ALL(SkipSpace("["), SkipSpace(random_positions_idx+1), SkipSpace("/"), SkipSpace(Settings::GetNumRuns()), "] Depth:", int(atomic_best_depth), "num_positions:", total_num_positions);
         LOG_EXTRA("total number positions:", total_num_positions, "search positions", num_positions_search, "leaf positions", num_positions_leaf);
         LOG_MEMORY();
     }
