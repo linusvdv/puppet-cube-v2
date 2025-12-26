@@ -20,11 +20,11 @@ int main (int argc, char *argv[]) {
     LOG_INFO("Puppet Cube V2 by Linus VandeVondele");
     LOG_MEMORY();
 
-    if (Settings::GetLogInfo()) {
+    if (Settings::GetHardwareInfo()) {
         GetHostInfo();
     }
     #ifdef USE_CUDA
-    if (Settings::GetLogInfo() && Settings::UseCuda()) {
+    if (Settings::GetHardwareInfo() && Settings::UseCuda()) {
         GetDeviceInfo();
     }
     DCubeInitialization();

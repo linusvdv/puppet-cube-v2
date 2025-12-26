@@ -13,45 +13,62 @@
 #endif  // USE_CUDA
 
 
-std::string Settings::root_path;
+// default values for the settings
+// general informations
+std::string Settings::root_path;                // automatic detection
 #ifdef USE_CUDA
 bool Settings::use_cuda = true;
 #else
 bool Settings::use_cuda = false;
 #endif
-int Settings::device_count = 1;
+int Settings::device_count;                     // automatic detection
+bool Settings::hardware_info = false;
+
+// search starting position
+size_t Settings::num_runs = 10;                 // NOLINT
+int Settings::scrambling_depth = 100;           // NOLINT
+int Settings::min_corner_heuristic = 0;
+
+// search
+int Settings::num_threads;                      // automatic detection
+int Settings::num_gpu_upload_threads;           // automatic detection
+int Settings::num_gputhreads;                   // automatic detection
+int Settings::num_positions_per_batch = 1000;   // NOLINT
+int Settings::num_parallel_batches = 10;        // NOLINT
+
+// tablebase
+int Settings::tb_depth = 6;                     // NOLINT
+
+// performance testing
 bool Settings::test_bcht = false;
+
 bool Settings::test_dfs = false;
 int Settings::dfs_depth = 4;
 size_t Settings::num_dfs_positions = 100000;  // NOLINT
-size_t Settings::num_positions = 10000000;  // NOLINT
-size_t Settings::num_runs = 10;
-int Settings::scrambling_depth = 100;  // NOLINT
-int Settings::num_threads = 1;
-int Settings::tb_depth = 6;  // NOLINT
-int Settings::tb_depth_gpu = 8;  // NOLINT
-bool Settings::log_info = false;
-int Settings::min_corner_heuristic = 0;
-float Settings::heuristic_factor = 1.55;
 
 
 static struct option long_options[] = {
     {"help", no_argument, NULL, 'h'},
+
+    // general informations
     {"root_path", required_argument, NULL, 0},
     {"use_cuda", required_argument, NULL, 0},
     {"device_count", required_argument, NULL, 'd'},
     {"info", no_argument, NULL, 'i'},
     {"log_level", required_argument, NULL, 'l'},
 
-    {"threads", required_argument, NULL, 't'},
-    {"tb_depth", required_argument, NULL, 0},
-    {"tb_depth_gpu", required_argument, NULL, 0},
-    {"scrambling_depth", required_argument, NULL, 's'},
-    {"num_positions", required_argument, NULL, 'p'},
+    // search starting postion
     {"num_runs", required_argument, NULL, 'r'},
+    {"scrambling_depth", required_argument, NULL, 's'},
     {"min_corner_heuristic", required_argument, NULL, 'm'},
-    {"heuristic_factor", required_argument, NULL, 0},
 
+    // search
+    {"threads", required_argument, NULL, 't'},
+
+    // tablebase
+    {"tb_depth", required_argument, NULL, 0},
+
+    // performance testing
     {"BCHT", no_argument, NULL, 'B'},
 
     {"dfs", no_argument, NULL, 'D'},
@@ -71,20 +88,22 @@ usage: ./build/bin/PuppetCubeV2 [options]
 
 list of options
     -h --help                  show this message
-    -i --info                  show additional hardware info
+
     --root_path                path to root folder puppet-cube-v2                         [./PathToPuppetCubeV2/../../]
     --use_cuda                 run cuda                                                   [USE_CUDA]     (true|1|false|0)
     -d --device_count          number of gpu                                              [NUM_GPUS]     (1, NUM_GPUS)
+    -i --info                  show additional hardware info
     -l --log_level             logger/error level                                         [memory]       (critical|error|warning|info|all|extra|memory)
 
-    -t --threads               number of threads used in the program                      [MAX_THREADS]  (1, MAX_THREADS)
-    --tb_depth                 depth of the tablebase (9 uses 40 GB RAM)                  [6]            (0, 9)
-    --tb_depth_gpu             how much get sent to GPU (<= CPU)                          [8]            (0, 9)
-    -s --scrambling_depth      how many moves to scramble                                 [100]          (0, 1000000)
-    -p --num_positions         max number of positions used in the search                 [1e7]          (0, 1e18)
     -r --num_runs              number of runs                                             [10]           (0, 1e18)
+    -s --scrambling_depth      how many moves to scramble                                 [100]          (0, 1000000)
     -m --min_corner_heuristic  all starting position have at least this corner heuristic  [0]            (0, 27)
-    --heuristic_factor         effects the time to find the first and optimal solution    [1.55]         (0.8, 100)
+
+    -t --threads               number of threads used in the program                      [MAX_THREADS]  (1, MAX_THREADS)
+
+    --tb_depth                 depth of the tablebase (9 uses 40 GB RAM)                  [6]            (0, 9)
+
+    -p --num_positions         max number of positions used in the search                 [1e7]          (0, 1e18)
 
     -B --BCHT                  time BCHT with comparison to phmap
 
@@ -159,15 +178,7 @@ bool GetTFromOptarg (T& num, T low, T upper, const std::string& option) {
     }
 }
 
-
-Settings::Settings (int argc, char *argv[]) {
-    num_threads = std::thread::hardware_concurrency();
-    #ifdef USE_CUDA
-    device_count = GetCUDADeviceCount();
-    #endif  // USE_CUDA
-
-    std::vector<std::string> arguments(argv, argv+argc);
-
+void Settings::SetDefault (std::vector<std::string>& arguments) {
     // get root path
     std::string temp_root_path = arguments[0];
     std::size_t executable_place = temp_root_path.find_last_of("/\\");
@@ -180,7 +191,30 @@ Settings::Settings (int argc, char *argv[]) {
     temp_root_path.append("/../../");
     root_path.append(temp_root_path);
 
-    const char* short_options = "hiBt:p:r:m:Ds:l:";
+    // device_count
+    #ifdef USE_CUDA
+    device_count = GetCUDADeviceCount();
+    #elif
+    device_count = 0;
+    #endif  // USE_CUDA
+
+    num_threads = std::thread::hardware_concurrency();
+    num_gpu_upload_threads = 4 * device_count;
+
+    #ifdef USE_CUDA
+    // only the first device gets checked
+    num_gputhreads = (GetThreadsPerDevice(0) / 2 / kBlockDim) * kBlockDim;
+    #elif
+    num_gputhreads = 0;
+    #endif  // USE_CUDA
+}
+
+
+Settings::Settings (int argc, char *argv[]) {
+    std::vector<std::string> arguments(argv, argv+argc);
+    SetDefault(arguments);
+
+    const char* short_options = "hd:il:r:s:m:t:BD";
     opterr = 0; // supress error messages from getopt_long
     int option_index;
     signed char cop;
@@ -189,13 +223,13 @@ Settings::Settings (int argc, char *argv[]) {
         switch (cop) {
             case 'h':
                 LOG_ALL(help_msg);
-                // --help
                 exit(0);
-            case 'i':
-                log_info = true;
-                break;
+
             case 'd':
                 GetTFromOptarg(device_count, 1, device_count, "DEVICE COUNT");
+                break;
+            case 'i':
+                hardware_info = true;
                 break;
             case 'l': {
                 std::string log_level = std::string(optarg);
@@ -225,48 +259,45 @@ Settings::Settings (int argc, char *argv[]) {
                 }
                 break;
                 }
-            case 'B':
-                test_bcht = true;
-                break;
-            case 't':
-                GetTFromOptarg(num_threads, 1, num_threads, "THREADS");
-                break;
-            case 'D':
-                test_dfs = true;
+
+            case 'r':
+                GetTFromOptarg(num_runs, size_t(0), size_t(1e18), "NUM RUNS");  // NOLINT
                 break;
             case 's':
                 GetTFromOptarg(scrambling_depth, 0, 1000000, "SCRAMBLING DEPTH"); // NOLINT
                 break;
-            case 'p':
-                GetTFromOptarg(num_positions, size_t(0), size_t(1e18), "NUM POSITIONS");  // NOLINT
-                break;
-            case 'r':
-                GetTFromOptarg(num_runs, size_t(0), size_t(1e18), "NUM RUNS");  // NOLINT
-                break;
             case 'm':
                 GetTFromOptarg(min_corner_heuristic, 0, 27, "MIN CORNER HEURISTIC");
                 break;
+
+            case 't':
+                GetTFromOptarg(num_threads, 1, num_threads, "THREADS");
+                break;
+
+            case 'B':
+                test_bcht = true;
+                break;
+            case 'D':
+                test_dfs = true;
+                break;
+
             case 0:
-                if (std::string(long_options[option_index].name) == "error_level") {
+                if (std::string(long_options[option_index].name) == "root_path") {
                     root_path = std::string(optarg);
                 }
+                if (std::string(long_options[option_index].name) == "use_cuda") {
+                    GetBoolFromOptarg(use_cuda, "USE CUDA");
+                }
+
                 if (std::string(long_options[option_index].name) == "tb_depth") {
                     GetTFromOptarg(tb_depth, 0, 9, "TB DEPTH"); // NOLINT
                 }
-                if (std::string(long_options[option_index].name) == "tb_depth_gpu") {
-                    GetTFromOptarg(tb_depth_gpu, 0, 9, "TB DEPTH GPU"); // NOLINT
-                }
+
                 if (std::string(long_options[option_index].name) == "dfs_depth") {
                     GetTFromOptarg(dfs_depth, 1, kMaxDFSDepth, "DFS DEPTH"); // NOLINT
                 }
                 if (std::string(long_options[option_index].name) == "num_dfs_positions") {
                     GetTFromOptarg(num_dfs_positions, size_t(1), size_t(1e18), "NUM DSF POSITIONS"); // NOLINT
-                }
-                if (std::string(long_options[option_index].name) == "use_cuda") {
-                    GetBoolFromOptarg(use_cuda, "USE CUDA");
-                }
-                if (std::string(long_options[option_index].name) == "heuristic_factor") {
-                    GetTFromOptarg(heuristic_factor, float(0.8), float(100.0), "HEURISTIC FACROR");
                 }
                 break;
             case '?':
@@ -288,6 +319,9 @@ Settings::Settings (int argc, char *argv[]) {
     }
     #endif  // USE_CUDA
 
-    // tb_depth
-    tb_depth_gpu = std::min(tb_depth, tb_depth_gpu);
+    if (use_cuda && device_count <= 0) {
+        use_cuda = false;
+        LOG_ERROR("No GPU detected!");
+        LOG_WARNING("Disabled CUDA search");
+    }
 }

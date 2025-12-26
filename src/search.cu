@@ -122,13 +122,13 @@ __global__ void DeviceLeafSearch (uint64_t* d_num_positions_leafs, const std::pa
 
 
 // add new starting_positions from cpu
-bool AddStartingPositions (std::queue<std::pair<State, uint8_t>>& local_position_queue, const uint64_t& leaf_batch_size,
+bool AddStartingPositions (std::queue<std::pair<State, uint8_t>>& local_position_queue,
                            std::stop_token& stocken, std::atomic<std::shared_ptr<phmap::flat_hash_map<State, uint8_t>>>& shared_leaf_states, std::mutex& mtx,
                            std::vector<std::pair<State, uint8_t>>& starting_positions,
                            std::vector<uint8_t>& rotation_idxs,
                            std::vector<uint64_t>& num_positions_leafs
                            ) {
-    for (uint64_t i = 0; i < leaf_batch_size; i++) {
+    for (int i = 0; i < Settings::GetNumGPUThreads(); i++) {
         // not yet finished with calculation
         if (rotation_idxs[i] != uint8_t(-1)) {
             continue;
@@ -173,7 +173,7 @@ bool AddStartingPositions (std::queue<std::pair<State, uint8_t>>& local_position
 
 
 // split starting positions that are left in finished starting_positions
-void SplitStartingPositions (uint64_t& cur_split_idx, const uint64_t& leaf_batch_size, VisitedMap& visited_leaf,
+void SplitStartingPositions (uint64_t& cur_split_idx, VisitedMap& visited_leaf,
                              std::atomic<uint8_t>& atomic_best_depth, std::pair<State, uint8_t>& best_endstate_leafs, const int& thread_idx,
                              std::vector<uint8_t>& rotation_idxs,
                              std::vector<URotations>& urotations,
@@ -181,8 +181,8 @@ void SplitStartingPositions (uint64_t& cur_split_idx, const uint64_t& leaf_batch
                              std::vector<uint64_t>& num_positions_leafs, uint64_t num_positions_leaf
                              ) {
     uint64_t finished_cnt = 0;
-    std::vector<bool> finished(leaf_batch_size, false);
-    for (uint64_t i = 0; i < leaf_batch_size; i++) {
+    std::vector<bool> finished(Settings::GetNumGPUThreads(), false);
+    for (int i = 0; i < Settings::GetNumGPUThreads(); i++) {
         if (rotation_idxs[i] == uint8_t(-1)) {
             finished[i] = true;
             finished_cnt++;
@@ -191,11 +191,11 @@ void SplitStartingPositions (uint64_t& cur_split_idx, const uint64_t& leaf_batch
 
     int next_idx = 0;
 
-    uint64_t stop_split_idx = (cur_split_idx + leaf_batch_size - 1) % leaf_batch_size;
+    uint64_t stop_split_idx = (cur_split_idx + Settings::GetNumGPUThreads() - 1) % Settings::GetNumGPUThreads();
     while (stop_split_idx != cur_split_idx && finished_cnt > kNumRotations) {
         if (finished[cur_split_idx]) {
             cur_split_idx++;
-            cur_split_idx %= leaf_batch_size;
+            cur_split_idx %= Settings::GetNumGPUThreads();
             continue;
         }
 
@@ -203,7 +203,7 @@ void SplitStartingPositions (uint64_t& cur_split_idx, const uint64_t& leaf_batch
             rotation_idxs[cur_split_idx] == 0) {
             // LOG_WARNING("Should never occur", rotation_idxs[cur_split_idx]);
             cur_split_idx++;
-            cur_split_idx %= leaf_batch_size;
+            cur_split_idx %= Settings::GetNumGPUThreads();
             continue;
         }
 
@@ -277,7 +277,7 @@ void SplitStartingPositions (uint64_t& cur_split_idx, const uint64_t& leaf_batch
 
 // remove the associated data from finished starting_positions
 // handel new found best solutions
-void FinishedStartingPositions (std::atomic<uint8_t>& atomic_best_depth, const uint64_t& leaf_batch_size, VisitedMap& visited_leaf,
+void FinishedStartingPositions (std::atomic<uint8_t>& atomic_best_depth, VisitedMap& visited_leaf,
                                 std::pair<State, uint8_t>& best_endstate_leafs, uint64_t& num_positions_leaf, const int& thread_idx,
                                 std::vector<uint8_t>& rotation_idxs,
                                 std::vector<std::pair<State, uint8_t>>& starting_positions,
@@ -286,7 +286,7 @@ void FinishedStartingPositions (std::atomic<uint8_t>& atomic_best_depth, const u
                                 std::vector<uint64_t>& num_positions_leafs
                                 ) {
     uint8_t cur_best_depth = atomic_best_depth;
-    for (uint64_t i = 0; i < leaf_batch_size; i++) {
+    for (int i = 0; i < Settings::GetNumGPUThreads(); i++) {
         // better solution
         if (best_depths[i] < cur_best_depth) {
             // do a CPU search for this position
@@ -321,7 +321,7 @@ void FinishedStartingPositions (std::atomic<uint8_t>& atomic_best_depth, const u
 void DeviceLeafManager (std::stop_token stocken, std::atomic<std::shared_ptr<phmap::flat_hash_map<State, uint8_t>>>& shared_leaf_states,
                         std::mutex& mtx, uint64_t& num_positions_leaf, VisitedMap& visited_leaf,
                         std::atomic<uint8_t>& atomic_best_depth, std::pair<State, uint8_t>& best_endstate_leafs,
-                        const uint64_t& leaf_batch_size, const int& thread_idx) {
+                        const int& thread_idx) {
     // set the device for this thread
     int gpu_device_idx = thread_idx % Settings::GetDeviceCount();
     cudaError_t err = cudaSetDevice(gpu_device_idx);
@@ -334,11 +334,11 @@ void DeviceLeafManager (std::stop_token stocken, std::atomic<std::shared_ptr<phm
     cudaStreamCreate(&cuda_stream);
 
     // updated for each position
-    std::vector<uint8_t> rotation_idxs(leaf_batch_size, uint8_t(-1));
-    std::vector<std::pair<State, uint8_t>> starting_positions(leaf_batch_size);
-    std::vector<uint8_t> best_depths(leaf_batch_size, atomic_best_depth);
-    std::vector<URotations> urotations(leaf_batch_size, {0, 0, 0, 0});
-    std::vector<uint64_t> num_positions_leafs(leaf_batch_size, 0);
+    std::vector<uint8_t> rotation_idxs(Settings::GetNumGPUThreads(), uint8_t(-1));
+    std::vector<std::pair<State, uint8_t>> starting_positions(Settings::GetNumGPUThreads());
+    std::vector<uint8_t> best_depths(Settings::GetNumGPUThreads(), atomic_best_depth);
+    std::vector<URotations> urotations(Settings::GetNumGPUThreads(), {0, 0, 0, 0});
+    std::vector<uint64_t> num_positions_leafs(Settings::GetNumGPUThreads(), 0);
 
     // pin host code
     HostRegister(rotation_idxs);
@@ -368,18 +368,18 @@ void DeviceLeafManager (std::stop_token stocken, std::atomic<std::shared_ptr<phm
     uint64_t cur_split_idx = 0;
 
     while (true) {
-        bool cpu_stop = AddStartingPositions(local_position_queue, leaf_batch_size, stocken, shared_leaf_states, mtx, starting_positions, rotation_idxs, num_positions_leafs);
+        bool cpu_stop = AddStartingPositions(local_position_queue, stocken, shared_leaf_states, mtx, starting_positions, rotation_idxs, num_positions_leafs);
 
         // update all best depths
         uint8_t cur_best_depth = atomic_best_depth;
-        for (uint64_t i = 0; i < leaf_batch_size; i++) {
+        for (int i = 0; i < Settings::GetNumGPUThreads(); i++) {
             best_depths[i] = cur_best_depth;
         }
 
         // check finished all positions
         if (cpu_stop) {
             bool has_work = false;
-            for (uint64_t i = 0; i < leaf_batch_size; i++) {
+            for (int i = 0; i < Settings::GetNumGPUThreads(); i++) {
                 // not yet finished with calculation
                 if (rotation_idxs[i] != uint8_t(-1)) {
                     has_work = true;
@@ -400,9 +400,9 @@ void DeviceLeafManager (std::stop_token stocken, std::atomic<std::shared_ptr<phm
         MemcpyToDeviceStream(num_positions_leafs, d_num_positions_leafs, cuda_stream);
 
         // only leaf_batch_size threads
-        size_t grid_dim = ((leaf_batch_size-1)/kBlockDim)+1;
+        size_t grid_dim = ((Settings::GetNumGPUThreads()-1)/kBlockDim)+1;
         DeviceLeafSearch<<<grid_dim, kBlockDim, 0, cuda_stream>>>(d_num_positions_leafs, d_starting_positions,
-                            d_rotation_idxs, d_best_depths, d_urotations, Settings::GetTBDepth(), leaf_batch_size, GetDCube(gpu_device_idx));
+                            d_rotation_idxs, d_best_depths, d_urotations, Settings::GetTBDepth(), Settings::GetNumGPUThreads(), GetDCube(gpu_device_idx));
         cudaError_t err = cudaGetLastError(); // launch of Device
         if (err != cudaSuccess) {
             LOG_CRITICAL("CUDA error:", cudaGetErrorString(err));
@@ -419,8 +419,8 @@ void DeviceLeafManager (std::stop_token stocken, std::atomic<std::shared_ptr<phm
             LOG_CRITICAL("CUDA error:", cudaGetErrorString(err));
         }
 
-        FinishedStartingPositions(atomic_best_depth, leaf_batch_size, visited_leaf, best_endstate_leafs, num_positions_leaf, thread_idx, rotation_idxs, starting_positions, best_depths, urotations, num_positions_leafs);
-        SplitStartingPositions(cur_split_idx, leaf_batch_size, visited_leaf, atomic_best_depth, best_endstate_leafs, thread_idx, rotation_idxs, urotations, starting_positions, num_positions_leafs, num_positions_leaf);
+        FinishedStartingPositions(atomic_best_depth, visited_leaf, best_endstate_leafs, num_positions_leaf, thread_idx, rotation_idxs, starting_positions, best_depths, urotations, num_positions_leafs);
+        SplitStartingPositions(cur_split_idx, visited_leaf, atomic_best_depth, best_endstate_leafs, thread_idx, rotation_idxs, urotations, starting_positions, num_positions_leafs, num_positions_leaf);
     }
 
     LOG_EXTRA(SkipSpace("#"), thread_idx, "finished with all kernels");

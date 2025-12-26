@@ -2,7 +2,6 @@
 
 #include "logger.hpp"
 
-
 int GetCUDADeviceCount() {
     int device_count;
     cudaError_t err = cudaGetDeviceCount(&device_count);
@@ -10,6 +9,17 @@ int GetCUDADeviceCount() {
         LOG_CRITICAL(cudaGetErrorString(err));
     }
     return device_count;
+}
+
+
+int GetThreadsPerDevice(int dev_idx) {
+    cudaDeviceProp prop;
+    cudaError_t err = cudaGetDeviceProperties(&prop, dev_idx);
+    if (err != cudaSuccess) {
+        LOG_CRITICAL(cudaGetErrorString(err));
+    }
+
+    return prop.maxThreadsPerMultiProcessor*prop.multiProcessorCount;
 }
 
 

@@ -45,19 +45,22 @@ usage: ./build/bin/PuppetCubeV2 [options]
 
 list of options
     -h --help                  show this message
-    -i --info                  show additional hardware info
+
     --root_path                path to root folder puppet-cube-v2                         [./PathToPuppetCubeV2/../../]
     --use_cuda                 run cuda                                                   [USE_CUDA]     (true|1|false|0)
+    -d --device_count          number of gpu                                              [NUM_GPUS]     (1, NUM_GPUS)
+    -i --info                  show additional hardware info
     -l --log_level             logger/error level                                         [memory]       (critical|error|warning|info|all|extra|memory)
 
-    -t --threads               number of threads used in the program                      [MAX_THREADS]  (1, MAX_THREADS)
-    --tb_depth                 depth of the tablebase (9 uses 40 GB RAM)                  [6]            (0, 9)
-    --tb_depth_gpu             how much get sent to GPU (<= CPU)                          [8]            (0, 9)
-    -s --scrambling_depth      how many moves to scramble                                 [100]          (0, 1000000)
-    -p --num_positions         max number of positions used in the search                 [1e7]          (0, 1e18)
     -r --num_runs              number of runs                                             [10]           (0, 1e18)
+    -s --scrambling_depth      how many moves to scramble                                 [100]          (0, 1000000)
     -m --min_corner_heuristic  all starting position have at least this corner heuristic  [0]            (0, 27)
-    --heuristic_factor         effects the time to find the first and optimal solution    [1.55]         (0.5, 100)
+
+    -t --threads               number of threads used in the program                      [MAX_THREADS]  (1, MAX_THREADS)
+
+    --tb_depth                 depth of the tablebase (9 uses 40 GB RAM)                  [6]            (0, 9)
+
+    -p --num_positions         max number of positions used in the search                 [1e7]          (0, 1e18)
 
     -B --BCHT                  time BCHT with comparison to phmap
 
