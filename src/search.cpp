@@ -119,7 +119,16 @@ void LeafManager (std::stop_token stocken, uint64_t& num_positions_leaf, Visited
                   SharedLeafStates& shared_leaf_states, const int& thread_idx) {
     std::shared_ptr<phmap::flat_hash_map<State, uint8_t>> local_buffer;
     while (!stocken.stop_requested()) {
-        bool is_new = shared_leaf_states.try_dequeue(local_buffer);
+        bool is_new = false;
+        {
+            std::lock_guard<std::mutex> lock(shared_leaf_states.mtx);
+            if (!shared_leaf_states.shared_ptrs.empty()) {
+                local_buffer = std::move(shared_leaf_states.shared_ptrs.front());
+                shared_leaf_states.shared_ptrs.pop();
+                shared_leaf_states.cv.notify_one();
+                is_new = true;
+            }
+        }
 
         if (is_new) {
             for (const std::pair<State, uint8_t> starting_position : *local_buffer) {
@@ -128,9 +137,6 @@ void LeafManager (std::stop_token stocken, uint64_t& num_positions_leaf, Visited
                         best_endstate_leafs, visited_leaf,
                         num_positions_leaf, atomic_best_depth, thread_idx);
             }
-        }
-        else {
-            std::this_thread::yield(); // prevent busy spin burn
         }
     }
 }
@@ -203,7 +209,7 @@ void DFSNextFrontierSearch (const State& state, VisitedMap& visited_search, Fron
         if (std::max(next_cube.GetMaxHeuristic(next_state.second), uint8_t(Settings::GetTBDepth()+1)) + cur_depth + 1 >= depth - 3 &&
             depth < 30 + Settings::GetTBDepth() + cur_depth + 1 &&  // fits in the rotation registers
             cur_depth + 1 > 5 &&  // more than 5 moves need to be already made
-            depth - cur_depth - 1 - Settings::GetTBDepth() < 10) { // less than 10 to go
+            depth - cur_depth - 1 - Settings::GetTBDepth() < 12) { // this value can be tweeked to have more cpu calculation needed
 
             auto find_local_buffer = local_buffer->find(next_state.second);
             if (find_local_buffer == local_buffer->end()) {
@@ -213,14 +219,14 @@ void DFSNextFrontierSearch (const State& state, VisitedMap& visited_search, Fron
                 find_local_buffer->second = cur_depth + 1;
             }
 
-            // swap local buffer with shared leaf states when it is swaped with an empty one
+            // insert local buffer when there is space
             if (int(local_buffer->size()) >= Settings::GetNumPositionsPerBatch()) {
-                while (shared_leaf_states.size_approx() > Settings::GetNumParallelBatches()) {
-                    std::this_thread::yield(); // prevent busy spin burn
-                }
-                shared_leaf_states.enqueue(local_buffer);
+                std::unique_lock<std::mutex> lock(shared_leaf_states.mtx);
+                shared_leaf_states.cv.wait(lock, [&] {
+                    return int(shared_leaf_states.shared_ptrs.size()) <= Settings::GetNumParallelBatches();
+                    });
+                shared_leaf_states.shared_ptrs.push(std::move(local_buffer));
                 local_buffer = std::make_shared<phmap::flat_hash_map<State, uint8_t>>();
-                LOG_EXTRA("appr size of shared leaf states:", shared_leaf_states.size_approx());
             }
 
             frontier_insert = true;
@@ -357,8 +363,13 @@ void SearchManager () {
             }
             std::swap(cur_frontier, next_frontier);
 
-            // TODO: wait until all shared position are empty
-            while (shared_leaf_states.size_approx() > 0) {}
+            // wait until queue is empty
+            {
+                std::unique_lock<std::mutex> lock(shared_leaf_states.mtx);
+                shared_leaf_states.cv.wait(lock, [&] {
+                    return shared_leaf_states.shared_ptrs.empty();
+                });
+            }
             LOG_EXTRA("start with finishing search");
 
             // Stop LeafManager

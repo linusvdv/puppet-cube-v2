@@ -130,7 +130,7 @@ bool AddStartingPositions (std::queue<std::pair<State, uint8_t>>& local_position
                            ) {
     // check if CPU search is already finished
     // it is guarantied that there is no positions in shared_leaf_states comeing after this point
-    if (stocken.stop_requested()) {
+    if (local_position_queue.empty() && stocken.stop_requested()) {
         return true;
     }
 
@@ -143,10 +143,15 @@ bool AddStartingPositions (std::queue<std::pair<State, uint8_t>>& local_position
         // get new cpu data
         if (local_position_queue.empty()) {
             std::shared_ptr<phmap::flat_hash_map<State, uint8_t>> local_buffer;
-            // this may fail
-            if (!shared_leaf_states.try_dequeue(local_buffer)) {
+
+            std::lock_guard<std::mutex> lock(shared_leaf_states.mtx);
+            if (shared_leaf_states.shared_ptrs.empty()) {
                 break;
             }
+
+            local_buffer = std::move(shared_leaf_states.shared_ptrs.front());
+            shared_leaf_states.shared_ptrs.pop();
+            shared_leaf_states.cv.notify_one();
 
             // insert all elements into local_position_queue
             for (const auto& new_pos : *local_buffer) {
