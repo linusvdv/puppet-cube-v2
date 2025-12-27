@@ -88,13 +88,13 @@ __device__ constexpr uint8_t kDLegalMoveIndex[kDNumRotations] = {
 };
 
 
-__device__ DRotateReturn DCube::Rotate(const DState& prev_state, const uint8_t& rotation) {
+__device__ DRotateReturn DCube::Rotate(const DState& prev_state, const uint8_t& rotation, bool rev) {
     uint16_t corner_orientation = prev_state.hash_2 >> 20;      // 12 bites         NOLINT
     uint16_t corner_position = prev_state.hash_1;               // 16 bites         NOLINT
     uint16_t edge_orientation = prev_state.hash_3 >> 20;        // 11 bites         NOLINT
     uint32_t edge_position_1 = prev_state.hash_2 & ((1<<20)-1); // 20 bites         NOLINT
     uint32_t edge_position_2 = prev_state.hash_3 & ((1<<20)-1); // 20 bites         NOLINT
-    if (kDLegalMoveIndex[rotation] != 0 && ((d_corner_heuristics[(corner_orientation*kDNumCornerPositions) + corner_position] >> kDLegalMoveIndex[rotation]) & 1) == 0) {
+    if (!rev && kDLegalMoveIndex[rotation] != 0 && ((d_corner_heuristics[(corner_orientation*kDNumCornerPositions) + corner_position] >> kDLegalMoveIndex[rotation]) & 1) == 0) {
         return {false, prev_state};
     }
     corner_orientation = d_corner_orientations[(corner_orientation*kDNumRotations) + rotation];

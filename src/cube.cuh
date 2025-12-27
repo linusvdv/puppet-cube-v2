@@ -131,7 +131,7 @@ public:
     __host__ void UploadTablebaseToDevice(const std::vector<State>& tablebebase, int gpu_device_idx);
 
 
-    __device__ DRotateReturn Rotate(const DState& prev_state, const uint8_t& rotation);
+    __device__ DRotateReturn Rotate(const DState& prev_state, const uint8_t& rotation, bool rev);
 
     __device__ bool DTablebaseContains(const DState& state);
 

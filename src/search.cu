@@ -38,11 +38,11 @@ __global__ void DeviceLeafSearch (uint64_t* d_num_positions_leafs, const std::pa
     // do the rotations such that state is again at the outcome state it was previously (somewhere in the tree)
     for (int i = 0; i < rotation_idx && rotation_idx != uint8_t(-1); i++) {
         if (rotations.At(i) > kNumRotations) {
-            state = dcube.Rotate(state, rotations.At(i) ^ uint8_t(1<<7)).state;
+            state = dcube.Rotate(state, rotations.At(i) ^ uint8_t(1<<7), false).state;
         }
     }
     if (rotation_idx != uint8_t(-1) && rotations.At(rotation_idx) > kNumRotations) {
-        state = dcube.Rotate(state, rotations.At(rotation_idx) ^ uint8_t(1<<7)).state;
+        state = dcube.Rotate(state, rotations.At(rotation_idx) ^ uint8_t(1<<7), false).state;
     }
 
     // make a constant number of position during each kernal function call
@@ -76,7 +76,7 @@ __global__ void DeviceLeafSearch (uint64_t* d_num_positions_leafs, const std::pa
         }
 
         // do the rotation
-        DRotateReturn next_pos = dcube.Rotate(state, rotation);
+        DRotateReturn next_pos = dcube.Rotate(state, rotation, rev);
         // it is garantied that the undo rotation of a cube is always possible in this leaf search
         // if it is an illegal search skip this rotation
         if (!next_pos.isLegal) {
@@ -99,15 +99,17 @@ __global__ void DeviceLeafSearch (uint64_t* d_num_positions_leafs, const std::pa
 
         // not able to improve the current leaf search skip this node
         DHeuristics heuristics;
+        uint8_t max_heuristic = heuristics.GetMaxHeuristic(state, dcube);
+
         // check if the current state is in tablebase and is therefore a new best solution
-        if (dcube.DTablebaseContains(state)) {
+        if (max_heuristic <= tb_depth && dcube.DTablebaseContains(state)) {
             uint8_t depth = rotation_idx + tb_depth + depth_offset;
             best_depth = min(depth, best_depth);
             rotations.Set(rotation_idx, kNumRotations);
             continue;
         }
 
-        if (max(tb_depth+1, heuristics.GetMaxHeuristic(state, dcube)) + rotation_idx + depth_offset >= best_depth) {
+        if (max(tb_depth+1, max_heuristic) + rotation_idx + depth_offset >= best_depth) {
             rotations.Set(rotation_idx, kNumRotations);
             continue;
         }
@@ -397,12 +399,16 @@ void DeviceLeafManager (std::stop_token stocken, SharedLeafStates& shared_leaf_s
         MemcpyToDeviceStream(num_positions_leafs, d_num_positions_leafs, cuda_stream);
 
         // only leaf_batch_size threads
+        cudaEvent_t evt;
+        cudaEventCreateWithFlags(&evt, cudaEventDisableTiming);
         size_t grid_dim = ((Settings::GetNumGPUThreads()-1)/kBlockDim)+1;
         DeviceLeafSearch<<<grid_dim, kBlockDim, 0, cuda_stream>>>(d_num_positions_leafs, d_starting_positions,
                             d_rotation_idxs, d_best_depths, d_urotations, Settings::GetTBDepth(), Settings::GetNumGPUThreads(), GetDCube(gpu_device_idx));
-        cudaError_t err = cudaGetLastError(); // launch of Device
-        if (err != cudaSuccess) {
-            LOG_CRITICAL("CUDA error:", cudaGetErrorString(err));
+        cudaEventRecord(evt, cuda_stream);
+
+        // wait kernal finished
+        while (cudaEventQuery(evt) == cudaErrorNotReady) {
+            std::this_thread::sleep_for(std::chrono::microseconds(50));
         }
 
         // copy all from the GPU as soon an kernals are finished

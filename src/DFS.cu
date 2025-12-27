@@ -39,7 +39,7 @@ __global__ void DFSGlobal(DState* d_random_position, size_t num_random_position,
     }
     while (dfs_stack_idx >= 0) {
         int8_t cur_depth = dfs_stack[dfs_stack_idx].depth;
-        DRotateReturn next = dcube.Rotate(dfs_stack[dfs_stack_idx].state, dfs_stack[dfs_stack_idx].rotation++);
+        DRotateReturn next = dcube.Rotate(dfs_stack[dfs_stack_idx].state, dfs_stack[dfs_stack_idx].rotation++, false);
 
         if (dfs_stack[dfs_stack_idx].rotation >= kNumRotations) {
             dfs_stack_idx--;
