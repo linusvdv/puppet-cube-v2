@@ -34,7 +34,7 @@ int Settings::num_threads;                      // automatic detection
 int Settings::num_gpu_upload_threads;           // automatic detection
 int Settings::num_gputhreads;                   // automatic detection
 int Settings::num_positions_per_batch = 1000;   // NOLINT
-int Settings::num_parallel_batches = 100;       // NOLINT
+int Settings::num_parallel_batches;             // automatic detection
 
 // tablebase
 int Settings::tb_depth = 6;                     // NOLINT
@@ -207,6 +207,8 @@ void Settings::SetDefault (std::vector<std::string>& arguments) {
     #elif
     num_gputhreads = 0;
     #endif  // USE_CUDA
+
+    num_parallel_batches = num_threads * 2;
 }
 
 
