@@ -246,17 +246,36 @@ void DFSNextFrontierSearch (const State& state, VisitedMap& visited_search, Fron
 }
 
 
+constexpr int kNumHeuristicLayers = 50;  // can be probably reduced to around 33
+
 void FrontierSearch (uint64_t& num_positions_search, VisitedMap& visited_search, std::atomic<uint8_t>& atomic_best_depth, std::pair<State, uint8_t>& best_endstate_search,
                SharedLeafStates& shared_leaf_states,
-               uint8_t depth, Frontier& cur_frontier, Frontier& next_frontier, int thread_idx) {
+               uint8_t depth, std::vector<std::vector<std::vector<std::pair<State, uint8_t>>>>& cur_frontier, Frontier& next_frontier, int thread_idx) {
     // local buffer for leaf search
     std::shared_ptr<phmap::flat_hash_map<State, uint8_t>> local_buffer = std::make_shared<phmap::flat_hash_map<State, uint8_t>>();
 
+    for (int i = 0; i < kNumHeuristicLayers; i++) {
+        for (int j = 0; j < Settings::GetNumThreads(); j++) {
+            // BFS layer
+            for (int idx = thread_idx; idx < int(cur_frontier[i][j].size()); idx += Settings::GetNumThreads()) {
+                    DFSNextFrontierSearch(cur_frontier[i][j][idx].first, visited_search, next_frontier, atomic_best_depth, best_endstate_search, local_buffer, shared_leaf_states, num_positions_search, cur_frontier[i][j][idx].second, depth);
+            }
+        }
+    }
+}
+
+
+void FrontierSort (const Frontier& next_frontier, std::vector<std::vector<std::vector<std::pair<State, uint8_t>>>>& cur_frontier, int thread_idx) {
     // BFS layer
     int idx = 0;
-    for (const std::pair<const State, uint8_t>& position : cur_frontier) {
+    for (const std::pair<const State, uint8_t>& position : next_frontier) {
         if (idx % Settings::GetNumThreads() == thread_idx) {
-            DFSNextFrontierSearch(position.first, visited_search, next_frontier, atomic_best_depth, best_endstate_search, local_buffer, shared_leaf_states, num_positions_search, position.second, depth);
+            Cube cube;
+            uint8_t heuristic = cube.GetMaxHeuristic(position.first) + position.second;
+            if (heuristic >= kNumHeuristicLayers) {
+                LOG_CRITICAL("heuristic too big", heuristic);
+            }
+            cur_frontier[heuristic][thread_idx].push_back(position);
         }
         idx++;
     }
@@ -314,8 +333,9 @@ void SearchManager () {
 
         // keep over the different depths
         // the frontier is moved to the position exactly before the cuts (stop because of max_heuristic or send to gpu)
-        Frontier cur_frontier;
-        cur_frontier[random_positions[random_positions_idx]] = 0;
+        std::vector<std::vector<std::vector<std::pair<State, uint8_t>>>> cur_frontier(kNumHeuristicLayers, std::vector<std::vector<std::pair<State, uint8_t>>>(Settings::GetNumThreads()));
+        cur_frontier[0][0].push_back({random_positions[random_positions_idx], 0});
+
         VisitedMap visited_search;
         visited_search[random_positions[random_positions_idx]] = 0;
 
@@ -361,7 +381,13 @@ void SearchManager () {
                                                                    id_depth, std::ref(cur_frontier), std::ref(next_frontier), i));
                 }
             }
-            std::swap(cur_frontier, next_frontier);
+            cur_frontier = std::vector<std::vector<std::vector<std::pair<State, uint8_t>>>>(kNumHeuristicLayers, std::vector<std::vector<std::pair<State, uint8_t>>>(Settings::GetNumThreads()));
+            {
+                std::vector<std::jthread> frontier_sort;
+                for (int i = 0; i < Settings::GetNumThreads(); i++) {
+                    frontier_sort.push_back(std::jthread(FrontierSort, std::ref(next_frontier), std::ref(cur_frontier), i));
+                }
+            }
 
             // wait until queue is empty
             {
