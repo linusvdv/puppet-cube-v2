@@ -124,10 +124,12 @@ endif()
 set(Debug_Options -O0 -fno-inline -fno-omit-frame-pointer)
 set(Release_Options -O3)
 
+set(CUDA_KEEP_DIR "${CMAKE_BINARY_DIR}/comp")
+file(MAKE_DIRECTORY ${CUDA_KEEP_DIR})
 
 target_compile_options(PuppetCubeV2 PRIVATE
     $<$<COMPILE_LANGUAGE:CXX>:-Wall -Wextra -g>
-    $<$<COMPILE_LANGUAGE:CUDA>:-Xptxas -v>
+    $<$<COMPILE_LANGUAGE:CUDA>:-Xptxas -v --keep --keep-dir=${CUDA_KEEP_DIR}>
     $<$<CONFIG:Debug>:${Debug_Options}>
     $<$<CONFIG:Release>:${Release_Options}>
 )

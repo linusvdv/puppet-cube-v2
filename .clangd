@@ -13,6 +13,8 @@ CompileFlags:
     - --expt-extended-lambda
     - -rdc=true
     - -Xptxas
+    - --keep
+    - --keep-dir*
 
 If:
   PathMatch: \.(cpp|cc|cxx|c|h|hpp)$
