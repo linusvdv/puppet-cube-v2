@@ -271,7 +271,7 @@ void FrontierSort (const Frontier& next_frontier, std::vector<std::vector<std::v
     for (const std::pair<const State, uint8_t>& position : next_frontier) {
         if (idx % Settings::GetNumThreads() == thread_idx) {
             Cube cube;
-            uint8_t heuristic = cube.GetMaxHeuristic(position.first) + position.second;
+            uint8_t heuristic = cube.GetAppHeuristic(position.first);
             if (heuristic >= kNumHeuristicLayers) {
                 LOG_CRITICAL("heuristic too big", heuristic);
             }
