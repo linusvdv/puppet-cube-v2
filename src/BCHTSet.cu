@@ -41,16 +41,16 @@ __device__ bool DBCHTSetContains(const DState* d_tablebase, const size_t& d_tabl
 // =====================
 // Testing purposes only
 // =====================
-extern __device__ DState* d_random_positions;
-extern __device__ size_t d_random_positions_size;
+extern __constant__ DState* d_random_positions;
+extern __constant__ size_t d_random_positions_size;
 extern size_t random_positions_size;
 
 
 constexpr size_t kBatching = 10;
-__global__ void DTimeBCHTtable(unsigned long long* hit, unsigned long long* miss, DCube dcube) {
+__global__ void DTimeBCHTtable(unsigned long long* hit, unsigned long long* miss) {
     size_t index = threadIdx.x + (blockIdx.x * blockDim.x);
     for (size_t i = index*kBatching; i < (index+1)*kBatching && i < d_random_positions_size; i++) {
-        if (dcube.DTablebaseContains(d_random_positions[i])) {
+        if (DCube::DTablebaseContains(d_random_positions[i])) {
             atomicAdd(hit, size_t(1));
         }
         else {
@@ -89,7 +89,7 @@ void TimeBCHTGPU() {
                 LOG_CRITICAL(cudaGetErrorString(err));
             }
 
-            DTimeBCHTtable<<<((random_positions_size/kBatching/kBlockDim)+1), kBlockDim>>>(d_hit, d_miss, GetDCube(0));
+            DTimeBCHTtable<<<((random_positions_size/kBatching/kBlockDim)+1), kBlockDim>>>(d_hit, d_miss);
             cudaError_t err = cudaGetLastError();
             if (err != cudaSuccess) {
                 LOG_CRITICAL("CUDA error:", cudaGetErrorString(err));

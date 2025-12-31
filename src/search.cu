@@ -18,31 +18,152 @@
 #include "tablebase.hpp"
 
 
+__host__ __device__ inline uint8_t RotationsAt(const uint64_t& rotations_1, const uint64_t& rotations_2, const uint8_t& idx) {
+    if (idx < 8) {
+        return uint8_t(rotations_1 >> (8 * idx));
+    }
+    return uint8_t(rotations_2 >> (8 * (idx-8)));
+}
+
+
+__host__ __device__ inline void RotationsSet(uint64_t& rotations_1, uint64_t& rotations_2, const uint8_t& idx, const uint8_t& value) {
+    if (idx < 8) {
+        rotations_1 ^= uint64_t(uint8_t(rotations_1 >> (8 * idx)) ^ value) << (8 * idx);
+    }
+    else {
+        rotations_2 ^= uint64_t(uint8_t(rotations_2 >> (8 * (idx-8))) ^ value) << (8 * (idx-8));
+    }
+}
+
+
+// it is guarantied that a rotation add does not overflow into the next idx (this code does not account for it!)
+__host__ __device__ inline void RotationsAdd(uint64_t& rotations_1, uint64_t& rotations_2, const uint8_t& idx, const uint8_t& value) {
+    if (idx < 8) {
+        rotations_1 += uint64_t(value) << (8 * idx);
+    }
+    else {
+        rotations_2 += uint64_t(value) << (8 * (idx-8));
+    }
+}
+
+
+__host__ __device__ inline void RotationsXOR(uint64_t& rotations_1, uint64_t& rotations_2, const uint8_t& idx, const uint8_t& value) {
+    if (idx < 8) {
+        rotations_1 ^= uint64_t(value) << (8 * idx);
+    }
+    else {
+        rotations_2 ^= uint64_t(value) << (8 * (idx-8));
+    }
+}
+
+
+__device__ inline uint8_t GetMaxHeuristic(uint16_t& corner_orientation, uint16_t& corner_position,
+                                                   uint16_t& edge_orientation, uint32_t& edge_position_1, uint32_t& edge_position_2,
+                                                   uint16_t& corner_heuristic, uint8_t& edge_heuristic_1, uint8_t& edge_heuristic_2) {
+    if (corner_heuristic == uint16_t(-1)) {
+        corner_heuristic = d_corner_heuristics[(corner_orientation*kNumCornerPositions) + corner_position];
+    }
+    if (edge_heuristic_1 == uint8_t(-1)) {
+        edge_heuristic_1 = d_edge_heuristics[(edge_orientation*kNumEdgePositions) + edge_position_1];
+    }
+    if (edge_heuristic_2 == uint8_t(-1)) {
+        uint32_t orientation = edge_orientation;
+        orientation |= (__popc(orientation)%2) << (kNumEdges-1); // get last bit using even num bits parity
+        uint32_t orientation_r = 0;
+        for (int i = 1; i < kNumEdges; i++) {
+            orientation_r |= ((orientation >> i) & uint32_t(1)) << (kNumEdges-1-i);
+        }
+
+        uint32_t position = edge_position_2;
+        uint32_t position_r = 0;
+        uint32_t temp = kNumEdgePositions;
+        for (int i = kNumEdges-1; i >= 6; i--) { // NOLINT
+            temp /= i+1;
+            position_r *= i+1;
+            position_r += i - ((position / temp) % (i + 1));
+        }
+        edge_heuristic_2 = d_edge_heuristics[(orientation_r*kNumEdgePositions) + position_r];
+    }
+    return max(uint8_t(corner_heuristic & ((uint16_t(1) << 8) - 1)), max(edge_heuristic_1, edge_heuristic_2));
+}
+
+
+__device__ inline bool DRotate(uint16_t& corner_orientation, uint16_t& corner_position,
+                               uint16_t& edge_orientation, uint32_t& edge_position_1, uint32_t& edge_position_2,
+                               uint16_t& corner_heuristic, uint8_t& edge_heuristic_1, uint8_t& edge_heuristic_2,
+                               const uint8_t& rotation, const bool& rev) {
+    // check legality only on front moves and when not doing slice moves
+    if (!rev && rotation < 12) {
+        if (corner_heuristic == uint16_t(-1)) {
+            corner_heuristic = d_corner_heuristics[(corner_orientation*kNumCornerPositions) + corner_position];
+        }
+        if (((corner_heuristic >> (rotation / 4 * 2 + rotation%2 + 8)) & 1) == 0) { // get important rotation bit
+            return false;
+        }
+        corner_heuristic = -1;
+    }
+    if (rev) {
+        corner_heuristic = -1;
+    }
+    edge_heuristic_1 = -1;
+    edge_heuristic_2 = -1;
+    corner_orientation = d_corner_orientations[(corner_orientation*kNumRotations) + rotation];
+    corner_position = d_corner_positions[(corner_position*kNumRotations) + rotation];
+    edge_orientation = d_edge_orientations[(edge_orientation*kNumRotations) + rotation];
+    edge_position_1 = d_edge_positions[(edge_position_1*kNumRotations) + rotation];
+    edge_position_2 = d_edge_positions[(edge_position_2*kNumRotations) + rotation];
+    return true;
+}
+
+
+__device__ inline void DRevRotation(uint8_t& rotation) {
+    if (rotation % 2 == 0) {
+        rotation += 1;
+    }
+    else {
+        rotation -= 1;
+    }
+}
+
+
 __global__ void DeviceLeafSearch (uint64_t* d_num_positions_leafs, const std::pair<DState, uint8_t>* d_starting_positions,
-                                  uint8_t* d_rotation_idxs, uint8_t* d_best_depths, URotations* d_urotations, uint8_t tb_depth, const uint64_t leaf_batch_size,
-                                  DCube dcube) {
+                                  uint8_t* d_rotation_idxs, uint8_t* d_best_depths, URotations* d_urotations, uint8_t tb_depth, const uint64_t num_gpu_threads) {
     // get current leaf thread idx
-    size_t index = threadIdx.x + (size_t(blockIdx.x) * blockDim.x);
-    if (index >= leaf_batch_size) {
+    uint32_t index = threadIdx.x + (blockIdx.x * blockDim.x);
+    if (index >= num_gpu_threads) {
         return;
     }
 
     // load from global memory
     uint8_t rotation_idx = d_rotation_idxs[index];
-    DState state = d_starting_positions[index].first;
     uint8_t depth_offset = d_starting_positions[index].second;
     uint8_t best_depth = d_best_depths[index];
-    URotations rotations = d_urotations[index];
     uint64_t num_positions = d_num_positions_leafs[index];
 
+    // state
+    uint16_t corner_orientation = d_starting_positions[index].first.hash_2 >> 20;
+    uint16_t corner_position = d_starting_positions[index].first.hash_1;
+    uint16_t edge_orientation = d_starting_positions[index].first.hash_3 >> 20;
+    uint32_t edge_position_1 = d_starting_positions[index].first.hash_2 & ((uint32_t(1) << 20)-1);
+    uint32_t edge_position_2 = d_starting_positions[index].first.hash_3 & ((uint32_t(1) << 20)-1);
+
+    // rotations
+    // only 16 moves at most in gpu search!
+    uint64_t rotations_1 = d_urotations[index].data[0];
+    uint64_t rotations_2 = d_urotations[index].data[1];
+
+    // heuristics
+    uint16_t corner_heuristic = uint16_t(-1);
+    uint8_t edge_heuristic_1 = uint8_t(-1);
+    uint8_t edge_heuristic_2 = uint8_t(-1);
+
     // do the rotations such that state is again at the outcome state it was previously (somewhere in the tree)
-    for (int i = 0; i < rotation_idx && rotation_idx != uint8_t(-1); i++) {
-        if (rotations.At(i) > kNumRotations) {
-            state = dcube.Rotate(state, rotations.At(i) ^ uint8_t(1<<7), false).state;
+    for (uint8_t i = 0; i <= rotation_idx && rotation_idx != uint8_t(-1); i++) {
+        uint8_t rotation = RotationsAt(rotations_1, rotations_2, i);
+        if (rotation > kNumRotations) {
+            DRotate(corner_orientation, corner_position, edge_orientation, edge_position_1, edge_position_2,
+                    corner_heuristic, edge_heuristic_1, edge_heuristic_2, rotation ^ uint8_t(1<<7), false);
         }
-    }
-    if (rotation_idx != uint8_t(-1) && rotations.At(rotation_idx) > kNumRotations) {
-        state = dcube.Rotate(state, rotations.At(rotation_idx) ^ uint8_t(1<<7), false).state;
     }
 
     // make a constant number of position during each kernal function call
@@ -60,36 +181,34 @@ __global__ void DeviceLeafSearch (uint64_t* d_num_positions_leafs, const std::pa
         // this cube is now during a search phase with the starting position of leaf_thread_idx
         // the state is the current position of the search after all rotations from the leaf starting position
 
-        uint8_t rotation = rotations.At(rotation_idx) & (uint8_t(-1)>>1);
+        uint8_t rotation = RotationsAt(rotations_1, rotations_2, rotation_idx) & (uint8_t(-1)>>1);
 
         // finished with the rotations of the current position
-        if (rotation == kNumRotations) {  // NOLINT
-            rotations.Set(rotation_idx, 0);
+        if (rotation == kNumRotations) {
+            RotationsSet(rotations_1, rotations_2, rotation_idx, 0);
             rotation_idx--;
             continue;
         }
 
         // undo the rotation to continue the search on the next subtree
-        bool rev = (rotations.At(rotation_idx) ^ rotation) != 0;
+        bool rev = (RotationsAt(rotations_1, rotations_2, rotation_idx) ^ rotation) != 0;
         if (rev) {
-            rotation = DGetRevRotation(rotation);
+            DRevRotation(rotation);
         }
 
         // do the rotation
-        DRotateReturn next_pos = dcube.Rotate(state, rotation, rev);
-        // it is garantied that the undo rotation of a cube is always possible in this leaf search
         // if it is an illegal search skip this rotation
-        if (!next_pos.isLegal) {
-            rotations.Add(rotation_idx, 1);
+        if (!DRotate(corner_orientation, corner_position, edge_orientation, edge_position_1, edge_position_2,
+                     corner_heuristic, edge_heuristic_1, edge_heuristic_2, rotation, rev)) {
+            RotationsAdd(rotations_1, rotations_2, rotation_idx, 1);
             continue;
         }
-        state = next_pos.state;
         // prepare the next rotation
-        rotations.BitXOR(rotation_idx, 1<<7);  // NOLINT
+        RotationsXOR(rotations_1, rotations_2, rotation_idx, 1<<7);  // NOLINT
 
         // undo rotation done increase to next rotation
         if (rev) {
-            rotations.Add(rotation_idx, 1);
+            RotationsAdd(rotations_1, rotations_2, rotation_idx, 1);
             continue;
         }
 
@@ -98,19 +217,19 @@ __global__ void DeviceLeafSearch (uint64_t* d_num_positions_leafs, const std::pa
         num_positions++;
 
         // not able to improve the current leaf search skip this node
-        DHeuristics heuristics;
-        uint8_t max_heuristic = heuristics.GetMaxHeuristic(state, dcube);
+        uint8_t max_heuristic = GetMaxHeuristic(corner_orientation, corner_position, edge_orientation, edge_position_1, edge_position_2,
+                                                corner_heuristic, edge_heuristic_1, edge_heuristic_2);
 
         // check if the current state is in tablebase and is therefore a new best solution
-        if (max_heuristic <= tb_depth && dcube.DTablebaseContains(state)) {
+        if (max_heuristic <= tb_depth && DCube::DTablebaseContains(DState(corner_orientation, corner_position, edge_orientation, edge_position_1, edge_position_2))) {
             uint8_t depth = rotation_idx + tb_depth + depth_offset;
             best_depth = min(depth, best_depth);
-            rotations.Set(rotation_idx, kNumRotations);
+            RotationsSet(rotations_1, rotations_2, rotation_idx, kNumRotations);
             continue;
         }
 
         if (max(tb_depth+1, max_heuristic) + rotation_idx + depth_offset >= best_depth) {
-            rotations.Set(rotation_idx, kNumRotations);
+            RotationsSet(rotations_1, rotations_2, rotation_idx, kNumRotations);
             continue;
         }
     }
@@ -118,7 +237,8 @@ __global__ void DeviceLeafSearch (uint64_t* d_num_positions_leafs, const std::pa
     // save back to global memory;
     d_rotation_idxs[index] = rotation_idx;
     d_best_depths[index] = best_depth;
-    d_urotations[index] = rotations; // not really necessary
+    d_urotations[index].data[0] = rotations_1;
+    d_urotations[index].data[1] = rotations_2;
     d_num_positions_leafs[index] = num_positions;
 }
 
@@ -403,7 +523,7 @@ void DeviceLeafManager (std::stop_token stocken, SharedLeafStates& shared_leaf_s
         cudaEventCreateWithFlags(&evt, cudaEventDisableTiming);
         size_t grid_dim = ((Settings::GetNumGPUThreads()-1)/kBlockDim)+1;
         DeviceLeafSearch<<<grid_dim, kBlockDim, 0, cuda_stream>>>(d_num_positions_leafs, d_starting_positions,
-                            d_rotation_idxs, d_best_depths, d_urotations, Settings::GetTBDepth(), Settings::GetNumGPUThreads(), GetDCube(gpu_device_idx));
+                            d_rotation_idxs, d_best_depths, d_urotations, Settings::GetTBDepth(), Settings::GetNumGPUThreads());
         cudaEventRecord(evt, cuda_stream);
 
         // wait kernal finished

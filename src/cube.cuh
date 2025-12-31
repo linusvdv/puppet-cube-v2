@@ -1,4 +1,3 @@
-// Same as cube.hpp for GPU
 #pragma once
 #include <compare>
 #include <cuda.h>
@@ -7,50 +6,17 @@
 #include "cube.hpp"
 
 
-__device__ constexpr int kDNumCorners = 8;
-__device__ constexpr int kDNumEdges = 12;
-__device__ constexpr int kDNumRotations = 18;
+extern __constant__ uint16_t* d_corner_orientations;
+extern __constant__ uint16_t* d_corner_positions;
+extern __constant__ uint16_t* d_corner_heuristics;
 
-__device__ constexpr int kDNumCornerOrientation = 2187;  // 3^7
-__device__ constexpr int kDCornerOrientationSize = kDNumCornerOrientation * kDNumRotations; // 3^7 * 18
-__device__ constexpr int kDNumCornerPositions = 40320;  // 8!
-__device__ constexpr int kDCornerPositionsSize = kDNumCornerPositions * kDNumRotations;
-__device__ constexpr int kDNumCornerHeuristic = kDNumCornerOrientation * kDNumCornerPositions;
-
-__device__ constexpr int kDNumEdgeOrientation = 2048;  // 2^11
-__device__ constexpr int kDEdgeOrientationSize = kDNumEdgeOrientation * kDNumRotations;  // 2^11 * 18
-__device__ constexpr int kDNumEdgePositions = 665280;  // 12! / 6!
-__device__ constexpr int kDEdgePositionsSize = kDNumEdgePositions * kDNumRotations;  // 12! / 6! * 18
-__device__ constexpr int kDNumEdgeHeuristic = kDNumEdgePositions * kDNumEdgeOrientation;
+extern __constant__ uint16_t* d_edge_orientations;
+extern __constant__ uint32_t* d_edge_positions;
+extern __constant__ uint8_t* d_edge_heuristics;
 
 
-__device__ uint8_t DGetRevRotation(uint8_t rotation);
-
-
-enum DRotations : uint8_t {
-    kDR,
-    kDRc,
-    kDL,
-    kDLc,
-    kDU,
-    kDUc,
-    kDD,
-    kDDc,
-    kDF,
-    kDFc,
-    kDB,
-    kDBc,
-    kDM,
-    kDMc,
-    kDE,
-    kDEc,
-    kDS,
-    kDSc
-};
-
-
-__device__ constexpr uint64_t kDMulA = 0x2545f4914f6cdd1dULL;
-__device__ constexpr uint64_t kDMulB = 0x9e3779b97f4a7c15ULL;
+constexpr uint64_t kDMulA = 0x2545f4914f6cdd1dULL;
+constexpr uint64_t kDMulB = 0x9e3779b97f4a7c15ULL;
 
 
 // 10 bytes
@@ -107,9 +73,6 @@ struct DState {
 };
 
 
-__device__ constexpr DState kDSolvedState = DState(0, 0, 0, 0, kDNumEdgePositions-1);
-
-
 struct DRotateReturn {
     bool isLegal;
     DState state;
@@ -118,50 +81,8 @@ struct DRotateReturn {
 
 class DCube {
 public:
-    __host__ void UploadComputationToDevice(
-        const std::vector<uint16_t>& corner_orientations,
-        const std::vector<uint16_t>& corner_positions,
-        const std::vector<uint16_t>& corner_heuristics,
-
-        const std::vector<uint16_t>& edge_orientations,
-        const std::vector<uint32_t>& edge_positions,
-        const std::vector<uint8_t>& edge_heuristics,
-        int gpu_device_idx);
-
-    __host__ void UploadTablebaseToDevice(const std::vector<State>& tablebebase, int gpu_device_idx);
-
-
-    __device__ DRotateReturn Rotate(const DState& prev_state, const uint8_t& rotation, bool rev);
-
-    __device__ bool DTablebaseContains(const DState& state);
-
-    uint16_t* d_corner_orientations = nullptr;
-    uint16_t* d_corner_positions = nullptr;
-    uint16_t* d_corner_heuristics = nullptr;
-
-    uint16_t* d_edge_orientations = nullptr;
-    uint32_t* d_edge_positions = nullptr;
-    uint8_t* d_edge_heuristics = nullptr;
-
-    DState* d_tablebase = nullptr;
-    size_t d_tablebase_size = 0;
+    static __device__ bool DTablebaseContains(const DState& state);
 };
 
-
-class DHeuristics {
-public:
-    __device__ uint8_t GetMaxHeuristic(const DState& state, const DCube& dcube);
-    __device__ uint8_t GetAppHeuristic(const DState& state, const DCube& dcube);
-
-    __device__ void SetCurCornerHeuristic(const DState& state, const DCube& dcube);
-    __device__ void SetCurEdgeHeuristic1(const DState& state, const DCube& dcube);
-    __device__ void SetCurEdgeHeuristic2(const DState& state, const DCube& dcube);
-
-private:
-    uint8_t cur_corner_heuristic_ = -1;
-    uint8_t cur_edge_heuristic_1_ = -1;
-    uint8_t cur_edge_heuristic_2_ = -1;
-};
-
-
-DCube GetDCube(int gpu_device_idx);
+extern __constant__ DState* d_tablebase;
+extern __constant__ size_t d_tablebase_size;

@@ -5,9 +5,6 @@
 #include "cube.hpp"
 
 
-void DCubeInitialization();
-
-
 void UploadCubeComputationToDevices(
     const std::vector<uint16_t>& corner_orientations,
     const std::vector<uint16_t>& corner_positions,

@@ -18,6 +18,9 @@ struct DFSStack {
 };
 
 
+/* 
+* TODO: when finished with the rewrite of the search have a look at DFS if still needed
+* NOT WORKING AT THE MOMENT
 __global__ void DFSGlobal(DState* d_random_position, size_t num_random_position, size_t* d_num_nodes_gpu, size_t* d_num_tb_hits_gpu, int max_depth, DCube dcube) {
     size_t index = threadIdx.x + (size_t(blockIdx.x) * blockDim.x);
 
@@ -88,4 +91,8 @@ void GPUDFS(const std::vector<State>& random_position, std::vector<size_t>& num_
     DownloadFromDevice(num_tb_hits_gpu, d_num_tb_hits_gpu);
 
     FreeCudaPointer(d_random_position);
+}
+*/
+
+void GPUDFS([[maybe_unused]] const std::vector<State>& random_position,[[maybe_unused]] std::vector<size_t>& num_nodes_gpu,[[maybe_unused]] std::vector<size_t>& num_tb_hits_gpu) {
 }

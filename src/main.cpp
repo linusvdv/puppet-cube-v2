@@ -8,7 +8,6 @@
 
 #ifdef USE_CUDA
 #include "BCHTSet_bridge.hpp"
-#include "cube_bridge.hpp"
 #include "info_bridge.hpp"
 #endif
 
@@ -27,7 +26,6 @@ int main (int argc, char *argv[]) {
     if (Settings::GetHardwareInfo() && Settings::UseCuda()) {
         GetDeviceInfo();
     }
-    DCubeInitialization();
     #endif // USE_CUDA
 
     Cube::Initialize();

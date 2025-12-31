@@ -129,7 +129,7 @@ file(MAKE_DIRECTORY ${CUDA_KEEP_DIR})
 
 target_compile_options(PuppetCubeV2 PRIVATE
     $<$<COMPILE_LANGUAGE:CXX>:-Wall -Wextra -g>
-    $<$<COMPILE_LANGUAGE:CUDA>:-Xptxas -v --keep --keep-dir=${CUDA_KEEP_DIR}>
+    $<$<COMPILE_LANGUAGE:CUDA>:-Xptxas -v --keep --keep-dir=${CUDA_KEEP_DIR} -lineinfo>
     $<$<CONFIG:Debug>:${Debug_Options}>
     $<$<CONFIG:Release>:${Release_Options}>
 )
