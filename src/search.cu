@@ -53,6 +53,9 @@ __device__ inline uint8_t GetMaxHeuristic(uint16_t& corner_orientation, uint16_t
 __device__ inline bool DRotate(uint16_t& corner_orientation, uint16_t& corner_position,
                                uint16_t& edge_orientation, uint32_t& edge_position_1, uint32_t& edge_position_2,
                                uint16_t& corner_heuristic, uint8_t& edge_heuristic_1, uint8_t& edge_heuristic_2,
+                               uint16_t& prev_corner_orientation, uint16_t& prev_corner_position,
+                               uint16_t& prev_edge_orientation, uint32_t& prev_edge_position_1, uint32_t& prev_edge_position_2,
+                               uint16_t& prev_corner_heuristic, uint8_t& prev_edge_heuristic_1, uint8_t& prev_edge_heuristic_2,
                                const uint8_t& rotation, const bool& rev) {
     // check legality only on front moves and when not doing slice moves
     if (!rev && rotation < 12) {
@@ -62,19 +65,57 @@ __device__ inline bool DRotate(uint16_t& corner_orientation, uint16_t& corner_po
         if (((corner_heuristic >> (rotation / 4 * 2 + rotation%2 + 8)) & 1) == 0) { // get important rotation bit
             return false;
         }
-        corner_heuristic = -1;
     }
-    if (rev) {
-        corner_heuristic = -1;
+    if (!rev) {
+        prev_corner_orientation = corner_orientation;
+        prev_corner_position = corner_position;
+        prev_edge_orientation = edge_orientation;
+        prev_edge_position_1 = edge_position_1;
+        prev_edge_position_2 = edge_position_2;
+        prev_corner_heuristic = corner_heuristic;
+        prev_edge_heuristic_1 = edge_heuristic_1;
+        prev_edge_heuristic_2 = edge_heuristic_2;
     }
-    edge_heuristic_1 = -1;
-    edge_heuristic_2 = -1;
+    if ((!rev && rotation < 12) || rev) {
+        corner_heuristic = uint16_t(-1);
+    }
+    edge_heuristic_1 = uint8_t(-1);
+    edge_heuristic_2 = uint8_t(-1);
     corner_orientation = d_corner_orientations[(corner_orientation*kNumRotations) + rotation];
     corner_position = d_corner_positions[(corner_position*kNumRotations) + rotation];
     edge_orientation = d_edge_orientations[(edge_orientation*kNumRotations) + rotation];
     edge_position_1 = d_edge_positions[(edge_position_1*kNumRotations) + rotation];
     edge_position_2 = d_edge_positions[(edge_position_2*kNumRotations) + rotation];
     return true;
+}
+
+
+// go to previous position if in prev registers
+__device__ inline void DUndoRotate(uint16_t& corner_orientation, uint16_t& corner_position,
+                                   uint16_t& edge_orientation, uint32_t& edge_position_1, uint32_t& edge_position_2,
+                                   uint16_t& corner_heuristic, uint8_t& edge_heuristic_1, uint8_t& edge_heuristic_2,
+                                   uint16_t& prev_corner_orientation, uint16_t& prev_corner_position,
+                                   uint16_t& prev_edge_orientation, uint32_t& prev_edge_position_1, uint32_t& prev_edge_position_2,
+                                   uint16_t& prev_corner_heuristic, uint8_t& prev_edge_heuristic_1, uint8_t& prev_edge_heuristic_2,
+                                   uint8_t& rotation_idx, uint64_t& rotations_1, uint64_t& rotations_2) {
+    rotation_idx--;
+    if (prev_corner_orientation != uint16_t(-1) && rotation_idx != uint8_t(-1)) {
+        corner_orientation = prev_corner_orientation;
+        corner_position = prev_corner_position;
+        edge_orientation = prev_edge_orientation;
+        edge_position_1 = prev_edge_position_1;
+        edge_position_2 = prev_edge_position_2;
+        corner_heuristic = prev_corner_heuristic;
+        edge_heuristic_1 = prev_edge_heuristic_1;
+        edge_heuristic_2 = prev_edge_heuristic_2;
+        prev_corner_orientation = uint16_t(-1); // only one that needs to be reset this indecates that all are not usefull
+        RotationsXOR(rotations_1, rotations_2, rotation_idx, 1<<7);  // NOLINT
+        RotationsAdd(rotations_1, rotations_2, rotation_idx, 1);
+        if (RotationsAt(rotations_1, rotations_2, rotation_idx) == kNumRotations) {
+            RotationsSet(rotations_1, rotations_2, rotation_idx, 0);
+            rotation_idx--;
+        }
+    }
 }
 
 
@@ -102,29 +143,41 @@ __global__ void DeviceLeafSearch (uint64_t* d_num_positions_leafs, const std::pa
     uint8_t best_depth = d_best_depths[index];
     uint64_t num_positions = d_num_positions_leafs[index];
 
+    // rotations
+    uint64_t rotations_1 = d_rotations_1[index];
+    uint64_t rotations_2 = d_rotations_2[index];
+
     // state
     uint16_t corner_orientation = d_starting_positions[index].first.hash_2 >> 20;
     uint16_t corner_position = d_starting_positions[index].first.hash_1;
     uint16_t edge_orientation = d_starting_positions[index].first.hash_3 >> 20;
     uint32_t edge_position_1 = d_starting_positions[index].first.hash_2 & ((uint32_t(1) << 20)-1);
     uint32_t edge_position_2 = d_starting_positions[index].first.hash_3 & ((uint32_t(1) << 20)-1);
-
-    // rotations
-    // only 16 moves at most in gpu search!
-    uint64_t rotations_1 = d_rotations_1[index];
-    uint64_t rotations_2 = d_rotations_2[index];
-
     // heuristics
     uint16_t corner_heuristic = uint16_t(-1);
     uint8_t edge_heuristic_1 = uint8_t(-1);
     uint8_t edge_heuristic_2 = uint8_t(-1);
+
+    // state
+    uint16_t prev_corner_orientation = uint16_t(-1);
+    uint16_t prev_corner_position = uint16_t(-1);
+    uint16_t prev_edge_orientation = uint16_t(-1);
+    uint32_t prev_edge_position_1 = uint32_t(-1);
+    uint32_t prev_edge_position_2 = uint32_t(-1);
+    // rotations
+    uint16_t prev_corner_heuristic = uint16_t(-1);
+    uint8_t prev_edge_heuristic_1 = uint8_t(-1);
+    uint8_t prev_edge_heuristic_2 = uint8_t(-1);
 
     // do the rotations such that state is again at the outcome state it was previously (somewhere in the tree)
     for (uint8_t i = 0; i <= rotation_idx && rotation_idx != uint8_t(-1); i++) {
         uint8_t rotation = RotationsAt(rotations_1, rotations_2, i);
         if (rotation > kNumRotations) {
             DRotate(corner_orientation, corner_position, edge_orientation, edge_position_1, edge_position_2,
-                    corner_heuristic, edge_heuristic_1, edge_heuristic_2, rotation ^ uint8_t(1<<7), false);
+                    corner_heuristic, edge_heuristic_1, edge_heuristic_2,
+                    prev_corner_orientation, prev_corner_position, prev_edge_orientation, prev_edge_position_1, prev_edge_position_2,
+                    prev_corner_heuristic, prev_edge_heuristic_1, prev_edge_heuristic_2,
+                    rotation ^ uint8_t(1<<7), false);
         }
     }
 
@@ -161,8 +214,19 @@ __global__ void DeviceLeafSearch (uint64_t* d_num_positions_leafs, const std::pa
         // do the rotation
         // if it is an illegal search skip this rotation
         if (!DRotate(corner_orientation, corner_position, edge_orientation, edge_position_1, edge_position_2,
-                     corner_heuristic, edge_heuristic_1, edge_heuristic_2, rotation, rev)) {
+                     corner_heuristic, edge_heuristic_1, edge_heuristic_2,
+                     prev_corner_orientation, prev_corner_position, prev_edge_orientation, prev_edge_position_1, prev_edge_position_2,
+                     prev_corner_heuristic, prev_edge_heuristic_1, prev_edge_heuristic_2,
+                     rotation, rev)) {
             RotationsAdd(rotations_1, rotations_2, rotation_idx, 1);
+            if (rotation == kNumRotations) {
+                RotationsSet(rotations_1, rotations_2, rotation_idx, 0);
+                DUndoRotate(corner_orientation, corner_position, edge_orientation, edge_position_1, edge_position_2,
+                            corner_heuristic, edge_heuristic_1, edge_heuristic_2,
+                            prev_corner_orientation, prev_corner_position, prev_edge_orientation, prev_edge_position_1, prev_edge_position_2, 
+                            prev_corner_heuristic, prev_edge_heuristic_1, prev_edge_heuristic_2,
+                            rotation_idx, rotations_1, rotations_2);
+            }
             continue;
         }
         // prepare the next rotation
@@ -171,6 +235,14 @@ __global__ void DeviceLeafSearch (uint64_t* d_num_positions_leafs, const std::pa
         // undo rotation done increase to next rotation
         if (rev) {
             RotationsAdd(rotations_1, rotations_2, rotation_idx, 1);
+            if (rotation == kNumRotations) {
+                RotationsSet(rotations_1, rotations_2, rotation_idx, 0);
+                DUndoRotate(corner_orientation, corner_position, edge_orientation, edge_position_1, edge_position_2,
+                            corner_heuristic, edge_heuristic_1, edge_heuristic_2,
+                            prev_corner_orientation, prev_corner_position, prev_edge_orientation, prev_edge_position_1, prev_edge_position_2, 
+                            prev_corner_heuristic, prev_edge_heuristic_1, prev_edge_heuristic_2,
+                            rotation_idx, rotations_1, rotations_2);
+            }
             continue;
         }
 
@@ -186,12 +258,20 @@ __global__ void DeviceLeafSearch (uint64_t* d_num_positions_leafs, const std::pa
         if (max_heuristic <= tb_depth && DBCHTSetContains(d_tablebase, d_tablebase_size, DState(corner_orientation, corner_position, edge_orientation, edge_position_1, edge_position_2))) {
             uint8_t depth = rotation_idx + tb_depth + depth_offset;
             best_depth = min(depth, best_depth);
-            RotationsSet(rotations_1, rotations_2, rotation_idx, kNumRotations);
+            DUndoRotate(corner_orientation, corner_position, edge_orientation, edge_position_1, edge_position_2,
+                        corner_heuristic, edge_heuristic_1, edge_heuristic_2,
+                        prev_corner_orientation, prev_corner_position, prev_edge_orientation, prev_edge_position_1, prev_edge_position_2, 
+                        prev_corner_heuristic, prev_edge_heuristic_1, prev_edge_heuristic_2,
+                        rotation_idx, rotations_1, rotations_2);
             continue;
         }
 
         if (max(tb_depth+1, max_heuristic) + rotation_idx + depth_offset >= best_depth) {
-            RotationsSet(rotations_1, rotations_2, rotation_idx, kNumRotations);
+            DUndoRotate(corner_orientation, corner_position, edge_orientation, edge_position_1, edge_position_2,
+                        corner_heuristic, edge_heuristic_1, edge_heuristic_2,
+                        prev_corner_orientation, prev_corner_position, prev_edge_orientation, prev_edge_position_1, prev_edge_position_2, 
+                        prev_corner_heuristic, prev_edge_heuristic_1, prev_edge_heuristic_2,
+                        rotation_idx, rotations_1, rotations_2);
             continue;
         }
     }

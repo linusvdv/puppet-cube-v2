@@ -207,7 +207,7 @@ void DFSNextFrontierSearch (const State& state, VisitedMap& visited_search, Fron
         // send the position to GPU search
         // this means that the state has to be again part of the new frontier
         if (std::max(next_cube.GetMaxHeuristic(next_state.second), uint8_t(Settings::GetTBDepth()+1)) + cur_depth + 1 >= depth - 3 &&
-            depth < 30 + Settings::GetTBDepth() + cur_depth + 1 &&  // fits in the rotation registers
+            depth - cur_depth - 1 - Settings::GetTBDepth() < 16 &&  // fits in the rotation registers
             cur_depth + 1 > 5 &&  // more than 5 moves need to be already made
             depth - cur_depth - 1 - Settings::GetTBDepth() < 12) { // this value can be tweeked to have more cpu calculation needed
 
