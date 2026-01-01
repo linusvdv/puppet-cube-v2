@@ -36,7 +36,7 @@ bool BCHTSetContains(const std::vector<State>& table, const State& key) {
 }
 
 
-int GetBucketIndex(const State& cube, uint32_t hash, uint32_t num_buckets) {
+int GetBucketIndex(const State& cube, const uint32_t& hash, const uint32_t& num_buckets) {
     if (cube.SplitMix64<State::kXORlow1, State::kXORhigh1>()%num_buckets == hash) {
         return 0;
     }

@@ -6,6 +6,7 @@
 #include <stop_token>
 #include <vector>
 
+#include "BCHTSet.cuh"
 #include "BCHTSet.hpp"
 #include "cube.cuh"
 #include "cube.hpp"
@@ -221,7 +222,7 @@ __global__ void DeviceLeafSearch (uint64_t* d_num_positions_leafs, const std::pa
                                                 corner_heuristic, edge_heuristic_1, edge_heuristic_2);
 
         // check if the current state is in tablebase and is therefore a new best solution
-        if (max_heuristic <= tb_depth && DCube::DTablebaseContains(DState(corner_orientation, corner_position, edge_orientation, edge_position_1, edge_position_2))) {
+        if (max_heuristic <= tb_depth && DBCHTSetContains(d_tablebase, d_tablebase_size, DState(corner_orientation, corner_position, edge_orientation, edge_position_1, edge_position_2))) {
             uint8_t depth = rotation_idx + tb_depth + depth_offset;
             best_depth = min(depth, best_depth);
             RotationsSet(rotations_1, rotations_2, rotation_idx, kNumRotations);

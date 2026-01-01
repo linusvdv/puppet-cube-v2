@@ -57,7 +57,7 @@ struct DState {
     std::strong_ordering operator<=>(const DState&) const = default;
 
 
-    static __device__ uint64_t Mix64(uint64_t num) {
+    static __device__ inline uint64_t Mix64(uint64_t num) {
         num ^= num >> 31;  // NOLINT
         num *= kDMulA;
         num ^= num >> 33;  // NOLINT
@@ -66,23 +66,19 @@ struct DState {
         return num;
     }
 
+
     template<uint64_t hash_low, uint64_t hash_high>
-    __device__ uint64_t SplitMix64() const {
+    __device__ inline uint64_t SplitMix64() const {
         return Mix64(uint64_t(hash_1) ^ hash_low) ^ Mix64(((uint64_t(hash_2) << 32) | uint64_t(hash_3)) ^ hash_high);
+    }
+
+    __device__ inline bool IsDefault() const {
+        return hash_1 == uint16_t(-1) &&
+               hash_2 == uint32_t(-1) &&
+               hash_3 == uint32_t(-1);
     }
 };
 
-
-struct DRotateReturn {
-    bool isLegal;
-    DState state;
-};
-
-
-class DCube {
-public:
-    static __device__ bool DTablebaseContains(const DState& state);
-};
 
 extern __constant__ DState* d_tablebase;
 extern __constant__ size_t d_tablebase_size;

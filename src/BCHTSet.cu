@@ -1,40 +1,9 @@
 #include "BCHTSet.cuh"
-#include "BCHTSet.hpp"
 #include "cube.cuh"
 #include "settings.hpp"
 #include "cuda_memory_transfer.cuh"
 
 
-__device__ constexpr uint64_t kDXORlow1 = 0x123456789abcdef0ULL;
-__device__ constexpr uint64_t kDXORhigh1 = 0xfedcba9876543210ULL;
-__device__ constexpr uint64_t kDXORlow2 = 0x0f1e2d3c4b5a6978ULL;
-__device__ constexpr uint64_t kDXORhigh2 = 0x87654321abcdef09ULL;
-
-
-__device__ bool DBCHTSetContains(const DState* d_tablebase, const size_t& d_tablebase_size, const DState& key) {
-    uint32_t num_buckets = d_tablebase_size / kBucketSize;
-    uint64_t h_1 = key.SplitMix64<kDXORlow1, kDXORhigh1>()%num_buckets;
-    for (int j = 0; j < kBucketSize; j++) {
-        DState tb_data = d_tablebase[(h_1*kBucketSize) + j];
-        if (tb_data == key) {
-            return true;
-        }
-        if (tb_data == DState()) {
-            return false;
-        }
-    }
-    uint64_t h_2 = key.SplitMix64<kDXORlow2, kDXORhigh2>()%num_buckets;
-    for (int j = 0; j < kBucketSize; j++) {
-        DState tb_data = d_tablebase[(h_2*kBucketSize) + j];
-        if (tb_data == key) {
-            return true;
-        }
-        if (tb_data == DState()) {
-            return false;
-        }
-    }
-    return false;
-}
 
 
 
@@ -50,7 +19,7 @@ constexpr size_t kBatching = 10;
 __global__ void DTimeBCHTtable(unsigned long long* hit, unsigned long long* miss) {
     size_t index = threadIdx.x + (blockIdx.x * blockDim.x);
     for (size_t i = index*kBatching; i < (index+1)*kBatching && i < d_random_positions_size; i++) {
-        if (DCube::DTablebaseContains(d_random_positions[i])) {
+        if (DBCHTSetContains(d_tablebase, d_tablebase_size, d_random_positions[i])) {
             atomicAdd(hit, size_t(1));
         }
         else {

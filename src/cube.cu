@@ -2,7 +2,6 @@
 #include <vector>
 #include <cuda.h>
 
-#include "BCHTSet.cuh"
 #include "cube.cuh"
 #include "cube.hpp"
 #include "cuda_memory_transfer.cuh"
@@ -55,11 +54,6 @@ void UploadTablebaseToDevices(const std::vector<State>& tablebebase) {
         UploadToDeviceSymbol(tablebebase, d_tablebase);
         MemcpyToSymbol(tablebebase.size(), d_tablebase_size);
     }
-}
-
-
-__device__ bool DCube::DTablebaseContains(const DState& state) {
-    return DBCHTSetContains(d_tablebase, d_tablebase_size, state);
 }
 
 

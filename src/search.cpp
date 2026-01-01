@@ -246,7 +246,7 @@ void DFSNextFrontierSearch (const State& state, VisitedMap& visited_search, Fron
 }
 
 
-constexpr int kNumHeuristicLayers = 50;  // can be probably reduced to around 33
+constexpr int kNumHeuristicLayers = 60;
 
 void FrontierSearch (uint64_t& num_positions_search, VisitedMap& visited_search, std::atomic<uint8_t>& atomic_best_depth, std::pair<State, uint8_t>& best_endstate_search,
                SharedLeafStates& shared_leaf_states,
