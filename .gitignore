@@ -42,6 +42,7 @@ out*
 perf.data
 perf.data.old
 performance_test/*
+performance*/*
 *.bin
 
 .venv

@@ -198,13 +198,6 @@ __global__ void DeviceLeafSearch (uint64_t* d_num_positions_leafs, const std::pa
 
         uint8_t rotation = RotationsAt(rotations_1, rotations_2, rotation_idx) & (uint8_t(-1)>>1);
 
-        // finished with the rotations of the current position
-        if (rotation == kNumRotations) {
-            RotationsSet(rotations_1, rotations_2, rotation_idx, 0);
-            rotation_idx--;
-            continue;
-        }
-
         // undo the rotation to continue the search on the next subtree
         bool rev = (RotationsAt(rotations_1, rotations_2, rotation_idx) ^ rotation) != 0;
         if (rev) {
@@ -219,7 +212,7 @@ __global__ void DeviceLeafSearch (uint64_t* d_num_positions_leafs, const std::pa
                      prev_corner_heuristic, prev_edge_heuristic_1, prev_edge_heuristic_2,
                      rotation, rev)) {
             RotationsAdd(rotations_1, rotations_2, rotation_idx, 1);
-            if (rotation == kNumRotations) {
+            if ((rotation+1) == kNumRotations) {
                 RotationsSet(rotations_1, rotations_2, rotation_idx, 0);
                 DUndoRotate(corner_orientation, corner_position, edge_orientation, edge_position_1, edge_position_2,
                             corner_heuristic, edge_heuristic_1, edge_heuristic_2,
@@ -235,7 +228,7 @@ __global__ void DeviceLeafSearch (uint64_t* d_num_positions_leafs, const std::pa
         // undo rotation done increase to next rotation
         if (rev) {
             RotationsAdd(rotations_1, rotations_2, rotation_idx, 1);
-            if (rotation == kNumRotations) {
+            if (RotationsAt(rotations_1, rotations_2, rotation_idx) == kNumRotations) {
                 RotationsSet(rotations_1, rotations_2, rotation_idx, 0);
                 DUndoRotate(corner_orientation, corner_position, edge_orientation, edge_position_1, edge_position_2,
                             corner_heuristic, edge_heuristic_1, edge_heuristic_2,
