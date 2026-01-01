@@ -39,13 +39,6 @@ int Settings::num_parallel_batches;             // automatic detection
 // tablebase
 int Settings::tb_depth = 6;                     // NOLINT
 
-// performance testing
-bool Settings::test_bcht = false;
-
-bool Settings::test_dfs = false;
-int Settings::dfs_depth = 4;
-size_t Settings::num_dfs_positions = 100000;  // NOLINT
-
 
 static struct option long_options[] = {
     {"help", no_argument, NULL, 'h'},
@@ -67,13 +60,6 @@ static struct option long_options[] = {
 
     // tablebase
     {"tb_depth", required_argument, NULL, 0},
-
-    // performance testing
-    {"BCHT", no_argument, NULL, 'B'},
-
-    {"dfs", no_argument, NULL, 'D'},
-    {"dfs_depth", required_argument, NULL, 0},
-    {"num_dfs_positions", required_argument, NULL, 0},
 
     {NULL, 0, NULL, 0}
 };
@@ -102,14 +88,6 @@ list of options
     -t --threads               number of threads used in the program                      [MAX_THREADS]  (1, MAX_THREADS)
 
     --tb_depth                 depth of the tablebase (9 uses 40 GB RAM)                  [6]            (0, 9)
-
-    -p --num_positions         max number of positions used in the search                 [1e7]          (0, 1e18)
-
-    -B --BCHT                  time BCHT with comparison to phmap
-
-    -D --dfs                   time dfs on CPU [and GPU]
-    --dfs_depth                depth searched from the dfs                                [4]            (1, 6)
-    --num_dfs_positions        number of different dfs positions searched                 [100000]       (1, 1e18)
 )";
 
 
@@ -216,7 +194,7 @@ Settings::Settings (int argc, char *argv[]) {
     std::vector<std::string> arguments(argv, argv+argc);
     SetDefault(arguments);
 
-    const char* short_options = "hd:il:r:s:m:t:BD";
+    const char* short_options = "hd:il:r:s:m:t:";
     opterr = 0; // supress error messages from getopt_long
     int option_index;
     signed char cop;
@@ -261,7 +239,6 @@ Settings::Settings (int argc, char *argv[]) {
                 }
                 break;
                 }
-
             case 'r':
                 GetTFromOptarg(num_runs, size_t(0), size_t(1e18), "NUM RUNS");  // NOLINT
                 break;
@@ -271,18 +248,9 @@ Settings::Settings (int argc, char *argv[]) {
             case 'm':
                 GetTFromOptarg(min_corner_heuristic, 0, 27, "MIN CORNER HEURISTIC");
                 break;
-
             case 't':
                 GetTFromOptarg(num_threads, 1, num_threads, "THREADS");
                 break;
-
-            case 'B':
-                test_bcht = true;
-                break;
-            case 'D':
-                test_dfs = true;
-                break;
-
             case 0:
                 if (std::string(long_options[option_index].name) == "root_path") {
                     root_path = std::string(optarg);
@@ -293,13 +261,6 @@ Settings::Settings (int argc, char *argv[]) {
 
                 if (std::string(long_options[option_index].name) == "tb_depth") {
                     GetTFromOptarg(tb_depth, 0, 9, "TB DEPTH"); // NOLINT
-                }
-
-                if (std::string(long_options[option_index].name) == "dfs_depth") {
-                    GetTFromOptarg(dfs_depth, 1, kMaxDFSDepth, "DFS DEPTH"); // NOLINT
-                }
-                if (std::string(long_options[option_index].name) == "num_dfs_positions") {
-                    GetTFromOptarg(num_dfs_positions, size_t(1), size_t(1e18), "NUM DSF POSITIONS"); // NOLINT
                 }
                 break;
             case '?':

@@ -1,4 +1,3 @@
-#include <chrono>
 #include <cstddef>
 #include <functional>
 #include <string>
@@ -37,114 +36,6 @@ void TablebaseSearch (const std::vector<State>& previous, const std::vector<Stat
             next.insert(next_position.second);
         }
     }
-}
-
-
-void PhmapTiming(const TablebasePrecomputation& tablebase_precomputation, const std::vector<State>& random_positions, size_t thread_idx, size_t num_threads) {
-    size_t hit = 0;
-    size_t miss = 0;
-    for (size_t i = thread_idx; i < random_positions.size(); i+=num_threads) {
-        if (tablebase_precomputation.contains(random_positions[i])) {
-            hit++;
-        }
-        else {
-            miss++;
-        }
-    }
-    LOG_EXTRA("thread", thread_idx, "hits:", hit, "miss:", miss);
-}
-
-
-void BCHTTiming(const std::vector<State>& tablebase_layer, const std::vector<State>& random_positions, size_t thread_idx, size_t num_threads) {
-    size_t hit = 0;
-    size_t miss = 0;
-    size_t rp_size = random_positions.size();
-    for (size_t i = thread_idx; i < rp_size; i+=num_threads) {
-        if (BCHTSetContains(tablebase_layer, random_positions[i])) {
-            hit++;
-        }
-        else {
-            miss++;
-        }
-    }
-    LOG_EXTRA("thread", thread_idx, "hits:", hit, "miss:", miss);
-}
-
-
-std::vector<State> TimeTablebaseCPU(std::vector<std::vector<State>>& tablebase, TablebasePrecomputation& tablebase_precomputation) {
-    // only time largest tb_depth
-
-    LOG_EXTRA("Create test data for timing tablebase CPU");
-    std::vector<State> random_positions;
-    for (const State& state : tablebase[Settings::GetTBDepth()]) {
-        if (state == State()) {
-            continue;
-        }
-        random_positions.push_back(state);
-    }
-    for (const State& state : tablebase[Settings::GetTBDepth()-1]) {
-        if (state == State()) {
-            continue;
-        }
-        random_positions.push_back(state);
-    }
-
-    for (size_t i = 0; i < random_positions.size(); i++) {
-        std::swap(random_positions[i], random_positions[rand()%random_positions.size()]);
-    }
-
-    // Time phmap
-    LOG_EXTRA("Start timing of phmap");
-    std::chrono::time_point phmap_time = std::chrono::high_resolution_clock::now(); // get the current time
-
-    PhmapTiming(tablebase_precomputation, random_positions, 0, 1);
-
-    std::chrono::time_point phmap_since_epoch = std::chrono::high_resolution_clock::now(); // get the duration since epoch
-    std::chrono::milliseconds phmap_millis = std::chrono::duration_cast<std::chrono::milliseconds>(phmap_since_epoch - phmap_time);
-    LOG_ALL("Time duration for phmap:", phmap_millis.count());
-
-    // Time phmap multithreads
-    LOG_EXTRA("Start timing of phmap multithreads");
-    std::chrono::time_point phmap_time_multi = std::chrono::high_resolution_clock::now(); // get the current time
-
-    {
-        std::vector<std::jthread> threads;
-        for (int j = 0; j < Settings::GetNumThreads(); j++) {
-            threads.push_back(std::jthread(PhmapTiming, std::ref(tablebase_precomputation), std::ref(random_positions), j, Settings::GetNumThreads()));
-        }
-    }
-
-    std::chrono::time_point phmap_since_epoch_multi = std::chrono::high_resolution_clock::now(); // get the duration since epoch
-    std::chrono::milliseconds phmap_millis_multi = std::chrono::duration_cast<std::chrono::milliseconds>(phmap_since_epoch_multi - phmap_time_multi);
-    LOG_ALL("Time duration for phmap multithreads:", phmap_millis_multi.count());
-
-    // Time BCHT
-    LOG_EXTRA("Start timing of BCHT");
-    std::chrono::time_point bcht_time = std::chrono::high_resolution_clock::now(); // get the current time
-
-    BCHTTiming(tablebase[Settings::GetTBDepth()], random_positions, 0, 1);
-
-    std::chrono::time_point bcht_since_epoch = std::chrono::high_resolution_clock::now(); // get the current time
-    std::chrono::milliseconds bcht_millis = std::chrono::duration_cast<std::chrono::milliseconds>(bcht_since_epoch - bcht_time);
-    LOG_ALL("Time duration for BCHT:", bcht_millis.count());
-
-    // Time BCHT multithreads
-    LOG_EXTRA("Start timing of BCHT multithreads");
-    std::chrono::time_point bcht_time_multi = std::chrono::high_resolution_clock::now(); // get the current time
-
-    {
-        std::vector<std::jthread> threads;
-        for (int j = 0; j < Settings::GetNumThreads(); j++) {
-            threads.push_back(std::jthread(BCHTTiming, std::ref(tablebase[Settings::GetTBDepth()]), std::ref(random_positions), j, Settings::GetNumThreads()));
-        }
-    }
-
-    std::chrono::time_point bcht_since_epoch_multi = std::chrono::high_resolution_clock::now(); // get the current time
-    std::chrono::milliseconds bcht_millis_multi = std::chrono::duration_cast<std::chrono::milliseconds>(bcht_since_epoch_multi - bcht_time_multi);
-    LOG_ALL("Time duration for BCHT multithreads:", bcht_millis_multi.count());
-
-    LOG_MEMORY();
-    return random_positions;
 }
 
 
@@ -231,24 +122,5 @@ void Tablebase::Initialize() {
         previous_tables.second = tablebase.back();
         SavePrecomputation(tablebase.back(), i);
         LOG_MEMORY();
-    }
-
-    if (Settings::GetTestBCHT()) {
-        LOG_EXTRA("Needs to generate phmap");
-        if (tablebase_layer.empty()) {
-            for (const State& state : tablebase.back()) {
-                if (state != State()) {
-                    tablebase_layer.insert(state);
-                }
-            }
-        }
-        std::vector<State> random_positions = TimeTablebaseCPU(tablebase, tablebase_layer);
-        #ifdef USE_CUDA
-        if (Settings::UseCuda()) {
-            LOG_EXTRA("Start Tablebase Timing Uploading Precomputation to Device");
-            UploadRandomPositionsToDevice(random_positions);
-            LOG_INFO("Tablebase Timing Uploaded to Device");
-        }
-        #endif // USE_CUDA
     }
 }

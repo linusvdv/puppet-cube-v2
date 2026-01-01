@@ -1,5 +1,4 @@
 #include "cube.hpp"
-#include "DFS.hpp"
 #include "info.hpp"
 #include "logger.hpp"
 #include "search.hpp"
@@ -7,7 +6,6 @@
 #include "tablebase.hpp"
 
 #ifdef USE_CUDA
-#include "BCHTSet_bridge.hpp"
 #include "info_bridge.hpp"
 #endif
 
@@ -37,14 +35,6 @@ int main (int argc, char *argv[]) {
     Tablebase::UploadComputationToDevice();
     LOG_MEMORY();
 
-    // time BCHT on GPU
-    #ifdef USE_CUDA
-    if (Settings::UseCuda()) {
-        TimeBCHTGPU();
-    }
-    #endif
-
-    TimeDFS();
     LOG_MEMORY();
 
     SearchManager();

@@ -1,35 +1,39 @@
 #pragma once
 
-constexpr int kURotationSize = 32;
-
-
-struct URotations {
-    uint64_t data[4];
-
-    // const index
-    __host__ __device__
-    uint8_t At(size_t idx) const {
-        return data[idx/8] >> ((idx % 8) * 8);
+__host__ __device__ inline uint8_t RotationsAt(const uint64_t& rotations_1, const uint64_t& rotations_2, const uint8_t& idx) {
+    if (idx < 8) {
+        return uint8_t(rotations_1 >> (8 * idx));
     }
+    return uint8_t(rotations_2 >> (8 * (idx-8)));
+}
 
-    __host__ __device__
-    void BitOR(size_t idx, uint8_t value) {
-        data[idx/8] |= uint64_t(value) << ((idx % 8) * 8);
-    }
 
-    __host__ __device__
-    void BitXOR(size_t idx, uint8_t value) {
-        data[idx/8] ^= uint64_t(value) << ((idx % 8) * 8);
+__host__ __device__ inline void RotationsSet(uint64_t& rotations_1, uint64_t& rotations_2, const uint8_t& idx, const uint8_t& value) {
+    if (idx < 8) {
+        rotations_1 ^= uint64_t(uint8_t(rotations_1 >> (8 * idx)) ^ value) << (8 * idx);
     }
+    else {
+        rotations_2 ^= uint64_t(uint8_t(rotations_2 >> (8 * (idx-8))) ^ value) << (8 * (idx-8));
+    }
+}
 
-    __host__ __device__
-    void Set(size_t idx, uint8_t value) {
-        data[idx/8] &= ~(uint64_t(uint8_t(-1)) << ((idx % 8) * 8));
-        BitOR(idx, value);
-    }
 
-    __host__ __device__
-    void Add(size_t idx, uint8_t value) {
-        Set(idx, At(idx)+value);
+// it is guarantied that a rotation add does not overflow into the next idx (this code does not account for it!)
+__host__ __device__ inline void RotationsAdd(uint64_t& rotations_1, uint64_t& rotations_2, const uint8_t& idx, const uint8_t& value) {
+    if (idx < 8) {
+        rotations_1 += uint64_t(value) << (8 * idx);
     }
-};
+    else {
+        rotations_2 += uint64_t(value) << (8 * (idx-8));
+    }
+}
+
+
+__host__ __device__ inline void RotationsXOR(uint64_t& rotations_1, uint64_t& rotations_2, const uint8_t& idx, const uint8_t& value) {
+    if (idx < 8) {
+        rotations_1 ^= uint64_t(value) << (8 * idx);
+    }
+    else {
+        rotations_2 ^= uint64_t(value) << (8 * (idx-8));
+    }
+}

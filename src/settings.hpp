@@ -97,19 +97,4 @@ public:
     static uint8_t GetTBDepth() {
         return tb_depth;
     }
-
-    // performance testing
-    static bool GetTestBCHT() {
-        return test_bcht;
-    }
-
-    static bool GetTestDFS() {
-        return test_dfs;
-    }
-    static int GetDFSDepth() {
-        return dfs_depth;
-    }
-    static size_t GetNumDFSPositions() {
-        return num_dfs_positions;
-    }
 };

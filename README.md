@@ -59,12 +59,4 @@ list of options
     -t --threads               number of threads used in the program                      [MAX_THREADS]  (1, MAX_THREADS)
 
     --tb_depth                 depth of the tablebase (9 uses 40 GB RAM)                  [6]            (0, 9)
-
-    -p --num_positions         max number of positions used in the search                 [1e7]          (0, 1e18)
-
-    -B --BCHT                  time BCHT with comparison to phmap
-
-    -D --dfs                   time dfs on CPU [and GPU]
-    --dfs_depth                depth searched from the dfs                                [4]            (1, 6)
-    --num_dfs_positions        number of different dfs positions searched                 [100000]       (1, 1e18)
 ```

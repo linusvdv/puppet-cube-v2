@@ -84,7 +84,6 @@ add_executable(PuppetCubeV2
     src/tablebase.cpp
     src/BCHTSet.cpp
     src/random_position.cpp
-    src/DFS.cpp
     src/search.cpp
     src/special_cubes.cpp
     src/info.cpp
@@ -95,8 +94,6 @@ if(USE_CUDA)
 
     target_sources(PuppetCubeV2 PRIVATE
         src/search.cu
-        src/BCHTSet.cu
-        src/DFS.cu
         src/cube.cu
         src/info.cu
     )
