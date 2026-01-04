@@ -76,9 +76,7 @@ __device__ inline bool DRotate(uint16_t& corner_orientation, uint16_t& corner_po
         prev_edge_heuristic_1 = edge_heuristic_1;
         prev_edge_heuristic_2 = edge_heuristic_2;
     }
-    if ((!rev && rotation < 12) || rev) {
-        corner_heuristic = uint16_t(-1);
-    }
+    corner_heuristic = uint16_t(-1);
     edge_heuristic_1 = uint8_t(-1);
     edge_heuristic_2 = uint8_t(-1);
     corner_orientation = d_corner_orientations[(corner_orientation*kNumRotations) + rotation];
