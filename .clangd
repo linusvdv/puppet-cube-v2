@@ -1,7 +1,6 @@
 Diagnostics:
   Suppress:
     - pp_hash_error
-
 If:
   PathMatch: .*\.(cu|cuh)$
 CompileFlags:

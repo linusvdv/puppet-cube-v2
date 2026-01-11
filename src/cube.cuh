@@ -45,7 +45,7 @@ struct DState {
     }
 
     // Default not legal State
-    __device__ constexpr DState() {}
+    __host__ __device__ constexpr DState() {}
 
     DState(const State& host_state) {
         hash_1 = host_state.hash_1;

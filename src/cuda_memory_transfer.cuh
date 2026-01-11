@@ -24,6 +24,15 @@ inline void MallocOnDevice(const std::vector<T1>& data, T2*& pointer) {
 }
 
 
+template<typename T>
+void MallocOnDevice(T*& pointer, size_t size) {
+    cudaError_t err = cudaMalloc((void **)&pointer, sizeof(T)*size);
+    if (err != cudaSuccess) {
+        LOG_CRITICAL(cudaGetErrorString(err));
+    }
+}
+
+
 template<typename T1, typename T2>
 requires SameDataTypeStructure<T1, T2>
 inline void MemcpyToDevice(const std::vector<T1>& data, T2*& pointer) {
@@ -45,8 +54,26 @@ inline void MemcpyToDeviceStream(const std::vector<T1>& data, T2*& pointer, cons
 
 
 template<typename T>
-inline void MemcpyToSymbol(const T& data, T& d_pointer) {
+inline void MemcpyToDeviceStream(T& data, T*& pointer, const cudaStream_t& cuda_stream) {
+    cudaError_t err = cudaMemcpyAsync(pointer, data.data(), sizeof(T), cudaMemcpyHostToDevice, cuda_stream);
+    if (err != cudaSuccess) {
+        LOG_CRITICAL(cudaGetErrorString(err));
+    }
+}
+
+
+template<typename T>
+inline void MemcpyToSymbol (const T& data, T& d_pointer) {
     cudaError_t err = cudaMemcpyToSymbol(d_pointer, &data, sizeof(T));
+    if (err != cudaSuccess) {
+        LOG_CRITICAL(cudaGetErrorString(err));
+    }
+}
+
+
+template<typename T>
+inline void MemcpyFromSymbol (const T& data, T& d_pointer) {
+    cudaError_t err = cudaMemcpyFromSymbol(&data, d_pointer, sizeof(T));
     if (err != cudaSuccess) {
         LOG_CRITICAL(cudaGetErrorString(err));
     }
