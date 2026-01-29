@@ -1,12 +1,8 @@
 #pragma once
-#include <algorithm>
-#include <bit>
 #include <compare>
 #include <cstddef>
 #include <cstdint>
 #include <vector>
-
-#include "logger.hpp"
 
 
 constexpr int kNumCorners = 8;

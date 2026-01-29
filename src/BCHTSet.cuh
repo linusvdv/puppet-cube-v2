@@ -1,4 +1,6 @@
 #pragma once
+#include <cstdint>
+
 #include "cube.cuh"
 #include "BCHTSet.hpp"
 

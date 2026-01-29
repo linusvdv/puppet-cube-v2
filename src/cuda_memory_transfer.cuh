@@ -1,7 +1,5 @@
 #pragma once
 #include <cuda.h>
-#include <cuda_device_runtime_api.h>
-#include <cuda_runtime_api.h>
 #include <driver_types.h>
 #include <vector>
 
@@ -35,6 +33,25 @@ void MallocOnDevice(T*& pointer, size_t size) {
 
 template<typename T1, typename T2>
 requires SameDataTypeStructure<T1, T2>
+inline void MallocOnDeviceStream(const std::vector<T1>& data, T2*& pointer, const cudaStream_t& cuda_stream) {
+    cudaError_t err = cudaMallocAsync((void **)&pointer, sizeof(T1)*data.size(), cuda_stream);
+    if (err != cudaSuccess) {
+        LOG_CRITICAL(cudaGetErrorString(err));
+    }
+}
+
+
+template<typename T>
+void MallocOnDeviceStream(T*& pointer, size_t size, const cudaStream_t& cuda_stream) {
+    cudaError_t err = cudaMallocAsync((void **)&pointer, sizeof(T)*size, cuda_stream);
+    if (err != cudaSuccess) {
+        LOG_CRITICAL(cudaGetErrorString(err));
+    }
+}
+
+
+template<typename T1, typename T2>
+requires SameDataTypeStructure<T1, T2>
 inline void MemcpyToDevice(const std::vector<T1>& data, T2*& pointer) {
     cudaError_t err = cudaMemcpy(pointer, data.data(), sizeof(T1)*data.size(), cudaMemcpyHostToDevice);
     if (err != cudaSuccess) {
@@ -55,7 +72,7 @@ inline void MemcpyToDeviceStream(const std::vector<T1>& data, T2*& pointer, cons
 
 template<typename T>
 inline void MemcpyToDeviceStream(T& data, T*& pointer, const cudaStream_t& cuda_stream) {
-    cudaError_t err = cudaMemcpyAsync(pointer, data.data(), sizeof(T), cudaMemcpyHostToDevice, cuda_stream);
+    cudaError_t err = cudaMemcpyAsync(pointer, &data, sizeof(T), cudaMemcpyHostToDevice, cuda_stream);
     if (err != cudaSuccess) {
         LOG_CRITICAL(cudaGetErrorString(err));
     }
@@ -72,7 +89,7 @@ inline void MemcpyToSymbol (const T& data, T& d_pointer) {
 
 
 template<typename T>
-inline void MemcpyFromSymbol (const T& data, T& d_pointer) {
+inline void MemcpyFromSymbol (T& data, T& d_pointer) {
     cudaError_t err = cudaMemcpyFromSymbol(&data, d_pointer, sizeof(T));
     if (err != cudaSuccess) {
         LOG_CRITICAL(cudaGetErrorString(err));
@@ -123,7 +140,7 @@ template<typename T1, typename T2>
 requires SameDataTypeStructure<T1, T2>
 void UploadToDeviceSymbol(const std::vector<T1>& data, T2*& d_pointer) {
     T2* temp_pointer = nullptr;
-    MallocOnDevice(data, temp_pointer);
+    MallocOnDeviceStream(data, temp_pointer);
     MemcpyToDevice(data, temp_pointer);
     MemcpyToSymbol(temp_pointer, d_pointer);
 }
@@ -131,9 +148,9 @@ void UploadToDeviceSymbol(const std::vector<T1>& data, T2*& d_pointer) {
 
 template<typename T1, typename T2>
 requires SameDataTypeStructure<T1, T2>
-void UploadToDevice(const std::vector<T1>& data, T2*& d_pointer) {
-    MallocOnDevice(data, d_pointer);
-    MemcpyToDevice(data, d_pointer);
+void UploadToDeviceStream(const std::vector<T1>& data, T2*& d_pointer, const cudaStream_t& cuda_stream) {
+    MallocOnDeviceStream(data, d_pointer, cuda_stream);
+    MemcpyToDevice(data, d_pointer, cuda_stream);
 }
 
 

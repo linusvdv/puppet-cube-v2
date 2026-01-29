@@ -5,7 +5,8 @@ If:
   PathMatch: .*\.(cu|cuh)$
 CompileFlags:
   Add:
-    - Ibuild/_dep/cuco-src/include
+    - -x
+    - cuda
   Remove:
     - -forward-unknown-to-host-compiler
     - --generate-code=arch=compute_89,code=[compute_89,sm_89]
@@ -20,9 +21,10 @@ If:
 CompileFlags:
   Add:
     - -std=c++20
-    - Ibuild/_dep/cuco-src/include
   Remove:
     - -forward-unknown-to-host-compiler
     - --generate-code=arch=compute_89,code=[compute_89,sm_89]
     - --expt-extended-lambda
     - -Xptxas
+    - -x
+    - cuda
