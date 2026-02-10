@@ -128,6 +128,7 @@ __device__ inline void DRevRotation(uint8_t& rotation) {
 __constant__ uint32_t num_gpu_threads;
 __constant__ uint8_t cur_depth;
 __constant__ uint8_t tb_depth;
+__device__ int found_solution;
 __device__ unsigned long long num_gpu_positions;
 
 
@@ -148,7 +149,7 @@ __global__ void DeviceLeafSearch (uint8_t* d_rotation_idxs, uint8_t* d_starting_
                                   uint64_t* d_rotations_1, uint64_t* d_rotations_2,  // rotations
                                   uint16_t* d_corner_orientations, uint16_t* d_corner_positions, uint16_t* d_edge_orientations, uint32_t* d_edge_positions_1, uint32_t* d_edge_positions_2,
                                   DState* d_starting_states,
-                                  int* first_sol, DState* sol_state, // only one element
+                                  DState* sol_state, // only one element
                                   uint32_t* ps_finished_pos, uint32_t* ps_num_rotations // prefix sums for split
                                   ) {
     // get current leaf thread idx
@@ -261,8 +262,8 @@ __global__ void DeviceLeafSearch (uint8_t* d_rotation_idxs, uint8_t* d_starting_
 
         // check if the current state is in tablebase and is therefore a new best solution
         if (max_heuristic <= tb_depth && DBCHTSetContains(d_tablebase, d_tablebase_size, DState(corner_orientation, corner_position, edge_orientation, edge_position_1, edge_position_2))) {
-            int check_first_sol = atomicOr(first_sol, 1);
-            if (check_first_sol == 0) { // first solution
+            bool cur_found_solution = bool(atomicCAS(&found_solution, int(false), int(true)));
+            if (!cur_found_solution) { // first solution
                 *sol_state = d_starting_states[index];
             }
             break;
@@ -342,6 +343,7 @@ void InitializeUploadToDevice () {
         cudaSetDevice(i);
         MemcpyToSymbol(uint32_t(Settings::GetNumGPUThreads()), num_gpu_threads);
         MemcpyToSymbol(Settings::GetTBDepth(), tb_depth);
+        MemcpyToSymbol(int(false), found_solution);
     }
 }
 
@@ -362,8 +364,7 @@ uint64_t ResetNumGPUPositions () {
         unsigned long long cur_num_gpu_positions;
         MemcpyFromSymbol(cur_num_gpu_positions, num_gpu_positions);
         total_num_gpu_positions += cur_num_gpu_positions;
-        cur_num_gpu_positions = 0;
-        MemcpyToSymbol(cur_num_gpu_positions, num_gpu_positions);
+        MemcpyToSymbol(0ULL, num_gpu_positions);
     }
     return total_num_gpu_positions;
 }
@@ -453,21 +454,18 @@ void DeviceLeafManager (std::stop_token stocken, SharedLeafStates& shared_leaf_s
     int first_sol = 0;
     DState sol_state = DState();
     // circular queue with Settings::GetNumGPUThreads elements
-    // this start and finish describe which part of the queue has data inside (so from start to finish has data)
-    // note that finish < start as the queue is implemented circular
-    uint32_t pos_queue_start_idx = 0;
-    uint32_t pos_queue_finish_idx = 0;
-    std::vector<std::pair<DState, uint8_t>> splitmix_positions(Settings::GetNumGPUThreads(), {DState(), -1});
-
+    uint32_t pos_queue_idx = 0;
+    uint32_t pos_queue_num_elements = 0;
     std::vector<std::pair<State, uint8_t>> pos_queue_host(Settings::GetNumGPUThreads(), {State(), -1});
     HostRegister(pos_queue_host);
 
+    std::vector<std::pair<DState, uint8_t>> splitmix_positions(Settings::GetNumGPUThreads(), {DState(), -1});
 
     // device updated
     int* d_first_sol;
     DState* d_sol_state;
-    uint32_t* d_pos_queue_start_idx;
-    uint32_t* d_pos_queue_finish_idx;
+    uint32_t* d_pos_queue_idx;
+    uint32_t* d_pos_queue_num_elements;
     std::pair<DState, uint8_t>* d_splitmix_positions;
 
     // allocate on device update
@@ -475,10 +473,10 @@ void DeviceLeafManager (std::stop_token stocken, SharedLeafStates& shared_leaf_s
     MemcpyToDeviceStream(first_sol, d_first_sol, cuda_stream);
     MallocOnDeviceStream(d_sol_state, 1, cuda_stream);
     MemcpyToDeviceStream(sol_state, d_sol_state, cuda_stream);
-    MallocOnDeviceStream(d_pos_queue_start_idx, 1, cuda_stream);
-    MemcpyToDeviceStream(pos_queue_start_idx, d_pos_queue_start_idx, cuda_stream);
-    MallocOnDeviceStream(d_pos_queue_finish_idx, 1, cuda_stream);
-    MemcpyToDeviceStream(pos_queue_finish_idx, d_pos_queue_finish_idx, cuda_stream);
+    MallocOnDeviceStream(d_pos_queue_idx, 1, cuda_stream);
+    MemcpyToDeviceStream(pos_queue_idx, d_pos_queue_idx, cuda_stream);
+    MallocOnDeviceStream(d_pos_queue_num_elements, 1, cuda_stream);
+    MemcpyToDeviceStream(pos_queue_num_elements, d_pos_queue_num_elements, cuda_stream);
 
     HostRegister(splitmix_positions);
     UploadToDeviceStream(splitmix_positions, d_splitmix_positions, cuda_stream);
