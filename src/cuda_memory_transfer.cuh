@@ -140,7 +140,7 @@ template<typename T1, typename T2>
 requires SameDataTypeStructure<T1, T2>
 void UploadToDeviceSymbol(const std::vector<T1>& data, T2*& d_pointer) {
     T2* temp_pointer = nullptr;
-    MallocOnDeviceStream(data, temp_pointer);
+    MallocOnDevice(data, temp_pointer);
     MemcpyToDevice(data, temp_pointer);
     MemcpyToSymbol(temp_pointer, d_pointer);
 }
@@ -150,7 +150,7 @@ template<typename T1, typename T2>
 requires SameDataTypeStructure<T1, T2>
 void UploadToDeviceStream(const std::vector<T1>& data, T2*& d_pointer, const cudaStream_t& cuda_stream) {
     MallocOnDeviceStream(data, d_pointer, cuda_stream);
-    MemcpyToDevice(data, d_pointer, cuda_stream);
+    MemcpyToDeviceStream(data, d_pointer, cuda_stream);
 }
 
 

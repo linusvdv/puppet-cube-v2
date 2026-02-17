@@ -107,6 +107,7 @@ struct State {
 
 
 constexpr State kSolvedState = State(0, 0, 0, 0, kNumEdgePositions-1);
+constexpr State kDefaultState = State();
 
 
 // A cube instance is not long living

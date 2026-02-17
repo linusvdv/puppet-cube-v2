@@ -1,39 +1,55 @@
 #pragma once
+struct RegRotations {
+    uint8_t idx = 0;
+    uint64_t d1 = 0;
+    uint64_t d2 = 0;
+};
 
-__host__ __device__ inline uint8_t RotationsAt(const uint64_t& rotations_1, const uint64_t& rotations_2, const uint8_t& idx) {
-    if (idx < 8) {
-        return uint8_t(rotations_1 >> (8 * idx));
+
+
+__host__ __device__ inline uint8_t RotationsAt(const RegRotations& reg_rotations) {
+    if (reg_rotations.idx < 8) {
+        return uint8_t(reg_rotations.d1 >> (8 * reg_rotations.idx));
     }
-    return uint8_t(rotations_2 >> (8 * (idx-8)));
+    return uint8_t(reg_rotations.d2 >> (8 * (reg_rotations.idx-8)));
 }
 
 
-__host__ __device__ inline void RotationsSet(uint64_t& rotations_1, uint64_t& rotations_2, const uint8_t& idx, const uint8_t& value) {
-    if (idx < 8) {
-        rotations_1 ^= uint64_t(uint8_t(rotations_1 >> (8 * idx)) ^ value) << (8 * idx);
+template<uint8_t idx>
+__host__ __device__ inline uint8_t RotationsAt(const RegRotations& reg_rotations) {
+    if constexpr (idx < 8) {
+        return uint8_t(reg_rotations.d1 >> (8 * idx));
+    }
+    return uint8_t(reg_rotations.d2 >> (8 * (idx-8)));
+}
+
+
+__host__ __device__ inline void RotationsSet(RegRotations& reg_rotations, const uint8_t& value) {
+    if (reg_rotations.idx < 8) {
+        reg_rotations.d1 ^= uint64_t(uint8_t(reg_rotations.d1 >> (8 * reg_rotations.idx)) ^ value) << (8 * reg_rotations.idx);
     }
     else {
-        rotations_2 ^= uint64_t(uint8_t(rotations_2 >> (8 * (idx-8))) ^ value) << (8 * (idx-8));
+        reg_rotations.d2 ^= uint64_t(uint8_t(reg_rotations.d2 >> (8 * (reg_rotations.idx-8))) ^ value) << (8 * (reg_rotations.idx-8));
     }
 }
 
 
 // it is guarantied that a rotation add does not overflow into the next idx (this code does not account for it!)
-__host__ __device__ inline void RotationsAdd(uint64_t& rotations_1, uint64_t& rotations_2, const uint8_t& idx, const uint8_t& value) {
-    if (idx < 8) {
-        rotations_1 += uint64_t(value) << (8 * idx);
+__host__ __device__ inline void RotationsAdd(RegRotations& reg_rotations, const uint8_t& value) {
+    if (reg_rotations.idx < 8) {
+        reg_rotations.d1 += uint64_t(value) << (8 * reg_rotations.idx);
     }
     else {
-        rotations_2 += uint64_t(value) << (8 * (idx-8));
+        reg_rotations.d2 += uint64_t(value) << (8 * (reg_rotations.idx-8));
     }
 }
 
 
-__host__ __device__ inline void RotationsXOR(uint64_t& rotations_1, uint64_t& rotations_2, const uint8_t& idx, const uint8_t& value) {
-    if (idx < 8) {
-        rotations_1 ^= uint64_t(value) << (8 * idx);
+__host__ __device__ inline void RotationsXOR(RegRotations& reg_rotations, const uint8_t& value) {
+    if (reg_rotations.idx < 8) {
+        reg_rotations.d1 ^= uint64_t(value) << (8 * reg_rotations.idx);
     }
     else {
-        rotations_2 ^= uint64_t(value) << (8 * (idx-8));
+        reg_rotations.d2 ^= uint64_t(value) << (8 * (reg_rotations.idx-8));
     }
 }
