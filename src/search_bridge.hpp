@@ -1,14 +1,9 @@
 #pragma once
+#include <atomic>
 #include <stop_token>
 
 #include "cube.hpp"
 #include "search.hpp"
-
-
-struct StartingPosition {
-    uint8_t depth;
-    State state;
-};
 
 
 struct RegState {
@@ -20,7 +15,18 @@ struct RegState {
 };
 
 
-void DeviceLeafManager (std::stop_token stocken, SharedLeafStates& shared_leaf_states,
-                        uint64_t& num_positions_leaf, VisitedMap& visited_leaf,
-                        std::atomic<uint8_t>& atomic_best_depth, std::pair<State, uint8_t>& best_endstate_leafs,
-                        const int& thread_idx);
+struct SharedLeafSolution {
+    std::atomic<bool> finished{false};
+    State state;
+    uint8_t best_depth;
+};
+
+
+void CudaConstMemInitialize ();
+
+
+void CudaConstMemChangeCurDepth (uint8_t depth);
+
+
+void DeviceLeafManager (std::stop_token stocken, SharedLeafStates& shared_leaf_states, VisitedMap& visited_leaf,
+                        SharedLeafSolution& shared_leaf_solution, uint64_t& num_gpu_positions, const int& thread_idx);

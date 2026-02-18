@@ -125,6 +125,14 @@ inline void MemcpyFromDeviceStream(std::vector<T1>& data, T2*& pointer, const cu
     }
 }
 
+template<typename T>
+inline void MemcpyFromDeviceStream(T& data, T*& pointer, const cudaStream_t& cuda_stream) {
+    cudaError_t err = cudaMemcpyAsync(&data, pointer, sizeof(T), cudaMemcpyDeviceToHost, cuda_stream);
+    if (err != cudaSuccess) {
+        LOG_CRITICAL(cudaGetErrorString(err));
+    }
+}
+
 
 template<typename T>
 inline void FreeCudaPointer(T& d_pointer) {

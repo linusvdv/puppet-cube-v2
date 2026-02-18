@@ -347,10 +347,14 @@ void SearchManager () {
             std::vector<uint64_t> num_positions_leaf_threads(num_leaf_threads, 0);
             #ifdef USE_CUDA
             if (Settings::UseCuda()) {
+                CudaConstMemChangeCurDepth(id_depth);
+
+                SharedLeafSolution shared_leaf_solution = {{false}, State(), uint8_t(-1)};
                 for (int i = 0; i < Settings::GetNumGPUUploadThreads(); i++) {
                     leaf_manager_threads.push_back(std::jthread(DeviceLeafManager, std::ref(shared_leaf_states),
-                                                                std::ref(num_positions_leaf_threads[i]), std::ref(visited_leaf_threads[i]),
-                                                                std::ref(atomic_best_depth), std::ref(best_endstate_leaf_threads[i]), i));
+                                                                std::ref(visited_leaf_threads[i]),
+                                                                std::ref(shared_leaf_solution),
+                                                                std::ref(num_positions_leaf_threads[i]), i));
                 }
             }
             #endif

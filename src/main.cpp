@@ -7,6 +7,7 @@
 
 #ifdef USE_CUDA
 #include "info_bridge.hpp"
+#include "search_bridge.hpp"
 #endif
 
 
@@ -35,9 +36,15 @@ int main (int argc, char *argv[]) {
     Tablebase::UploadComputationToDevice();
     LOG_MEMORY();
 
-    LOG_MEMORY();
+    #ifdef USE_CUDA
+    if (Settings::GetHardwareInfo() && Settings::UseCuda()) {
+        CudaConstMemInitialize();
+        LOG_MEMORY();
+    }
+    #endif // USE_CUDA
 
     SearchManager();
     LOG_INFO("Search Computed");
+    LOG_MEMORY();
     return 0;
 }
