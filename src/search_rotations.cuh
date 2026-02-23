@@ -1,6 +1,6 @@
 #pragma once
 struct RegRotations {
-    uint8_t idx = 0;
+    uint8_t idx = -1;
     uint64_t d1 = 0;
     uint64_t d2 = 0;
 };

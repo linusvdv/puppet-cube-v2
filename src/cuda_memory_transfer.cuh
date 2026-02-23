@@ -105,6 +105,14 @@ inline void HostRegister(std::vector<T>& data) {
     }
 }
 
+template<typename T>
+inline void HostRegister(T*& data) {
+    cudaError_t err = cudaHostRegister(data, 1 * sizeof(T), cudaHostRegisterDefault);
+    if (err != cudaSuccess) {
+        LOG_CRITICAL(cudaGetErrorString(err));
+    }
+}
+
 
 template<typename T1, typename T2>
 requires SameDataTypeStructure<T1, T2>

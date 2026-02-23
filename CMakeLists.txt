@@ -128,5 +128,6 @@ target_compile_options(PuppetCubeV2 PRIVATE
     $<$<COMPILE_LANGUAGE:CXX>:-Wall -Wextra -g>
     $<$<COMPILE_LANGUAGE:CUDA>:-Xptxas -v --keep --keep-dir=${CUDA_KEEP_DIR} -lineinfo>
     $<$<CONFIG:Debug>:${Debug_Options}>
+    $<$<CONFIG:Debug>:$<$<COMPILE_LANGUAGE:CUDA>:-G>>
     $<$<CONFIG:Release>:${Release_Options}>
 )

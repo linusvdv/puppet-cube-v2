@@ -37,8 +37,9 @@ int main (int argc, char *argv[]) {
     LOG_MEMORY();
 
     #ifdef USE_CUDA
-    if (Settings::GetHardwareInfo() && Settings::UseCuda()) {
+    if (Settings::UseCuda()) {
         CudaConstMemInitialize();
+        LOG_INFO("Cuda Constant Memory Inizialized");
         LOG_MEMORY();
     }
     #endif // USE_CUDA
