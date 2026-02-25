@@ -141,6 +141,12 @@ __device__ inline uint32_t GetNumRotationsLeft(const RegState& reg_state, const 
 }
 
 
+constexpr DeviceSolution kDefaultDeviceSolution = DeviceSolution();
+constexpr RegRotations kDefaultRegRotations = RegRotations();
+constexpr RegState kDefaultRegState = RegState();
+constexpr Heuristics kDefaultHeuristics = Heuristics();
+
+
 __global__ void DeviceLeafSearch (int32_t* d_pos_queue_idx, int32_t* d_pos_queue_num_elements, int32_t* atomic_offset_idx,
                                   const uint8_t* d_starting_depths,
                                   RegState* d_reg_states,
@@ -176,13 +182,13 @@ __global__ void DeviceLeafSearch (int32_t* d_pos_queue_idx, int32_t* d_pos_queue
     RegState reg_state = d_reg_states[index];
 
     // heuristics
-    Heuristics heuristic = {};
+    Heuristics heuristic = kDefaultHeuristics;
 
     // previous state
-    RegState prev_reg_state = {};
+    RegState prev_reg_state = kDefaultRegState;
 
     // previous rotations
-    Heuristics prev_heuristic = {};
+    Heuristics prev_heuristic = kDefaultHeuristics;
 
     if (reg_rotations.idx == 0) {
         num_position_thread++;
@@ -284,7 +290,6 @@ __global__ void GetNewStates(std::pair<State, uint8_t>* d_position_queue, const 
     if (current_offset_idx >= *d_pos_queue_num_elements) {
         return;
     }
-    d_starting_depths[index] = d_position_queue[index].second;
     RegRotations reg_rotations;
     reg_rotations.d1 = 0;
     reg_rotations.d2 = 0;
@@ -298,6 +303,7 @@ __global__ void GetNewStates(std::pair<State, uint8_t>* d_position_queue, const 
     reg_state.edge_position_2 = d_position_queue[pos_queue_idx].first.hash_3 & ((uint32_t(1) << 20)-1);
     reg_state.edge_orientation = d_position_queue[pos_queue_idx].first.hash_3 >> 20;
     d_reg_states[index] = reg_state;
+    d_starting_depths[index] = d_position_queue[pos_queue_idx].second;
 }
 
 // device memory only
@@ -309,12 +315,12 @@ __global__ void MemInitialization(RegRotations* d_reg_rotations, RegState* d_reg
     }
 
     if (index == 0) {
-        *d_device_solution = {};
+        *d_device_solution = kDefaultDeviceSolution;
         *d_atomic_offset_idx = 0;
     }
 
-    d_reg_rotations[index] = {};
-    d_reg_state[index] = {};
+    d_reg_rotations[index] = kDefaultRegRotations;
+    d_reg_state[index] = kDefaultRegState;
     d_starting_depths[index] = -1;
     d_num_position_threads[index] = 0;
 }
@@ -336,6 +342,7 @@ void CudaConstMemChangeCurDepth (uint8_t depth) {
         cudaSetDevice(i);
         MemcpyToSymbol(depth, cur_depth);
     }
+    cudaDeviceSynchronize();
 }
 
 
@@ -397,7 +404,7 @@ void UploadBatchesToDevice (SharedLeafStates& shared_leaf_states,
     }
 
     if (new_num_elements > 0) {
-        LOG_EXTRA(position_queue[pos_queue_idx].first.hash_1, position_queue[pos_queue_idx].first.hash_2, position_queue[pos_queue_idx].first.hash_3);
+        LOG_EXTRA(position_queue[pos_queue_idx].first.hash_1, position_queue[pos_queue_idx].first.hash_2, position_queue[pos_queue_idx].first.hash_3, "num:", new_num_elements);
     }
 
     // copy to device wrap around

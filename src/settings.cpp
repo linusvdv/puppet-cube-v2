@@ -192,7 +192,7 @@ void Settings::SetDefault (std::vector<std::string>& arguments) {
 
     num_gpu_upload_threads = 1;
     num_threads = 1;
-    num_gputhreads = 1;
+    num_gputhreads = 64;
     num_positions_per_batch = 1;
 }
 
