@@ -403,10 +403,6 @@ void UploadBatchesToDevice (SharedLeafStates& shared_leaf_states,
         }
     }
 
-    if (new_num_elements > 0) {
-        LOG_EXTRA(position_queue[pos_queue_idx].first.hash_1, position_queue[pos_queue_idx].first.hash_2, position_queue[pos_queue_idx].first.hash_3, "num:", new_num_elements);
-    }
-
     // copy to device wrap around
     int copy_num_elements = new_num_elements;
     cudaError_t err = cudaMemcpyAsync(d_position_queue + ((pos_queue_idx + pos_queue_num_elements) % Settings::GetNumGPUThreads()),
@@ -423,7 +419,7 @@ void UploadBatchesToDevice (SharedLeafStates& shared_leaf_states,
 }
 
 
-void DeviceLeafManager (std::stop_token stocken, SharedLeafStates& shared_leaf_states, VisitedMap& visited_leaf,
+void DeviceLeafManager (std::stop_token stocken, SharedLeafStates& shared_leaf_states, VisitedMap& visited_leaf, std::atomic<uint8_t>& atomic_best_depth,
                         SharedLeafSolution& shared_leaf_solution, uint64_t& num_gpu_positions, const int& thread_idx) {
     // set the device for this thread
     int gpu_device_idx = thread_idx % Settings::GetDeviceCount();
@@ -479,7 +475,6 @@ void DeviceLeafManager (std::stop_token stocken, SharedLeafStates& shared_leaf_s
     LocalBuffer local_buffer = std::make_shared<std::vector<std::pair<State, uint8_t>>>();;
     size_t local_buffer_idx = 0;
 
-    // FIX: possible thread race
     while (local_buffer_idx != local_buffer->size() || pos_queue_num_elements != 0 || !stocken.stop_requested()) {
         GetNewStates<<<grid_dim, kBlockDim, 0, cuda_stream>>>(d_position_queue, d_pos_queue_idx, d_pos_queue_num_elements, d_atomic_offset_idx, d_starting_depths, d_reg_states, d_reg_rotations);
         DeviceLeafSearch<<<grid_dim, kBlockDim, 0, cuda_stream>>>(d_pos_queue_idx, d_pos_queue_num_elements, d_atomic_offset_idx, d_starting_depths, d_reg_states, d_reg_rotations, d_device_solution, d_num_position_threads);
@@ -490,10 +485,15 @@ void DeviceLeafManager (std::stop_token stocken, SharedLeafStates& shared_leaf_s
             return;
         }
         if (bool(device_solution.flag)) {
+            LOG_ERROR("found sol");
             bool expected = false;
             if (shared_leaf_solution.finished.compare_exchange_strong(expected, true, std::memory_order_acq_rel, std::memory_order_acquire)) {
+                LOG_INFO("test");
                 // TODO: Add the solution
+                AtomicMin(atomic_best_depth, uint8_t(0));
+                shared_leaf_states.cv.notify_all();
             };
+            return;
         }
         // accumulate num_positions
         uint64_t total_num_position_threads = 0;
@@ -510,13 +510,6 @@ void DeviceLeafManager (std::stop_token stocken, SharedLeafStates& shared_leaf_s
         MemcpyFromDeviceStream(total_num_position_threads, d_total_num_position_threads, cuda_stream);
         cudaStreamSynchronize(cuda_stream);
         num_gpu_positions += total_num_position_threads;
-        if (total_num_position_threads != 0) {
-            LOG_ALL(total_num_position_threads);
-        }
     }
-    LOG_WARNING("num positions:", num_gpu_positions);
     cudaHostUnregister(position_queue.data());
-    if (num_gpu_positions > 1000) {
-        LOG_CRITICAL("stop");
-    }
 }

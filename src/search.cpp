@@ -215,7 +215,7 @@ void DFSNextFrontierSearch (const State& state, VisitedMap& visited_search, Fron
             if (local_buffer->size() >= size_t(Settings::GetNumPositionsPerBatch())) {
                 std::unique_lock<std::mutex> lock(shared_leaf_states.mtx);
                 shared_leaf_states.cv.wait(lock, [&] {
-                    return int(shared_leaf_states.shared_ptrs.size()) <= Settings::GetNumParallelBatches();
+                    return int(shared_leaf_states.shared_ptrs.size()) <= Settings::GetNumParallelBatches() || atomic_best_depth < depth;
                 });
                 shared_leaf_states.shared_ptrs.push(std::move(local_buffer));
                 local_buffer = std::make_shared<std::vector<std::pair<State, uint8_t>>>();
@@ -250,9 +250,22 @@ void FrontierSearch (uint64_t& num_positions_search, VisitedMap& visited_search,
         for (int j = 0; j < Settings::GetNumThreads(); j++) {
             // BFS layer
             for (int idx = thread_idx; idx < int(cur_frontier[i][j].size()); idx += Settings::GetNumThreads()) {
+                    if (atomic_best_depth < depth) {
+                        break;
+                    }
                     DFSNextFrontierSearch(cur_frontier[i][j][idx].first, visited_search, next_frontier, atomic_best_depth, best_endstate_search, local_buffer, shared_leaf_states, num_positions_search, cur_frontier[i][j][idx].second, depth);
             }
         }
+    }
+
+    // insert element if the search is not finished with the current level
+    if (local_buffer->size() > 0) {
+        std::unique_lock<std::mutex> lock(shared_leaf_states.mtx);
+        shared_leaf_states.cv.wait(lock, [&] {
+            return int(shared_leaf_states.shared_ptrs.size()) <= Settings::GetNumParallelBatches() || atomic_best_depth < depth;
+        });
+        shared_leaf_states.shared_ptrs.push(std::move(local_buffer));
+        local_buffer = std::make_shared<std::vector<std::pair<State, uint8_t>>>();
     }
 }
 
@@ -354,6 +367,7 @@ void SearchManager () {
                 for (int i = 0; i < Settings::GetNumGPUUploadThreads(); i++) {
                     leaf_manager_threads.push_back(std::jthread(DeviceLeafManager, std::ref(shared_leaf_states),
                                                                 std::ref(visited_leaf_threads[i]),
+                                                                std::ref(atomic_best_depth),
                                                                 std::ref(shared_leaf_solution),
                                                                 std::ref(num_positions_leaf_threads[i]), i));
                 }
@@ -390,7 +404,7 @@ void SearchManager () {
             {
                 std::unique_lock<std::mutex> lock(shared_leaf_states.mtx);
                 shared_leaf_states.cv.wait(lock, [&] {
-                    return shared_leaf_states.shared_ptrs.empty();
+                    return shared_leaf_states.shared_ptrs.empty() || atomic_best_depth < id_depth;
                 });
             }
             LOG_EXTRA("start with finishing search");
@@ -403,9 +417,11 @@ void SearchManager () {
                 leaf_manager_threads[i].join();
                 num_positions_leaf += num_positions_leaf_threads[i];
             }
+            LOG_ERROR("Num position", num_positions_leaf+num_positions_search);
 
             // found optimal solution
             if (atomic_best_depth < id_depth) {
+                atomic_best_depth = id_depth-1;
                 LOG_EXTRA("Proven optimal solution");
                 std::swap(visited_leaf_threads_final, visited_leaf_threads);
                 break;
@@ -416,6 +432,7 @@ void SearchManager () {
         acc_depth += atomic_best_depth;
         acc_total_num_positions += total_num_positions;
 
+        /*
         // Construct solution
         std::pair<State, uint8_t> best_endstate = best_endstate_search;
         for (int i = 0; i < num_leaf_threads; i++) {
@@ -432,6 +449,7 @@ void SearchManager () {
         SolveSearch(search_rotations, atomic_best_depth-Settings::GetTBDepth(), best_endstate.first, visited_search, visited_leaf_threads_final);
 
         LOG_EXTRA("solution moves:", search_rotations, tb_rotations);
+        */
 
         LOG_ALL(SkipSpace("["), SkipSpace(random_positions_idx+1), SkipSpace("/"), SkipSpace(Settings::GetNumRuns()), "] Depth:", int(atomic_best_depth), "num_positions:", total_num_positions);
         LOG_EXTRA("total number positions:", total_num_positions, "search positions", num_positions_search, "leaf positions", num_positions_leaf);

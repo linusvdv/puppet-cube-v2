@@ -189,11 +189,6 @@ void Settings::SetDefault (std::vector<std::string>& arguments) {
     LOG_EXTRA("num_gputhreads:", num_gputhreads);
 
     num_parallel_batches = num_threads * 2;
-
-    num_gpu_upload_threads = 1;
-    num_threads = 1;
-    num_gputhreads = 64;
-    num_positions_per_batch = 1;
 }
 
 
