@@ -53,6 +53,7 @@ list of options
     -l --log_level             logger/error level                                         [memory]       (critical|error|warning|info|all|extra|memory)
 
     -r --num_runs              number of runs                                             [10]           (0, 1e18)
+    --run_offset               start at a specific run number                             [0]            (0, 1e18)
     -s --scrambling_depth      how many moves to scramble                                 [100]          (0, 1000000)
     -m --min_corner_heuristic  all starting position have at least this corner heuristic  [0]            (0, 27)
 
