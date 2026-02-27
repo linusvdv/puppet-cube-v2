@@ -106,8 +106,8 @@ inline void HostRegister(std::vector<T>& data) {
 }
 
 template<typename T>
-inline void HostRegister(T*& data) {
-    cudaError_t err = cudaHostRegister(data, 1 * sizeof(T), cudaHostRegisterDefault);
+inline void HostRegister(T& data) {
+    cudaError_t err = cudaHostRegister((void*)&data, 1 * sizeof(T), cudaHostRegisterDefault);
     if (err != cudaSuccess) {
         LOG_CRITICAL(cudaGetErrorString(err));
     }

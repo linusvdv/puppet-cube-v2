@@ -455,9 +455,11 @@ void DeviceLeafManager (std::stop_token stocken, SharedLeafStates& shared_leaf_s
     DeviceSolution device_solution;
     DeviceSolution* d_device_solution;
     MallocOnDeviceStream(d_device_solution, 1, cuda_stream);
+    HostRegister(device_solution);
     int32_t num_reg_states = 0;
     int32_t* d_num_reg_states;
     MallocOnDeviceStream(d_num_reg_states, 1, cuda_stream);
+    HostRegister(num_reg_states);
 
     MemInitialization<<<grid_dim, kBlockDim, 0, cuda_stream>>>(d_reg_rotations, d_reg_states, d_starting_depths, d_device_solution, d_num_position_threads, d_atomic_offset_idx, d_num_reg_states);
 
@@ -470,6 +472,8 @@ void DeviceLeafManager (std::stop_token stocken, SharedLeafStates& shared_leaf_s
     std::pair<State, uint8_t>* d_position_queue;
     MallocOnDeviceStream(d_position_queue, Settings::GetNumGPUThreads(), cuda_stream);
     HostRegister(position_queue);
+    HostRegister(pos_queue_idx);
+    HostRegister(pos_queue_num_elements);
     MallocOnDeviceStream(d_pos_queue_idx, 1, cuda_stream);
     MemcpyToDeviceStream(pos_queue_idx, d_pos_queue_idx, cuda_stream);
     MallocOnDeviceStream(d_pos_queue_num_elements, 1, cuda_stream);
@@ -527,7 +531,11 @@ void DeviceLeafManager (std::stop_token stocken, SharedLeafStates& shared_leaf_s
     num_gpu_positions += total_num_position_threads;
 
     cudaDeviceSynchronize();
+    cudaHostUnregister(&device_solution);
+    cudaHostUnregister(&num_reg_states);
     cudaHostUnregister(position_queue.data());
+    cudaHostUnregister(&pos_queue_idx);
+    cudaHostUnregister(&pos_queue_num_elements);
     FreeCudaPointer(d_reg_rotations);
     FreeCudaPointer(d_reg_states);
     FreeCudaPointer(d_starting_depths);
