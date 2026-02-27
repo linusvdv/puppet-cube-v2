@@ -26,6 +26,7 @@ bool Settings::hardware_info = false;
 
 // search starting position
 size_t Settings::num_runs = 10;                 // NOLINT
+size_t Settings::run_offset = 0;
 int Settings::scrambling_depth = 100;           // NOLINT
 int Settings::min_corner_heuristic = 0;
 
@@ -52,6 +53,7 @@ static struct option long_options[] = {
 
     // search starting postion
     {"num_runs", required_argument, NULL, 'r'},
+    {"run_offset", required_argument, NULL, 0},
     {"scrambling_depth", required_argument, NULL, 's'},
     {"min_corner_heuristic", required_argument, NULL, 'm'},
 
@@ -82,6 +84,7 @@ list of options
     -l --log_level             logger/error level                                         [memory]       (critical|error|warning|info|all|extra|memory)
 
     -r --num_runs              number of runs                                             [10]           (0, 1e18)
+    --run_offset               start at a specific run number                             [0]            (0, 1e18)
     -s --scrambling_depth      how many moves to scramble                                 [100]          (0, 1000000)
     -m --min_corner_heuristic  all starting position have at least this corner heuristic  [0]            (0, 27)
 
@@ -264,6 +267,10 @@ Settings::Settings (int argc, char *argv[]) {
                 if (std::string(long_options[option_index].name) == "tb_depth") {
                     GetTFromOptarg(tb_depth, 0, 9, "TB DEPTH"); // NOLINT
                 }
+
+                if (std::string(long_options[option_index].name) == "run_offset") {
+                    GetTFromOptarg(run_offset, size_t(0), size_t(1e18), "RUN OFFSET"); // NOLINT
+                }
                 break;
             case '?':
                 LOG_WARNING("Unrecognized option:", argv[optind-1]);
@@ -286,7 +293,7 @@ Settings::Settings (int argc, char *argv[]) {
 
     if (use_cuda && device_count <= 0) {
         use_cuda = false;
-        LOG_ERROR("No GPU detected!");
+        LOG_ERROR("No GPU found!");
         LOG_WARNING("Disabled CUDA search");
     }
 }

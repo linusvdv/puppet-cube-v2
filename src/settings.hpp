@@ -20,6 +20,7 @@ private:
 
     // search starting position
     static size_t num_runs;
+    static size_t run_offset;
     static int scrambling_depth;
     static int min_corner_heuristic;
 
@@ -68,6 +69,9 @@ public:
     // search starting position
     static size_t GetNumRuns() {
         return num_runs;
+    }
+    static size_t GetRunOffset() {
+        return run_offset;
     }
     static int GetScramblingDepth() {
         return scrambling_depth;
