@@ -2,6 +2,7 @@
 #include <cuda_runtime_api.h>
 #include <algorithm>
 #include <atomic>
+#include <bitset>
 #include <cub/cub.cuh>
 #include <cassert>
 #include <cstdint>
@@ -266,6 +267,11 @@ __global__ void DeviceLeafSearch (const uint8_t* d_starting_depths,
 }
 
 
+State StateFromRegState(RegState& reg_state) {
+    return State(reg_state.corner_orientation, reg_state.corner_position, reg_state.edge_orientation, reg_state.edge_position_1, reg_state.edge_position_2);
+}
+
+
 __global__ void GetNewStates(std::pair<State, uint8_t>* d_position_queue, const int32_t* d_pos_queue_idx, const int32_t* d_pos_queue_num_elements, int32_t* atomic_offset_idx,
                              uint8_t* d_starting_depths,
                              RegState* d_reg_states,
@@ -422,8 +428,8 @@ void UploadBatchesToDevice (SharedLeafStates& shared_leaf_states,
 }
 
 
-void DeviceLeafManager (std::stop_token stocken, SharedLeafStates& shared_leaf_states, VisitedMap& visited_leaf, std::atomic<uint8_t>& atomic_best_depth,
-                        SharedLeafSolution& shared_leaf_solution, uint64_t& num_gpu_positions, const int& thread_idx) {
+void DeviceLeafManager (std::stop_token stocken, SharedLeafStates& shared_leaf_states, VisitedMap& visited_leaf,
+                        SharedLeafSolution& shared_leaf_solution, uint64_t& num_gpu_positions, const int& thread_idx, uint8_t current_depth) {
     // set the device for this thread
     int gpu_device_idx = thread_idx % Settings::GetDeviceCount();
     cudaError_t err = cudaSetDevice(gpu_device_idx);
@@ -504,12 +510,23 @@ void DeviceLeafManager (std::stop_token stocken, SharedLeafStates& shared_leaf_s
     MemcpyFromDeviceStream(device_solution, d_device_solution, cuda_stream);
     cudaStreamSynchronize(cuda_stream);
     if (bool(device_solution.flag)) {
-        LOG_ERROR("found sol");
         bool expected = false;
         if (shared_leaf_solution.finished.compare_exchange_strong(expected, true, std::memory_order_acq_rel, std::memory_order_acquire)) {
-            LOG_INFO("test");
+            State state = StateFromRegState(device_solution.reg_state);
+            shared_leaf_solution.state = state;
+            RegRotations reg_rotations = device_solution.reg_rotations;
+            while (true) {
+                VisitedMapInsert(visited_leaf, state, current_depth-Settings::GetTBDepth()-1);
+                reg_rotations.idx--;
+                current_depth--;
+                if (reg_rotations.idx == uint8_t(-1)) {
+                    break;
+                }
+                uint8_t rotation = GetRevRotation(RotationsAt(reg_rotations) & (uint8_t(-1)>>1));
+                auto [legal, next_state] = Cube::Rotate(state, rotation);
+                state = next_state;
+            }
             // TODO: Add the solution
-            AtomicMin(atomic_best_depth, uint8_t(0));
             shared_leaf_states.cv.notify_all();
         };
     }

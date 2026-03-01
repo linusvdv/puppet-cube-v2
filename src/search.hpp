@@ -8,11 +8,22 @@
 
 using VisitedMap = phmap::parallel_flat_hash_map<State, uint8_t, phmap::priv::hash_default_hash<State>, phmap::priv::hash_default_eq<State>, phmap::priv::Allocator<std::pair<State, uint8_t>>, 8, std::mutex>;
 
+
 struct SharedLeafStates {
     std::queue<std::shared_ptr<std::vector<std::pair<State, uint8_t>>>> shared_ptrs;
     std::mutex mtx;
     std::condition_variable cv;
 };
+
+
+struct SharedLeafSolution {
+    std::atomic<bool> finished{false};
+    State state;
+};
+
+
+void VisitedMapInsert(VisitedMap& visited_map, const State& state, uint8_t cur_depth);
+
 
 using LocalBuffer = std::shared_ptr<std::vector<std::pair<State, uint8_t>>>;
 

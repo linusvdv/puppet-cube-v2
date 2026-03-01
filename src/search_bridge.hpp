@@ -15,18 +15,11 @@ struct RegState {
 };
 
 
-struct SharedLeafSolution {
-    std::atomic<bool> finished{false};
-    State state;
-    uint8_t best_depth;
-};
-
-
 void CudaConstMemInitialize ();
 
 
 void CudaConstMemChangeCurDepth (uint8_t depth);
 
 
-void DeviceLeafManager (std::stop_token stocken, SharedLeafStates& shared_leaf_states, VisitedMap& visited_leaf, std::atomic<uint8_t>& atomic_best_depth,
-                        SharedLeafSolution& shared_leaf_solution, uint64_t& num_gpu_positions, const int& thread_idx);
+void DeviceLeafManager (std::stop_token stocken, SharedLeafStates& shared_leaf_states, VisitedMap& visited_leaf,
+                        SharedLeafSolution& shared_leaf_solution, uint64_t& num_gpu_positions, const int& thread_idx, uint8_t current_depth);
