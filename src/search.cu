@@ -544,6 +544,7 @@ void DeviceLeafManager (std::stop_token stocken, SharedLeafStates& shared_leaf_s
     }
     cub::DeviceReduce::Sum(d_temp, num_temp_bytes, d_num_position_threads, d_total_num_position_threads, Settings::GetNumGPUThreads(), cuda_stream);
     MemcpyFromDeviceStream(total_num_position_threads, d_total_num_position_threads, cuda_stream);
+    FreeCudaPointer(d_temp);
     cudaStreamSynchronize(cuda_stream);
     num_gpu_positions += total_num_position_threads;
 
@@ -563,4 +564,5 @@ void DeviceLeafManager (std::stop_token stocken, SharedLeafStates& shared_leaf_s
     FreeCudaPointer(d_position_queue);
     FreeCudaPointer(d_pos_queue_idx);
     FreeCudaPointer(d_pos_queue_num_elements);
+    FreeCudaPointer(d_total_num_position_threads);
 }
