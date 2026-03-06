@@ -152,6 +152,16 @@ inline void FreeCudaPointer(T& d_pointer) {
 }
 
 
+template<typename T>
+inline void FreeCudaPointerStream(T& d_pointer, const cudaStream_t& cuda_stream) {
+    cudaError_t err = cudaFreeAsync(d_pointer, cuda_stream);
+    if (err != cudaSuccess) {
+        LOG_CRITICAL(cudaGetErrorString(err));
+    }
+    d_pointer = nullptr;
+}
+
+
 template<typename T1, typename T2>
 requires SameDataTypeStructure<T1, T2>
 void UploadToDeviceSymbol(const std::vector<T1>& data, T2*& d_pointer) {

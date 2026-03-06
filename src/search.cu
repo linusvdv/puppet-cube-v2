@@ -544,25 +544,26 @@ void DeviceLeafManager (std::stop_token stocken, SharedLeafStates& shared_leaf_s
     }
     cub::DeviceReduce::Sum(d_temp, num_temp_bytes, d_num_position_threads, d_total_num_position_threads, Settings::GetNumGPUThreads(), cuda_stream);
     MemcpyFromDeviceStream(total_num_position_threads, d_total_num_position_threads, cuda_stream);
-    FreeCudaPointer(d_temp);
+    FreeCudaPointerStream(d_temp, cuda_stream);
     cudaStreamSynchronize(cuda_stream);
     num_gpu_positions += total_num_position_threads;
 
-    cudaDeviceSynchronize();
     cudaHostUnregister(&device_solution);
     cudaHostUnregister(&num_reg_states);
     cudaHostUnregister(position_queue.data());
     cudaHostUnregister(&pos_queue_idx);
     cudaHostUnregister(&pos_queue_num_elements);
-    FreeCudaPointer(d_reg_rotations);
-    FreeCudaPointer(d_reg_states);
-    FreeCudaPointer(d_starting_depths);
-    FreeCudaPointer(d_atomic_offset_idx);
-    FreeCudaPointer(d_num_position_threads);
-    FreeCudaPointer(d_device_solution);
-    FreeCudaPointer(d_num_reg_states);
-    FreeCudaPointer(d_position_queue);
-    FreeCudaPointer(d_pos_queue_idx);
-    FreeCudaPointer(d_pos_queue_num_elements);
-    FreeCudaPointer(d_total_num_position_threads);
+    FreeCudaPointerStream(d_reg_rotations, cuda_stream);
+    FreeCudaPointerStream(d_reg_states, cuda_stream);
+    FreeCudaPointerStream(d_starting_depths, cuda_stream);
+    FreeCudaPointerStream(d_atomic_offset_idx, cuda_stream);
+    FreeCudaPointerStream(d_num_position_threads, cuda_stream);
+    FreeCudaPointerStream(d_device_solution, cuda_stream);
+    FreeCudaPointerStream(d_num_reg_states, cuda_stream);
+    FreeCudaPointerStream(d_position_queue, cuda_stream);
+    FreeCudaPointerStream(d_pos_queue_idx, cuda_stream);
+    FreeCudaPointerStream(d_pos_queue_num_elements, cuda_stream);
+    FreeCudaPointerStream(d_total_num_position_threads, cuda_stream);
+    cudaStreamSynchronize(cuda_stream);
+    cudaStreamDestroy(cuda_stream);
 }
