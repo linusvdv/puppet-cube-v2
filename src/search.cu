@@ -2,7 +2,6 @@
 #include <cuda_runtime_api.h>
 #include <algorithm>
 #include <atomic>
-#include <bitset>
 #include <cub/cub.cuh>
 #include <cassert>
 #include <cstdint>
@@ -29,15 +28,19 @@ struct Heuristics {
 };
 
 
+constexpr RegRotations kDefaultRegRotations = RegRotations();
+constexpr RegState kDefaultRegState = RegState();
+constexpr Heuristics kDefaultHeuristics = Heuristics();
+
+
 struct DeviceSolution {
     int flag = int(false);
-    RegState reg_state;
-    RegRotations reg_rotations;
+    RegState reg_state = kDefaultRegState;
+    RegRotations reg_rotations = kDefaultRegRotations;
 };
 
 
-struct DeviceRingBuffer {
-};
+constexpr DeviceSolution kDefaultDeviceSolution = DeviceSolution();
 
 
 __constant__ uint32_t num_gpu_threads;
@@ -74,7 +77,17 @@ __device__ inline uint8_t GetMaxHeuristic(RegState& reg_state, Heuristics& heuri
 }
 
 
-__device__ inline bool DRotate(RegState& reg_state, Heuristics& heuristic,
+__device__ inline void DRotate(RegState& reg_state, const uint8_t& rotation) {
+    // no legality check
+    reg_state.corner_orientation = d_corner_orientations[(reg_state.corner_orientation*kNumRotations) + rotation];
+    reg_state.corner_position = d_corner_positions[(reg_state.corner_position*kNumRotations) + rotation];
+    reg_state.edge_orientation = d_edge_orientations[(reg_state.edge_orientation*kNumRotations) + rotation];
+    reg_state.edge_position_1 = d_edge_positions[(reg_state.edge_position_1*kNumRotations) + rotation];
+    reg_state.edge_position_2 = d_edge_positions[(reg_state.edge_position_2*kNumRotations) + rotation];
+}
+
+
+__device__ inline bool DRotatePrev(RegState& reg_state, Heuristics& heuristic,
                                RegState& prev_reg_state, Heuristics& prev_heuristic,
                                const uint8_t& rotation, const bool& rev) {
     // check legality only on front moves and when not doing slice moves
@@ -91,11 +104,7 @@ __device__ inline bool DRotate(RegState& reg_state, Heuristics& heuristic,
         prev_heuristic = heuristic;
     }
     heuristic = {uint16_t(-1), uint8_t(-1), uint8_t(-1)};
-    reg_state.corner_orientation = d_corner_orientations[(reg_state.corner_orientation*kNumRotations) + rotation];
-    reg_state.corner_position = d_corner_positions[(reg_state.corner_position*kNumRotations) + rotation];
-    reg_state.edge_orientation = d_edge_orientations[(reg_state.edge_orientation*kNumRotations) + rotation];
-    reg_state.edge_position_1 = d_edge_positions[(reg_state.edge_position_1*kNumRotations) + rotation];
-    reg_state.edge_position_2 = d_edge_positions[(reg_state.edge_position_2*kNumRotations) + rotation];
+    DRotate(reg_state, rotation);
     return true;
 }
 
@@ -105,7 +114,7 @@ __device__ inline void DUndoRotate(RegState& reg_state, Heuristics& heuristic,
                                    RegState& prev_reg_state, Heuristics& prev_heuristic,
                                    RegRotations& reg_rotations) {
     reg_rotations.idx--;
-    if (prev_reg_state.corner_orientation != uint16_t(-1) && reg_rotations.idx != uint8_t(-1)) {
+    if (prev_reg_state.corner_orientation != uint16_t(-1) && reg_rotations.idx >= 0) {
         reg_state = prev_reg_state;
         heuristic = prev_heuristic;
         prev_reg_state.corner_orientation = uint16_t(-1); // only one that needs to be reset this indecates that all are not usefull
@@ -142,12 +151,6 @@ __device__ inline uint32_t GetNumRotationsLeft(const RegState& reg_state, const 
 }
 
 
-constexpr DeviceSolution kDefaultDeviceSolution = DeviceSolution();
-constexpr RegRotations kDefaultRegRotations = RegRotations();
-constexpr RegState kDefaultRegState = RegState();
-constexpr Heuristics kDefaultHeuristics = Heuristics();
-
-
 __global__ void DeviceLeafSearch (const uint8_t* d_starting_depths,
                                   RegState* d_reg_states,
                                   RegRotations* d_reg_rotations,
@@ -182,36 +185,34 @@ __global__ void DeviceLeafSearch (const uint8_t* d_starting_depths,
     // previous rotations
     Heuristics prev_heuristic = kDefaultHeuristics;
 
-    if (reg_rotations.idx == 0) {
-        num_position_thread++;
-    }
-
     // make a constant number of position during each kernal function call
     // this could be way to high
     constexpr int kNumPosBatchSize = 1000;
-    for (int cur_pos_batch = 0; cur_pos_batch < kNumPosBatchSize || reg_rotations.idx == 0; cur_pos_batch++) {
-        if (reg_rotations.idx == uint8_t(-1)) {
-            break;
-        }
-
+    for (int cur_pos_batch = 0; cur_pos_batch < kNumPosBatchSize; cur_pos_batch++) {
         // the goal is to search further in the dfs (from the leaf position) and stop if an improvement to the best_depth is not posible any more
         // for each loop cycle it will look at a new position or undo the move it has done during the dfs.
         // the search is structured in a way that the current moment of the search can be saved to global memory and the kernal stops.
         // at the next kernal start the search will continue from the previous search
         // this cube is now during a search phase with the starting position of leaf_thread_idx
         // the state is the current position of the search after all rotations from the leaf starting position
-
-        uint8_t rotation = RotationsAt(reg_rotations) & (uint8_t(-1)>>1);
+        if (reg_rotations.idx < 0 || reg_rotations.idx < reg_rotations.finish_idx) {
+            break;
+        }
+        uint8_t rotation_at = RotationsAt(reg_rotations);
+        uint8_t rotation = rotation_at & (uint8_t(-1)>>1);
+        if (reg_rotations.idx == reg_rotations.finish_idx && rotation >= reg_rotations.finish_rot) {
+            break;
+        }
 
         // undo the rotation to continue the search on the next subtree
-        bool rev = (RotationsAt(reg_rotations) ^ rotation) != 0;
+        bool rev = (rotation_at ^ rotation) != 0;
         if (rev) {
             DRevRotation(rotation);
         }
 
         // do the rotation
         // if it is an illegal search skip this rotation
-        if (!DRotate(reg_state, heuristic, prev_reg_state, prev_heuristic, rotation, rev)) {
+        if (!DRotatePrev(reg_state, heuristic, prev_reg_state, prev_heuristic, rotation, rev)) {
             RotationsAdd(reg_rotations, 1);
             if ((rotation+1) == kNumRotations) {
                 RotationsSet(reg_rotations, 0);
@@ -273,6 +274,8 @@ State StateFromRegState(RegState& reg_state) {
 
 
 __global__ void GetNewStates(std::pair<State, uint8_t>* d_position_queue, const int32_t* d_pos_queue_idx, const int32_t* d_pos_queue_num_elements, int32_t* atomic_offset_idx,
+                             int32_t* d_free_splitmix_idx,
+                             bool* d_possible_splitmix_idx,
                              uint8_t* d_starting_depths,
                              RegState* d_reg_states,
                              RegRotations* d_reg_rotations) {
@@ -280,18 +283,33 @@ __global__ void GetNewStates(std::pair<State, uint8_t>* d_position_queue, const 
     if (index >= num_gpu_threads) {
         return;
     }
-    if (d_reg_rotations[index].idx != uint8_t(-1)) {
-        return;
+
+    // still has stuff to do
+    RegRotations reg_rotations = d_reg_rotations[index];
+    if (reg_rotations.idx >= 0) {
+        uint8_t rotation = RotationsAt(reg_rotations) & (uint8_t(-1)>>1);
+        if (reg_rotations.idx >= reg_rotations.finish_idx && (reg_rotations.idx != reg_rotations.finish_idx || rotation < reg_rotations.finish_rot)) {
+            d_possible_splitmix_idx[index] = true;
+            return;
+        }
     }
+
+    // index calculation
+    d_possible_splitmix_idx[index] = false;
     int32_t current_offset_idx = atomicAdd(atomic_offset_idx, 1);
+
+    // this thread has nothing to do anymore
     if (current_offset_idx >= *d_pos_queue_num_elements) {
-        // this thread has nothing to do anymore
+        d_free_splitmix_idx[current_offset_idx - *d_pos_queue_num_elements] = index;
         return;
     }
-    RegRotations reg_rotations;
+
+    // add new position
     reg_rotations.d1 = 0;
     reg_rotations.d2 = 0;
     reg_rotations.idx = 0;
+    reg_rotations.finish_idx = -1;
+    reg_rotations.finish_rot = 1;
     d_reg_rotations[index] = reg_rotations;
     RegState reg_state;
     int32_t pos_queue_idx = (*d_pos_queue_idx + current_offset_idx) % num_gpu_threads;
@@ -305,21 +323,88 @@ __global__ void GetNewStates(std::pair<State, uint8_t>* d_position_queue, const 
 }
 
 
-__global__ void PostGetNewStates(int32_t* d_pos_queue_idx, int32_t* d_pos_queue_num_elements, int32_t* atomic_offset_idx, int32_t* d_num_reg_states) {
+__global__ void PostGetNewStates (int32_t* d_pos_queue_idx, int32_t* d_pos_queue_num_elements, int32_t* d_atomic_offset_idx, int32_t* d_num_reg_states, int32_t* d_atomic_splitmix) {
     uint32_t index = threadIdx.x + (blockIdx.x * blockDim.x);
     if (index == 0) {
         //                   already existing positions              newly added positions
-        *d_num_reg_states = (num_gpu_threads - *atomic_offset_idx) + min(*atomic_offset_idx, *d_pos_queue_num_elements);
-        *atomic_offset_idx = min(*atomic_offset_idx, *d_pos_queue_num_elements);
-        *d_pos_queue_num_elements -= *atomic_offset_idx;
-        *d_pos_queue_idx = (*d_pos_queue_idx + *atomic_offset_idx) % num_gpu_threads;
-        *atomic_offset_idx = 0;
+        *d_num_reg_states = (num_gpu_threads - *d_atomic_offset_idx) + min(*d_atomic_offset_idx, *d_pos_queue_num_elements);
+        *d_atomic_offset_idx = min(*d_atomic_offset_idx, *d_pos_queue_num_elements);
+        *d_pos_queue_num_elements -= *d_atomic_offset_idx;
+        *d_pos_queue_idx = (*d_pos_queue_idx + *d_atomic_offset_idx) % num_gpu_threads;
+        *d_atomic_offset_idx = 0;
+        *d_atomic_splitmix = 0;
+    }
+}
+
+
+__global__ void SplitMixStates (RegRotations* d_reg_rotations, RegState* d_reg_state, uint8_t* d_starting_depths, bool* d_possible_splitmix_idx, int32_t* d_free_splitmix_idx, int32_t* d_num_reg_states, int32_t* d_atomic_splitmix) {
+    uint32_t index = threadIdx.x + (blockIdx.x * blockDim.x);
+    if (index >= num_gpu_threads) {
+        return;
+    }
+    if (num_gpu_threads - *d_num_reg_states == 0) {
+        return;
+    }
+    if (!d_possible_splitmix_idx[index]) {
+        return;
+    }
+
+    RegRotations reg_rotations = d_reg_rotations[index];
+    // don't split if the current position is at the moment during rotations
+    if (reg_rotations.idx == reg_rotations.finish_idx || reg_rotations.idx == uint8_t(reg_rotations.finish_idx+1)) {
+        return;
+    }
+
+    RegState reg_state_start = d_reg_state[index];
+    uint8_t rotation_start = -1;
+
+    // printf("pre %d\n", index);
+    // get to the position where you should split
+    while (uint8_t(reg_rotations.idx+1) > uint8_t(reg_rotations.finish_idx+1)) {
+        uint8_t cur_rotation = RotationsAt(reg_rotations);
+        // reverse rotation
+        if (!(RotationsAt(reg_rotations) <= kNumRotations)) {
+            cur_rotation ^= uint8_t(1<<7);
+            DRevRotation(cur_rotation);
+            DRotate(reg_state_start, cur_rotation);
+        }
+        RotationsSet(reg_rotations, 0);
+        reg_rotations.idx--;
+    }
+    // printf("post %d\n", index);
+    rotation_start = RotationsAt(reg_rotations);
+
+    // atomic check
+    uint32_t num_rotations_left = GetNumRotationsLeft(reg_state_start, rotation_start);
+    uint32_t atomic_splitmix = atomicAdd(d_atomic_splitmix, num_rotations_left);
+    if (*d_num_reg_states + atomic_splitmix + num_rotations_left > num_gpu_threads) {
+        return;
+    }
+    // printf("splitmix %d num_rotations_left: %d\n", index, num_rotations_left);
+
+    // increase for standard value
+    d_reg_rotations[index].finish_idx++;
+    d_reg_rotations[index].finish_rot = (rotation_start ^ uint8_t(1 << 7)) + 1;
+    reg_rotations.finish_idx++;
+
+    // do the splitmix
+    uint32_t corner_heuristic = d_corner_heuristics[(reg_state_start.corner_orientation*kNumCornerPositions) + reg_state_start.corner_position];
+    for (uint8_t rot = (rotation_start ^ uint8_t(1 << 7)) + 1; rot < kNumRotations; rot++) {
+        if (((corner_heuristic >> (rot / 4 * 2 + rot%2 + 8)) & 1) == 0) { // get important rotation bit
+            int32_t splitmix_idx = d_free_splitmix_idx[atomic_splitmix++];
+            d_reg_rotations[splitmix_idx] = reg_rotations;
+            d_reg_rotations[splitmix_idx].finish_rot = rot+1;
+            d_starting_depths[splitmix_idx] = d_starting_depths[index];
+            RotationsSet(d_reg_rotations[splitmix_idx], rot);
+
+        }
     }
 }
 
 
 // device memory only
-__global__ void MemInitialization(RegRotations* d_reg_rotations, RegState* d_reg_state, uint8_t* d_starting_depths, DeviceSolution* d_device_solution, uint64_t* d_num_position_threads, int32_t* d_atomic_offset_idx, int32_t* d_num_reg_states) {
+__global__ void MemInitialization(RegRotations* d_reg_rotations, RegState* d_reg_state, uint8_t* d_starting_depths, DeviceSolution* d_device_solution, uint64_t* d_num_position_threads, int32_t* d_atomic_offset_idx, int32_t* d_num_reg_states, int32_t* d_free_splitmix_idx,
+                             bool* d_possible_splitmix_idx, int32_t* d_atomic_splitmix) {
     // get current leaf thread idx
     uint32_t index = threadIdx.x + (blockIdx.x * blockDim.x);
     if (index >= num_gpu_threads) {
@@ -330,12 +415,15 @@ __global__ void MemInitialization(RegRotations* d_reg_rotations, RegState* d_reg
         *d_device_solution = kDefaultDeviceSolution;
         *d_atomic_offset_idx = 0;
         *d_num_reg_states = 0;
+        *d_atomic_splitmix = 0;
     }
 
     d_reg_rotations[index] = kDefaultRegRotations;
     d_reg_state[index] = kDefaultRegState;
     d_starting_depths[index] = -1;
     d_num_position_threads[index] = 0;
+    d_free_splitmix_idx[index] = 0;
+    d_possible_splitmix_idx[index] = false;
 }
 
 
@@ -452,6 +540,12 @@ void DeviceLeafManager (std::stop_token stocken, SharedLeafStates& shared_leaf_s
     MallocOnDeviceStream(d_starting_depths, Settings::GetNumGPUThreads(), cuda_stream);
     int32_t* d_atomic_offset_idx;
     MallocOnDeviceStream(d_atomic_offset_idx, 1, cuda_stream);
+    int32_t* d_free_splitmix_idx;
+    MallocOnDeviceStream(d_free_splitmix_idx, Settings::GetNumGPUThreads(), cuda_stream);
+    bool* d_possible_splitmix_idx;
+    MallocOnDeviceStream(d_possible_splitmix_idx, Settings::GetNumGPUThreads(), cuda_stream);
+    int32_t* d_atomic_splitmix;
+    MallocOnDeviceStream(d_atomic_splitmix, 1, cuda_stream);
 
     // copied at the end of the leaf manager
     uint64_t* d_num_position_threads;
@@ -467,7 +561,7 @@ void DeviceLeafManager (std::stop_token stocken, SharedLeafStates& shared_leaf_s
     MallocOnDeviceStream(d_num_reg_states, 1, cuda_stream);
     HostRegister(num_reg_states);
 
-    MemInitialization<<<grid_dim, kBlockDim, 0, cuda_stream>>>(d_reg_rotations, d_reg_states, d_starting_depths, d_device_solution, d_num_position_threads, d_atomic_offset_idx, d_num_reg_states);
+    MemInitialization<<<grid_dim, kBlockDim, 0, cuda_stream>>>(d_reg_rotations, d_reg_states, d_starting_depths, d_device_solution, d_num_position_threads, d_atomic_offset_idx, d_num_reg_states, d_free_splitmix_idx, d_possible_splitmix_idx, d_atomic_splitmix);
 
     // circular queue with Settings::GetNumGPUThreads elements
     int32_t pos_queue_idx = 0;
@@ -491,8 +585,9 @@ void DeviceLeafManager (std::stop_token stocken, SharedLeafStates& shared_leaf_s
     size_t local_buffer_idx = 0;
 
     while (local_buffer_idx != local_buffer->size() || pos_queue_num_elements != 0 || !stocken.stop_requested() || num_reg_states != 0) {
-        GetNewStates<<<grid_dim, kBlockDim, 0, cuda_stream>>>(d_position_queue, d_pos_queue_idx, d_pos_queue_num_elements, d_atomic_offset_idx, d_starting_depths, d_reg_states, d_reg_rotations);
-        PostGetNewStates<<<1, 1, 0, cuda_stream>>>(d_pos_queue_idx, d_pos_queue_num_elements, d_atomic_offset_idx, d_num_reg_states);
+        GetNewStates<<<grid_dim, kBlockDim, 0, cuda_stream>>>(d_position_queue, d_pos_queue_idx, d_pos_queue_num_elements, d_atomic_offset_idx, d_free_splitmix_idx, d_possible_splitmix_idx, d_starting_depths, d_reg_states, d_reg_rotations);
+        PostGetNewStates<<<1, 1, 0, cuda_stream>>>(d_pos_queue_idx, d_pos_queue_num_elements, d_atomic_offset_idx, d_num_reg_states, d_atomic_splitmix);
+        // SplitMixStates<<<grid_dim, kBlockDim, 0, cuda_stream>>>(d_reg_rotations, d_reg_states, d_starting_depths, d_possible_splitmix_idx, d_free_splitmix_idx, d_num_reg_states, d_atomic_splitmix);
         MemcpyFromDeviceStream(pos_queue_idx, d_pos_queue_idx, cuda_stream);
         MemcpyFromDeviceStream(pos_queue_num_elements, d_pos_queue_num_elements, cuda_stream);
         MemcpyFromDeviceStream(device_solution, d_device_solution, cuda_stream);
@@ -519,14 +614,13 @@ void DeviceLeafManager (std::stop_token stocken, SharedLeafStates& shared_leaf_s
                 VisitedMapInsert(visited_leaf, state, current_depth-Settings::GetTBDepth()-1);
                 reg_rotations.idx--;
                 current_depth--;
-                if (reg_rotations.idx == uint8_t(-1)) {
+                if (reg_rotations.idx == -1) {
                     break;
                 }
                 uint8_t rotation = GetRevRotation(RotationsAt(reg_rotations) & (uint8_t(-1)>>1));
                 auto [legal, next_state] = Cube::Rotate(state, rotation);
                 state = next_state;
             }
-            // TODO: Add the solution
             shared_leaf_states.cv.notify_all();
         };
     }
@@ -557,6 +651,9 @@ void DeviceLeafManager (std::stop_token stocken, SharedLeafStates& shared_leaf_s
     FreeCudaPointerStream(d_reg_states, cuda_stream);
     FreeCudaPointerStream(d_starting_depths, cuda_stream);
     FreeCudaPointerStream(d_atomic_offset_idx, cuda_stream);
+    FreeCudaPointerStream(d_free_splitmix_idx, cuda_stream);
+    FreeCudaPointerStream(d_possible_splitmix_idx, cuda_stream);
+    FreeCudaPointerStream(d_atomic_splitmix, cuda_stream);
     FreeCudaPointerStream(d_num_position_threads, cuda_stream);
     FreeCudaPointerStream(d_device_solution, cuda_stream);
     FreeCudaPointerStream(d_num_reg_states, cuda_stream);

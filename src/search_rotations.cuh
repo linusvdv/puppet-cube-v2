@@ -1,10 +1,13 @@
 #pragma once
+
+
 struct RegRotations {
-    uint8_t idx = -1;
+    int8_t idx = -1;
+    int8_t finish_idx = -1;
+    uint8_t finish_rot = 0;
     uint64_t d1 = 0;
     uint64_t d2 = 0;
 };
-
 
 
 __host__ __device__ inline uint8_t RotationsAt(const RegRotations& reg_rotations) {
