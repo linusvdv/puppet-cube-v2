@@ -180,12 +180,12 @@ void Settings::SetDefault (std::vector<std::string>& arguments) {
     #endif  // USE_CUDA
 
     num_threads = std::thread::hardware_concurrency();
-    num_gpu_upload_threads = 6 * device_count;
+    num_gpu_upload_threads = device_count * 2;
     // TEST: to get better time
 
     #ifdef USE_CUDA
     // only the first device gets checked
-    num_gputhreads = (GetThreadsPerDevice(0) / 4 / kBlockDim) * kBlockDim;
+    num_gputhreads = (GetThreadsPerDevice(0) / kBlockDim / 4) * kBlockDim;
     #elif
     num_gputhreads = 0;
     #endif  // USE_CUDA
