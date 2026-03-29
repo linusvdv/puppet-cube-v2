@@ -1,4 +1,5 @@
 #include "cube.hpp"
+#include "duplicate_rotations.hpp"
 #include "info.hpp"
 #include "logger.hpp"
 #include "search.hpp"
@@ -28,6 +29,7 @@ int main (int argc, char *argv[]) {
     #endif // USE_CUDA
 
     Cube::Initialize();
+    DuplicateRotations::Initialize();
     LOG_INFO("Cube Initialized");
     Cube::UploadComputationToDevice();
 

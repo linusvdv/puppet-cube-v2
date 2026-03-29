@@ -18,6 +18,17 @@ __host__ __device__ inline uint8_t RotationsAt(const RegRotations& reg_rotations
 }
 
 
+__host__ __device__ inline uint8_t RotationsAtPrev(const RegRotations& reg_rotations) {
+    if (reg_rotations.idx <= 0) {
+        return uint8_t(-1);
+    }
+    if (reg_rotations.idx-1 < 8) {
+        return uint8_t(reg_rotations.d1 >> (8 * (reg_rotations.idx-1)));
+    }
+    return uint8_t(reg_rotations.d2 >> (8 * ((reg_rotations.idx-1)-8)));
+}
+
+
 template<uint8_t idx>
 __host__ __device__ inline uint8_t RotationsAt(const RegRotations& reg_rotations) {
     if constexpr (idx < 8) {

@@ -88,6 +88,15 @@ inline void MemcpyToSymbol (const T& data, T& d_pointer) {
 }
 
 
+template<typename T, size_t N>
+inline void MemcpyToSymbol (const std::array<T, N>& data, const T (&symbol)[N]) {
+    cudaError_t err = cudaMemcpyToSymbol(symbol, data.data(), sizeof(T)*N);
+    if (err != cudaSuccess) {
+        LOG_CRITICAL(cudaGetErrorString(err));
+    }
+}
+
+
 template<typename T>
 inline void MemcpyFromSymbol (T& data, T& d_pointer) {
     cudaError_t err = cudaMemcpyFromSymbol(&data, d_pointer, sizeof(T));

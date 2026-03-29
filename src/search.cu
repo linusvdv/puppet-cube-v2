@@ -13,6 +13,8 @@
 #include "cuda_memory_transfer.cuh"
 #include "cube.cuh"
 #include "cube.hpp"
+#include "duplicate_rotations.hpp"
+#include "duplicate_rotations.cuh"
 #include "logger.hpp"
 #include "utils.hpp"
 #include "search.hpp"
@@ -46,6 +48,7 @@ constexpr DeviceSolution kDefaultDeviceSolution = DeviceSolution();
 __constant__ uint32_t num_gpu_threads;
 __constant__ uint8_t cur_depth;
 __constant__ uint8_t tb_depth;
+__constant__ uint64_t duplicate_rotations_constmem[kDuplicateRotationDataSize];
 
 
 __device__ inline uint8_t GetMaxHeuristic(RegState& reg_state, Heuristics& heuristic) {
@@ -162,6 +165,13 @@ __global__ void DeviceLeafSearch (const uint8_t* d_starting_depths,
         return;
     }
 
+    __shared__ uint64_t duplicate_rotations_sharedmem[kDuplicateRotationDataSize];
+    if (threadIdx.x == 0) {
+        for (int i = 0; i < kDuplicateRotationDataSize; i++) {
+            duplicate_rotations_sharedmem[i] = duplicate_rotations_constmem[i];
+        }
+    }
+
     // load all global memory to registers
     // all accesses are coaleased
 
@@ -208,6 +218,17 @@ __global__ void DeviceLeafSearch (const uint8_t* d_starting_depths,
         bool rev = (rotation_at ^ rotation) != 0;
         if (rev) {
             DRevRotation(rotation);
+        }
+        else {
+            uint8_t prev_rotation = RotationsAtPrev(reg_rotations) & (uint8_t(-1)>>1);
+            if (IsDuplicateRotation(prev_rotation, rotation, duplicate_rotations_sharedmem)) {
+                RotationsAdd(reg_rotations, 1);
+                if ((rotation+1) == kNumRotations) {
+                    RotationsSet(reg_rotations, 0);
+                    DUndoRotate(reg_state, heuristic, prev_reg_state, prev_heuristic, reg_rotations);
+                }
+                continue;
+            }
         }
 
         // do the rotation
@@ -435,6 +456,7 @@ void CudaConstMemInitialize () {
         cudaSetDevice(i);
         MemcpyToSymbol(uint32_t(Settings::GetNumGPUThreads()), num_gpu_threads);
         MemcpyToSymbol(Settings::GetTBDepth(), tb_depth);
+        MemcpyToSymbol(DuplicateRotations::GetData(), duplicate_rotations_constmem);
     }
 }
 

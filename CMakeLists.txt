@@ -87,6 +87,7 @@ add_executable(PuppetCubeV2
     src/search.cpp
     src/special_cubes.cpp
     src/info.cpp
+    src/duplicate_rotations.cpp
 )
 
 if(USE_CUDA)
