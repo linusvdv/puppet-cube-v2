@@ -221,7 +221,7 @@ __global__ void DeviceLeafSearch (const uint8_t* d_starting_depths,
         }
         else {
             uint8_t prev_rotation = RotationsAtPrev(reg_rotations) & (uint8_t(-1)>>1);
-            if (IsDuplicateRotation(prev_rotation, rotation, duplicate_rotations_sharedmem)) {
+            if (rotation < kNumRotations && prev_rotation < kNumRotations && IsDuplicateRotation(prev_rotation, rotation, duplicate_rotations_sharedmem)) {
                 RotationsAdd(reg_rotations, 1);
                 if ((rotation+1) == kNumRotations) {
                     RotationsSet(reg_rotations, 0);

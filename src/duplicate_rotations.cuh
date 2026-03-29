@@ -8,6 +8,6 @@ __device__ inline bool IsDuplicateRotation(const uint8_t& last, const uint8_t& c
     if (last == uint8_t(-1)) {
         return false;
     }
-    int index = (int(last)*kNumRotations)+current;
+    int index = (int(last)*kNumRotations)+int(current);
     return ((duplicate_move_data[index/64]>>(index%64)) & uint64_t(1)) != uint64_t(0);
 }
