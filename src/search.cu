@@ -214,6 +214,8 @@ __global__ void DeviceLeafSearch (const uint8_t* d_starting_depths,
             break;
         }
 
+        bool passive_add_one = false;
+
         // undo the rotation to continue the search on the next subtree
         bool rev = (rotation_at ^ rotation) != 0;
         if (rev) {
@@ -222,30 +224,26 @@ __global__ void DeviceLeafSearch (const uint8_t* d_starting_depths,
         else {
             uint8_t prev_rotation = RotationsAtPrev(reg_rotations) & (uint8_t(-1)>>1);
             if (rotation < kNumRotations && prev_rotation < kNumRotations && IsDuplicateRotation(prev_rotation, rotation, duplicate_rotations_sharedmem)) {
-                RotationsAdd(reg_rotations, 1);
-                if ((rotation+1) == kNumRotations) {
-                    RotationsSet(reg_rotations, 0);
-                    DUndoRotate(reg_state, heuristic, prev_reg_state, prev_heuristic, reg_rotations);
-                }
-                continue;
+                passive_add_one = true;
             }
         }
 
         // do the rotation
         // if it is an illegal search skip this rotation
-        if (!DRotatePrev(reg_state, heuristic, prev_reg_state, prev_heuristic, rotation, rev)) {
-            RotationsAdd(reg_rotations, 1);
-            if ((rotation+1) == kNumRotations) {
-                RotationsSet(reg_rotations, 0);
-                DUndoRotate(reg_state, heuristic, prev_reg_state, prev_heuristic, reg_rotations);
-            }
-            continue;
+        if (!passive_add_one && !DRotatePrev(reg_state, heuristic, prev_reg_state, prev_heuristic, rotation, rev)) {
+            passive_add_one = true;
         }
         // prepare the next rotation
-        RotationsXOR(reg_rotations, 1<<7);  // NOLINT
+        if (!passive_add_one) {
+            RotationsXOR(reg_rotations, 1<<7);  // NOLINT
+        }
 
         // undo rotation done increase to next rotation
-        if (rev) {
+        if (!passive_add_one && rev) {
+            passive_add_one = true;
+        }
+
+        if (passive_add_one) {
             RotationsAdd(reg_rotations, 1);
             if (RotationsAt(reg_rotations) == kNumRotations) {
                 RotationsSet(reg_rotations, 0);
