@@ -246,12 +246,11 @@ constexpr int kNumHeuristicLayers = 60;
 
 void FrontierSearch (uint64_t& num_positions_search, VisitedMap& visited_search, SharedLeafSolution& shared_leaf_solution,
                SharedLeafStates& shared_leaf_states,
-               uint8_t depth, std::vector<std::vector<std::vector<std::pair<State, uint8_t>>>>& cur_frontier, Frontier& next_frontier, int thread_idx) {
+               uint8_t depth, std::vector<std::vector<std::vector<std::pair<State, uint8_t>>>>& cur_frontier, Frontier& next_frontier, std::atomic<long long>& atmoic_idx) {
     // local buffer for leaf search
     LocalBuffer local_buffer = std::make_shared<std::vector<std::pair<State, uint8_t>>>();
 
     // get the correct frontier element
-    std::atomic<long long> atmoic_idx = 0;
     long long acc_cnt = 0;
     int heuristic_layer = 0;
     int thread_layer = 0;
@@ -400,11 +399,12 @@ void SearchManager () {
 
             // Search
             Frontier next_frontier;
+            std::atomic<long long> atmoic_frontier_idx = 0;
             {
                 std::vector<std::jthread> frontier_search_threads;
                 for (int i = 0; i < Settings::GetNumThreads(); i++) {
                     frontier_search_threads.push_back(std::jthread(FrontierSearch, std::ref(num_positions_search), std::ref(visited_search), std::ref(shared_leaf_solution), std::ref(shared_leaf_states),
-                                                                   id_depth, std::ref(cur_frontier), std::ref(next_frontier), i));
+                                                                   id_depth, std::ref(cur_frontier), std::ref(next_frontier), std::ref(atmoic_frontier_idx)));
                 }
             }
             cur_frontier = std::vector<std::vector<std::vector<std::pair<State, uint8_t>>>>(kNumHeuristicLayers, std::vector<std::vector<std::pair<State, uint8_t>>>(Settings::GetNumThreads()));
