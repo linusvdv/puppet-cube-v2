@@ -250,16 +250,32 @@ void FrontierSearch (uint64_t& num_positions_search, VisitedMap& visited_search,
     // local buffer for leaf search
     LocalBuffer local_buffer = std::make_shared<std::vector<std::pair<State, uint8_t>>>();
 
-    for (int i = 0; i < kNumHeuristicLayers; i++) {
-        for (int j = 0; j < Settings::GetNumThreads(); j++) {
-            // BFS layer
-            for (int idx = thread_idx; idx < int(cur_frontier[i][j].size()); idx += Settings::GetNumThreads()) {
-                    if (shared_leaf_solution.finished.load(std::memory_order_acquire)) {
-                        break;
-                    }
-                    DFSNextFrontierSearch(cur_frontier[i][j][idx].first, visited_search, next_frontier, shared_leaf_solution, local_buffer, shared_leaf_states, num_positions_search, cur_frontier[i][j][idx].second, depth);
+    // get the correct frontier element
+    std::atomic<long long> atmoic_idx = 0;
+    long long acc_cnt = 0;
+    int heuristic_layer = 0;
+    int thread_layer = 0;
+    while (size_t(heuristic_layer) < cur_frontier.size()) {
+        long long cur_idx = atmoic_idx++;
+        while (size_t(cur_idx - acc_cnt) >= cur_frontier[heuristic_layer][thread_layer].size()) {
+            acc_cnt += cur_frontier[heuristic_layer][thread_layer].size();
+            thread_layer++;
+            if (thread_layer == Settings::GetNumThreads()) {
+                thread_layer = 0;
+                heuristic_layer++;
+            }
+            if (size_t(heuristic_layer) >= cur_frontier.size()) {
+                break;
             }
         }
+        if (size_t(heuristic_layer) >= cur_frontier.size()) {
+            break;
+        }
+        if (shared_leaf_solution.finished.load(std::memory_order_acquire)) {
+            break;
+        }
+
+        DFSNextFrontierSearch(cur_frontier[heuristic_layer][thread_layer][cur_idx-acc_cnt].first, visited_search, next_frontier, shared_leaf_solution, local_buffer, shared_leaf_states, num_positions_search, cur_frontier[heuristic_layer][thread_layer][cur_idx-acc_cnt].second, depth);
     }
 
     // insert element if the search is not finished with the current level
