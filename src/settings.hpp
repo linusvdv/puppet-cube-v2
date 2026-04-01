@@ -35,6 +35,8 @@ private:
     static int num_positions_per_batch;
     // max parallel transfer batches (size of queue)
     static int num_parallel_batches;
+    // size of the transposition table in MB
+    static int tt_size;
 
     // tablebase
     static int tb_depth;
@@ -95,6 +97,9 @@ public:
     }
     static int GetNumParallelBatches() {
         return num_parallel_batches;
+    }
+    static int GetTTSize() {
+        return tt_size;
     }
 
     // tablebase

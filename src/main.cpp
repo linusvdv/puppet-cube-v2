@@ -5,6 +5,7 @@
 #include "search.hpp"
 #include "settings.hpp"
 #include "tablebase.hpp"
+#include "transposition_table.hpp"
 
 #ifdef USE_CUDA
 #include "info_bridge.hpp"
@@ -38,10 +39,14 @@ int main (int argc, char *argv[]) {
     Tablebase::UploadComputationToDevice();
     LOG_MEMORY();
 
+    TranspositionTable::Initialize(Settings::GetTTSize());
+    LOG_INFO("Transposition Table Initialized");
+    LOG_MEMORY();
+
     #ifdef USE_CUDA
     if (Settings::UseCuda()) {
         CudaConstMemInitialize();
-        LOG_INFO("Cuda Constant Memory Inizialized");
+        LOG_INFO("Cuda Constant Memory Initialized");
         LOG_MEMORY();
     }
     #endif // USE_CUDA

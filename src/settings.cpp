@@ -36,6 +36,7 @@ int Settings::num_gpu_upload_threads;           // automatic detection
 int Settings::num_gputhreads;                   // automatic detection
 int Settings::num_positions_per_batch = 1000;   // NOLINT
 int Settings::num_parallel_batches;             // automatic detection
+int Settings::tt_size = 1000;   // 1 GB         // NOLINT
 
 // tablebase
 int Settings::tb_depth = 6;                     // NOLINT
@@ -59,6 +60,7 @@ static struct option long_options[] = {
 
     // search
     {"threads", required_argument, NULL, 't'},
+    {"tt_size", required_argument, NULL, 0},
 
     // tablebase
     {"tb_depth", required_argument, NULL, 0},
@@ -89,6 +91,7 @@ list of options
     -m --min_corner_heuristic  all starting position have at least this corner heuristic  [0]            (0, 27)
 
     -t --threads               number of threads used in the program                      [MAX_THREADS]  (1, MAX_THREADS)
+    --tt_size                  size of the transposition table in MB                      [1000]         (128, 1000000)
 
     --tb_depth                 depth of the tablebase (9 uses 40 GB RAM)                  [6]            (0, 9)
 )";
@@ -189,7 +192,6 @@ void Settings::SetDefault (std::vector<std::string>& arguments) {
     #elif
     num_gputhreads = 0;
     #endif  // USE_CUDA
-    LOG_EXTRA("num_gputhreads:", num_gputhreads);
 
     num_parallel_batches = num_threads * 2;
 }
@@ -260,8 +262,13 @@ Settings::Settings (int argc, char *argv[]) {
                 if (std::string(long_options[option_index].name) == "root_path") {
                     root_path = std::string(optarg);
                 }
+
                 if (std::string(long_options[option_index].name) == "use_cuda") {
                     GetBoolFromOptarg(use_cuda, "USE CUDA");
+                }
+
+                if (std::string(long_options[option_index].name) == "tt_size") {
+                    GetTFromOptarg(tt_size, 128, 1000000, "TT SIZE"); // NOLINT
                 }
 
                 if (std::string(long_options[option_index].name) == "tb_depth") {
