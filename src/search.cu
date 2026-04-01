@@ -16,6 +16,7 @@
 #include "duplicate_rotations.hpp"
 #include "duplicate_rotations.cuh"
 #include "logger.hpp"
+#include "transposition_table.hpp"
 #include "utils.hpp"
 #include "search.hpp"
 #include "search_rotations.cuh"
@@ -538,7 +539,7 @@ void UploadBatchesToDevice (SharedLeafStates& shared_leaf_states,
 }
 
 
-void DeviceLeafManager (std::stop_token stocken, SharedLeafStates& shared_leaf_states, VisitedMap& visited_leaf,
+void DeviceLeafManager (std::stop_token stocken, SharedLeafStates& shared_leaf_states,
                         SharedLeafSolution& shared_leaf_solution, uint64_t& num_gpu_positions, const int& thread_idx, uint8_t current_depth) {
     // set the device for this thread
     int gpu_device_idx = thread_idx % Settings::GetDeviceCount();
@@ -633,7 +634,7 @@ void DeviceLeafManager (std::stop_token stocken, SharedLeafStates& shared_leaf_s
             shared_leaf_solution.state = state;
             RegRotations reg_rotations = device_solution.reg_rotations;
             while (true) {
-                VisitedMapInsert(visited_leaf, state, current_depth-Settings::GetTBDepth()-1);
+                TranspositionTable::InsertState(state, current_depth-Settings::GetTBDepth()-1);
                 reg_rotations.idx--;
                 current_depth--;
                 if (reg_rotations.idx == -1) {

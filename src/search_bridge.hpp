@@ -1,8 +1,6 @@
 #pragma once
-#include <atomic>
 #include <stop_token>
 
-#include "cube.hpp"
 #include "search.hpp"
 
 
@@ -21,5 +19,5 @@ void CudaConstMemInitialize ();
 void CudaConstMemChangeCurDepth (uint8_t depth);
 
 
-void DeviceLeafManager (std::stop_token stocken, SharedLeafStates& shared_leaf_states, VisitedMap& visited_leaf,
-                        SharedLeafSolution& shared_leaf_solution, uint64_t& num_gpu_positions, const int& thread_idx, uint8_t current_depth);
+void DeviceLeafManager (std::stop_token stocken, SharedLeafStates& shared_leaf_states, SharedLeafSolution& shared_leaf_solution,
+                        uint64_t& num_gpu_positions, const int& thread_idx, uint8_t current_depth);
