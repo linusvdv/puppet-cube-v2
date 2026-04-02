@@ -2,6 +2,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <mutex>
+#include <numeric>
 #include <thread>
 #include <vector>
 
@@ -299,14 +300,16 @@ void SearchManager () {
 
             // Search
             Frontier next_frontier(kNumHeuristicLayers, std::vector<std::vector<std::pair<State, uint8_t>>>(Settings::GetNumThreads()));
+            std::vector<uint64_t> num_positions_search_threads(Settings::GetNumThreads(), 0);
             {
                 std::atomic<long long> frontier_idx = 0;
                 std::vector<std::jthread> frontier_search_threads;
                 for (int i = 0; i < Settings::GetNumThreads(); i++) {
-                    frontier_search_threads.push_back(std::jthread(FrontierSearch, std::ref(num_positions_leaf_threads[i]), std::ref(shared_leaf_solution), std::ref(shared_leaf_states),
+                    frontier_search_threads.push_back(std::jthread(FrontierSearch, std::ref(num_positions_search_threads[i]), std::ref(shared_leaf_solution), std::ref(shared_leaf_states),
                                                                    id_depth, std::ref(cur_frontier), std::ref(next_frontier), std::ref(frontier_idx), i));
                 }
             }
+            num_positions_search += std::accumulate(num_positions_search_threads.begin(), num_positions_search_threads.end(), 0ULL);
             std::swap(next_frontier, cur_frontier);
 
             // wait until queue is empty
