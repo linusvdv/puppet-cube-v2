@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <mutex>
 #include <thread>
+#include <vector>
 
 #include "BCHTSet.hpp"
 #include "cube.hpp"
@@ -20,13 +21,17 @@
 #endif  // USE_CUDA
 
 
+using Frontier = std::vector<std::vector<std::vector<std::pair<State, uint8_t>>>>;
+constexpr int kNumHeuristicLayers = 60;
+
+
 void SolutionTB(std::vector<Rotations>& tb_rotations, int tb_layer, State state) {
     for (int layer = tb_layer - 1; layer >= 0; layer--) {
         for (uint8_t rotation = 0; rotation < kNumRotations; rotation++) {
             State next_state = Cube::Rotate(state, rotation).second;
             if (BCHTSetContains(Tablebase::tablebase[layer], next_state)) {
                 state = next_state;
-                tb_rotations[tb_rotations.size()-tb_layer-1] = Rotations(rotation);
+                tb_rotations[tb_rotations.size()-layer-1] = Rotations(rotation);
                 break;
             }
         }
@@ -36,7 +41,9 @@ void SolutionTB(std::vector<Rotations>& tb_rotations, int tb_layer, State state)
 
 // recursive solution
 // bfs-like
+// FIX: full implementation (this is dfs like and does not work), collision
 bool SolutionSearch(std::vector<Rotations>& search_rotations, int depth, State state) {
+    return true;
     if (depth == 0) {
         // it is guarantied that the starting position is in the transposition table
         // so in_tt of the starting position is kTrue
@@ -76,6 +83,137 @@ int GetTBLayer(const State& state) {
         }
     }
     return -1;
+}
+
+
+void DFSNextFrontierSearch (const State& state, Frontier& next_frontier,
+                            SharedLeafSolution& shared_leaf_solution,
+                            SharedLeafStates& shared_leaf_states,
+                            LocalBuffer& local_buffer,
+                            uint64_t& num_positions_search, uint8_t cur_depth, uint8_t depth, int thread_idx) {
+    if (shared_leaf_solution.finished.load(std::memory_order_acquire)) {
+        return;
+    }
+
+    bool frontier_insert = false;
+    // rotate to the next position
+    for (uint8_t rotation = 0; rotation < kNumRotations; rotation++) {
+        std::pair<bool, State> next_state = Cube::Rotate(state, rotation);
+        // illegal move
+        if (!next_state.first) {
+            continue;
+        }
+        num_positions_search++;
+
+        // already visited
+        // if not insert this position
+        if (TranspositionTable::ContainsState(next_state.second, cur_depth+1) == InTT::kTrue) {
+            continue;
+        }
+
+        Cube next_cube;
+        uint8_t max_heuristic = next_cube.GetMaxHeuristic(next_state.second);
+
+        // in tablebase
+        if (max_heuristic <= Settings::GetTBDepth() && BCHTSetContains(Tablebase::tablebase.back(), next_state.second)) {
+            bool expected = false;
+            if (shared_leaf_solution.finished.compare_exchange_strong(expected, true, std::memory_order_acq_rel, std::memory_order_acquire)) {
+                shared_leaf_states.cv.notify_all();
+                shared_leaf_solution.state = next_state.second;
+            }
+            LOG_EXTRA("found solution of length ", Settings::GetTBDepth()+cur_depth+1);
+            return;
+        }
+
+        // due to the heuristic it is not possible to solve the next state in fewer moves than the depth
+        // this means that the state has to be again part of the new frontier
+        if (std::max(max_heuristic, uint8_t(Settings::GetTBDepth()+1)) + cur_depth + 1 >= depth) {
+            frontier_insert = true;
+            continue;
+        }
+
+        // send the position to GPU search
+        // this means that the state has to be again part of the new frontier
+        if (false &&
+            std::max(max_heuristic, uint8_t(Settings::GetTBDepth()+1)) + cur_depth + 1 >= depth - 3 &&
+            depth - cur_depth - 1 - Settings::GetTBDepth() < 16 &&  // fits in the rotation registers
+            cur_depth + 1 > 5 &&  // more than 5 moves need to be already made
+            depth - cur_depth - 1 - Settings::GetTBDepth() < 12) { // this value can be tweeked to have more cpu calculation needed
+
+            local_buffer->push_back({next_state.second, cur_depth + 1});
+
+            // insert local buffer when there is space
+            if (local_buffer->size() >= size_t(Settings::GetNumPositionsPerBatch())) {
+                std::unique_lock<std::mutex> lock(shared_leaf_states.mtx);
+                shared_leaf_states.cv.wait(lock, [&] {
+                    return int(shared_leaf_states.shared_ptrs.size()) <= Settings::GetNumParallelBatches() || shared_leaf_solution.finished.load(std::memory_order_acquire);
+                });
+                shared_leaf_states.shared_ptrs.push(std::move(local_buffer));
+                local_buffer = std::make_shared<std::vector<std::pair<State, uint8_t>>>();
+            }
+
+            frontier_insert = true;
+            continue;
+        }
+
+        // insert into visited_search
+        TranspositionTable::InsertState(next_state.second, cur_depth+1);
+
+
+        // Do further DFS
+        DFSNextFrontierSearch(next_state.second, next_frontier, shared_leaf_solution, shared_leaf_states, local_buffer, num_positions_search, cur_depth+1, depth, thread_idx);
+    }
+
+    if (frontier_insert) {
+        uint8_t heuristic = Cube().GetAppHeuristic(state);
+        next_frontier[heuristic][thread_idx].push_back({state, cur_depth});
+    }
+}
+
+
+void FrontierSearch (uint64_t& num_positions_search, SharedLeafSolution& shared_leaf_solution,
+                     SharedLeafStates& shared_leaf_states, uint8_t depth,
+                     Frontier& cur_frontier, Frontier& next_frontier, std::atomic<long long>& frontier_idx, int thread_idx) {
+    // local buffer for leaf search
+    LocalBuffer local_buffer = std::make_shared<std::vector<std::pair<State, uint8_t>>>();
+
+    long long accumulator = 0;
+    int heuristic_layer = 0;
+    int thread_layer = 0;
+
+    while (size_t(heuristic_layer) < cur_frontier.size()) {
+        long long cur_idx = frontier_idx++;
+        while (size_t(cur_idx - accumulator) >= cur_frontier[heuristic_layer][thread_layer].size()) {
+            accumulator += cur_frontier[heuristic_layer][thread_layer].size();
+            thread_layer++;
+            if (thread_layer == Settings::GetNumThreads()) {
+                thread_layer = 0;
+                heuristic_layer++;
+            }
+            if (size_t(heuristic_layer) >= cur_frontier.size()) {
+                break;
+            }
+        }
+        if (size_t(heuristic_layer) >= cur_frontier.size()) {
+            break;
+        }
+        if (shared_leaf_solution.finished.load(std::memory_order_acquire)) {
+            break;
+        }
+
+        DFSNextFrontierSearch(cur_frontier[heuristic_layer][thread_layer][cur_idx-accumulator].first, next_frontier, shared_leaf_solution, shared_leaf_states, local_buffer, num_positions_search, cur_frontier[heuristic_layer][thread_layer][cur_idx-accumulator].second, depth, thread_idx);
+    }
+
+    // insert element if the search is not finished with the current level
+    if (local_buffer->size() > 0) {
+        std::unique_lock<std::mutex> lock(shared_leaf_states.mtx);
+        shared_leaf_states.cv.wait(lock, [&] {
+            return int(shared_leaf_states.shared_ptrs.size()) <= Settings::GetNumParallelBatches() || shared_leaf_solution.finished.load(std::memory_order_acquire);
+        });
+        shared_leaf_states.shared_ptrs.push(std::move(local_buffer));
+        local_buffer = std::make_shared<std::vector<std::pair<State, uint8_t>>>();
+    }
+
 }
 
 
@@ -124,6 +262,9 @@ void SearchManager () {
         // state of the solution between the leaf search and the tb
         SharedLeafSolution shared_leaf_solution = {{false}, State()};
 
+        Frontier cur_frontier(kNumHeuristicLayers, std::vector<std::vector<std::pair<State, uint8_t>>>(Settings::GetNumThreads()));
+        cur_frontier[0][0].push_back({random_positions[random_positions_idx], 0});
+
         // information purposes
         uint64_t total_num_positions = 0;
         uint64_t num_positions_search = 0;
@@ -157,6 +298,16 @@ void SearchManager () {
             }
 
             // Search
+            Frontier next_frontier(kNumHeuristicLayers, std::vector<std::vector<std::pair<State, uint8_t>>>(Settings::GetNumThreads()));
+            {
+                std::atomic<long long> frontier_idx = 0;
+                std::vector<std::jthread> frontier_search_threads;
+                for (int i = 0; i < Settings::GetNumThreads(); i++) {
+                    frontier_search_threads.push_back(std::jthread(FrontierSearch, std::ref(num_positions_leaf_threads[i]), std::ref(shared_leaf_solution), std::ref(shared_leaf_states),
+                                                                   id_depth, std::ref(cur_frontier), std::ref(next_frontier), std::ref(frontier_idx), i));
+                }
+            }
+            std::swap(next_frontier, cur_frontier);
 
             // wait until queue is empty
             {
@@ -193,7 +344,7 @@ void SearchManager () {
         // Tablebase
         std::vector<Rotations> solution_rotations(id_depth);
         SolutionTB(solution_rotations, Settings::GetTBDepth(), shared_leaf_solution.state);
-        SolutionSearch(solution_rotations, id_depth-Settings::GetTBDepth(), shared_leaf_solution.state);
+        SolutionSearch(solution_rotations, id_depth-Settings::GetTBDepth()-1, shared_leaf_solution.state);
 
         LOG_EXTRA("solution moves:", solution_rotations);
 
