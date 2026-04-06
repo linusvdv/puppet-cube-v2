@@ -5,7 +5,7 @@
 #include <vector>
 
 
-constexpr size_t kBlockDim = 32;
+constexpr size_t kBlockDim = 64;
 constexpr int kMaxDFSDepth = 6;
 
 
