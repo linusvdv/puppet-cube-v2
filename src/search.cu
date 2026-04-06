@@ -5,6 +5,7 @@
 #include <cub/cub.cuh>
 #include <cassert>
 #include <cstdint>
+#include <nvtx3/nvtx3.hpp>
 #include <queue>
 #include <stop_token>
 #include <vector>
@@ -540,12 +541,16 @@ void UploadBatchesToDevice (SharedLeafStates& shared_leaf_states,
 
 
 void DeviceLeafManager (std::stop_token stocken, SharedLeafStates& shared_leaf_states,
-                        SharedLeafSolution& shared_leaf_solution, uint64_t& num_gpu_positions, const int& thread_idx, uint8_t current_depth) {
+                        SharedLeafSolution& shared_leaf_solution, uint64_t& num_gpu_positions, const int& thread_idx, uint8_t current_depth, int current_scramble) {
     // set the device for this thread
     int gpu_device_idx = thread_idx % Settings::GetDeviceCount();
     cudaError_t err = cudaSetDevice(gpu_device_idx);
     if (err != cudaSuccess) {
         LOG_CRITICAL(cudaGetErrorString(err));
+    }
+
+    if (thread_idx == 0) {
+        nvtxMark(("Cube " + std::to_string(current_scramble) + " depth " + std::to_string(current_depth)).c_str());
     }
 
     size_t grid_dim = ((Settings::GetNumGPUThreads()-1)/kBlockDim)+1;

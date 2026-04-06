@@ -287,7 +287,7 @@ void SearchManager () {
 
                 for (int i = 0; i < Settings::GetNumGPUUploadThreads(); i++) {
                     leaf_manager_threads.push_back(std::jthread(DeviceLeafManager, std::ref(shared_leaf_states), std::ref(shared_leaf_solution),
-                                                                std::ref(num_positions_leaf_threads[i]), i, id_depth));
+                                                                std::ref(num_positions_leaf_threads[i]), i, id_depth, random_positions_idx));
                 }
             }
             #endif
