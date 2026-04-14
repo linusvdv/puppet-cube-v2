@@ -639,7 +639,7 @@ void DeviceLeafManager (std::stop_token stocken, SharedLeafStates& shared_leaf_s
             shared_leaf_solution.state = state;
             RegRotations reg_rotations = device_solution.reg_rotations;
             while (true) {
-                TranspositionTable::InsertState(state, current_depth-Settings::GetTBDepth()-1);
+                TranspositionTable::InsertState<true>(state, current_depth-Settings::GetTBDepth()-1);
                 reg_rotations.idx--;
                 current_depth--;
                 if (reg_rotations.idx == -1) {

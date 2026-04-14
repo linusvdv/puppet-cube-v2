@@ -9,6 +9,7 @@
 #include "BCHTSet.hpp"
 #include "cube.hpp"
 #include "logger.hpp"
+#include "parallel_hashmap/phmap.h"
 #include "transposition_table.hpp"
 #include "utils.hpp"
 #include "random_position.hpp"
@@ -42,34 +43,50 @@ void SolutionTB(std::vector<Rotations>& tb_rotations, int tb_layer, State state)
 
 // recursive solution
 // bfs-like
-// FIX: full implementation (this is dfs like and does not work), collision
-bool SolutionSearch(std::vector<Rotations>& search_rotations, int depth, State state) {
-    return true;
-    if (depth == 0) {
-        // it is guarantied that the starting position is in the transposition table
-        // so in_tt of the starting position is kTrue
-        return false;
-    }
-    for (uint8_t rotation = 0; rotation < kNumRotations; rotation++) {
-        State next_state = Cube::Rotate(state, rotation).second;
-        InTT in_tt = TranspositionTable::ContainsState(next_state, depth-1);
-        if (in_tt == InTT::kFalse) {
-            continue;
-        }
-        if (in_tt == InTT::kTrue) {
-            search_rotations[depth-1] = Rotations(GetRevRotation(rotation));
-            SolutionSearch(search_rotations, depth-1, next_state);
-            return true;
-        }
-        // this is only really rarly the case and thus most of the time this function should be really fast
-        if (in_tt == InTT::kCollision) {
-            if (SolutionSearch(search_rotations, depth-1, next_state)) {
+void SolutionSearch(std::vector<Rotations>& search_rotations, int depth, State state) {
+    phmap::flat_hash_map<State, uint8_t> visited;
+    phmap::flat_hash_set<State> current_level;
+    phmap::flat_hash_set<State> next_level;
+    current_level.insert(state);
+
+    int last_depth = depth;
+    while (!current_level.empty() && depth != 0) {
+        State cur_state = *current_level.begin();
+        current_level.erase(current_level.begin());
+        for (uint8_t rotation = 0; rotation < kNumRotations; rotation++) {
+            State next_state = Cube::Rotate(cur_state, rotation).second;
+            InTT in_tt = TranspositionTable::ContainsState(next_state, depth-1);
+            if (in_tt == InTT::kFalse) {
+                continue;
+            }
+            if (in_tt == InTT::kTrue) {
                 search_rotations[depth-1] = Rotations(GetRevRotation(rotation));
-                return true;
+                int temp_depth = depth;
+                while (last_depth > temp_depth) {
+                    uint8_t to_rotation = visited[cur_state];
+                    cur_state = Cube::Rotate(cur_state, GetRevRotation(to_rotation)).second;
+                    search_rotations[temp_depth] = Rotations(GetRevRotation(to_rotation));
+                    temp_depth++;
+                }
+                last_depth = depth-1;
+                visited.clear();
+                current_level.clear();
+                next_level.clear();
+                next_level.insert(next_state);
+                break;
+            }
+            // this is only really rarely the case and thus most of the time this function should be really fast
+            if (in_tt == InTT::kCollision || in_tt == InTT::kHighDepth) {
+                next_level.insert(next_state);
+                visited.insert(std::make_pair(next_state, rotation));
+                continue;
             }
         }
+        if (current_level.empty()) {
+            depth--;
+            std::swap(current_level, next_level);
+        }
     }
-    return false;
 }
 
 
@@ -343,15 +360,27 @@ void SearchManager () {
         acc_depth += id_depth;
         acc_total_num_positions += total_num_positions;
 
+        // guarantie that the starting position is in TT
+        TranspositionTable::InsertState<true>(random_positions[random_positions_idx], 0);
+
         // Tablebase
         std::vector<Rotations> solution_rotations(id_depth);
         SolutionTB(solution_rotations, Settings::GetTBDepth(), shared_leaf_solution.state);
-        SolutionSearch(solution_rotations, id_depth-Settings::GetTBDepth()-1, shared_leaf_solution.state);
+        SolutionSearch(solution_rotations, id_depth-Settings::GetTBDepth(), shared_leaf_solution.state);
 
         LOG_EXTRA("solution moves:", solution_rotations);
 
         LOG_ALL(SkipSpace("["), SkipSpace(random_positions_idx+1), SkipSpace("/"), SkipSpace(Settings::GetNumRuns()), "] Depth:", int(id_depth), "num_positions:", total_num_positions);
         LOG_MEMORY();
+        if (Logger::GetLoggerLevel() >= LoggerLevel::kExtra) { // test if the solution works
+            State test_state = random_positions[random_positions_idx];
+            for (Rotations rotation : solution_rotations) {
+                test_state = Cube::Rotate(test_state, uint8_t(rotation)).second;
+            }
+            if (test_state != kSolvedState) {
+                LOG_WARNING("Not correct solution!");
+            }
+        }
     }
 
     // get the duration in milliseconds

@@ -52,6 +52,9 @@ constexpr std::array<TextFormat, 7> kTextFormat = {{
 class Logger {
     public:
         static void SetLoggerLevel (LoggerLevel level);
+        static LoggerLevel GetLoggerLevel() {
+            return logger_level;
+        }
 
         template<typename... Args>
         static void Log (LoggerLevel level, const std::source_location& source_location = std::source_location::current(), Args&&... args);
