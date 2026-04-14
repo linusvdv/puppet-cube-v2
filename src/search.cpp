@@ -270,7 +270,12 @@ void SearchManager () {
             continue;
         }
         // Transposition Table
-        TranspositionTable::Clear();
+        {
+            std::vector<std::jthread> ttclear_threads;
+            for (int i = 0; i < Settings::GetNumThreads(); i++) {
+                ttclear_threads.push_back(std::jthread([i](){TranspositionTable::Clear(i, Settings::GetNumThreads());}));
+            }
+        }
         TranspositionTable::InsertState(random_positions[random_positions_idx], 0);
 
         // queue shared between search

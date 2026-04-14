@@ -25,6 +25,8 @@ public:
 
     // resets the Transposition Table
     static void Clear();
+    static void Clear(size_t thread_idx, size_t num_threads);
+
 
     static std::vector<std::atomic<uint64_t>>& GetTT() {
         return tt;

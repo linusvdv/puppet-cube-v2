@@ -1,5 +1,6 @@
 #include <atomic>
 #include <cassert>
+#include <cstddef>
 #include <cstdint>
 #include <vector>
 
@@ -25,9 +26,18 @@ void TranspositionTable::Initialize(uint64_t size_mb) {
 
 
 void TranspositionTable::Clear() {
-    for (std::atomic<uint64_t>& entry : tt) {
-        entry.store(kDefaultTTEntry, std::memory_order_relaxed);
-    }
+    std::fill(
+        reinterpret_cast<uint64_t*>(tt.data()),
+        reinterpret_cast<uint64_t*>(&tt[tt_size]),
+        kDefaultTTEntry
+    );
+}
+void TranspositionTable::Clear(size_t thread_idx, size_t num_threads) {
+    std::fill(
+        reinterpret_cast<uint64_t*>(&tt[tt_size*(thread_idx)/num_threads]),
+        reinterpret_cast<uint64_t*>(&tt[tt_size*(thread_idx+1)/num_threads]),
+        kDefaultTTEntry
+    );
 }
 
 
