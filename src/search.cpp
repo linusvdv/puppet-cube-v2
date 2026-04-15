@@ -3,7 +3,6 @@
 #include <cstdint>
 #include <mutex>
 #include <numeric>
-#include <thread>
 #include <vector>
 
 #include "BCHTSet.hpp"
@@ -16,6 +15,7 @@
 #include "search.hpp"
 #include "settings.hpp"
 #include "tablebase.hpp"
+#include "thread_pool.hpp"
 
 
 #ifdef USE_CUDA
@@ -245,6 +245,8 @@ void SearchManager () {
         num_leaf_threads = Settings::GetNumGPUUploadThreads();
     }
     #endif
+    ThreadPool leaf_thread_pool(num_leaf_threads);
+    ThreadPool search_thread_pool(Settings::GetNumThreads());
 
     // start timing
     std::chrono::time_point start_time = std::chrono::high_resolution_clock::now();
@@ -270,12 +272,7 @@ void SearchManager () {
             continue;
         }
         // Transposition Table
-        {
-            std::vector<std::jthread> ttclear_threads;
-            for (int i = 0; i < Settings::GetNumThreads(); i++) {
-                ttclear_threads.push_back(std::jthread([i](){TranspositionTable::Clear(i, Settings::GetNumThreads());}));
-            }
-        }
+        search_thread_pool.Run([](size_t thread_id){TranspositionTable::Clear(thread_id, Settings::GetNumThreads());});
         TranspositionTable::InsertState(random_positions[random_positions_idx], 0);
 
         // queue shared between search
@@ -300,36 +297,26 @@ void SearchManager () {
             LOG_EXTRA("Start with depth", id_depth);
 
             // Start LeafManagers on seperate threads
-            std::vector<std::jthread> leaf_manager_threads;
             std::vector<uint64_t> num_positions_leaf_threads(num_leaf_threads, 0);
 
             #ifdef USE_CUDA
+            std::atomic<bool> leaf_stoken{false};
             if (Settings::UseCuda()) {
                 CudaConstMemChangeCurDepth(id_depth);
 
-                for (int i = 0; i < Settings::GetNumGPUUploadThreads(); i++) {
-                    leaf_manager_threads.push_back(std::jthread(DeviceLeafManager, std::ref(shared_leaf_states), std::ref(shared_leaf_solution),
-                                                                std::ref(num_positions_leaf_threads[i]), i, id_depth, random_positions_idx));
-                }
+                leaf_thread_pool.AsyncRun([&](size_t thread_id){DeviceLeafManager(leaf_stoken, shared_leaf_states, shared_leaf_solution, num_positions_leaf_threads[thread_id], thread_id, id_depth, random_positions_idx);});
             }
             #endif
             // is always off if it is compiled without cuda
             if (!Settings::UseCuda()) {
-                LOG_ERROR("currently not supported");
-                // LOG_CRITICAL("currently not supported");
+                LOG_CRITICAL("currently not supported");
             }
 
             // Search
             Frontier next_frontier(kNumHeuristicLayers, std::vector<std::vector<std::pair<State, uint8_t>>>(Settings::GetNumThreads()));
             std::vector<uint64_t> num_positions_search_threads(Settings::GetNumThreads(), 0);
-            {
-                std::atomic<long long> frontier_idx = 0;
-                std::vector<std::jthread> frontier_search_threads;
-                for (int i = 0; i < Settings::GetNumThreads(); i++) {
-                    frontier_search_threads.push_back(std::jthread(FrontierSearch, std::ref(num_positions_search_threads[i]), std::ref(shared_leaf_solution), std::ref(shared_leaf_states),
-                                                                   id_depth, std::ref(cur_frontier), std::ref(next_frontier), std::ref(frontier_idx), i));
-                }
-            }
+            std::atomic<long long> frontier_idx = 0;
+            search_thread_pool.Run([&](size_t thread_id){FrontierSearch(num_positions_search_threads[thread_id], shared_leaf_solution, shared_leaf_states, id_depth, cur_frontier, next_frontier, frontier_idx, thread_id);});
             num_positions_search += std::accumulate(num_positions_search_threads.begin(), num_positions_search_threads.end(), 0ULL);
             std::swap(next_frontier, cur_frontier);
 
@@ -343,11 +330,9 @@ void SearchManager () {
             LOG_EXTRA("start with finishing search");
 
             // Stop LeafManager
+            leaf_stoken = true;
+            leaf_thread_pool.Wait();
             for (int i = 0; i < num_leaf_threads; i++) {
-                leaf_manager_threads[i].request_stop();
-            }
-            for (int i = 0; i < num_leaf_threads; i++) {
-                leaf_manager_threads[i].join();
                 num_positions_leaf += num_positions_leaf_threads[i];
             }
 

@@ -84,6 +84,7 @@ add_executable(PuppetCubeV2
     src/tablebase.cpp
     src/BCHTSet.cpp
     src/random_position.cpp
+    src/thread_pool.cpp
     src/search.cpp
     src/special_cubes.cpp
     src/info.cpp

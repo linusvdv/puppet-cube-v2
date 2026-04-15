@@ -7,7 +7,6 @@
 #include <cstdint>
 #include <nvtx3/nvtx3.hpp>
 #include <queue>
-#include <stop_token>
 #include <vector>
 
 #include "BCHTSet.cuh"
@@ -540,7 +539,7 @@ void UploadBatchesToDevice (SharedLeafStates& shared_leaf_states,
 }
 
 
-void DeviceLeafManager (std::stop_token stocken, SharedLeafStates& shared_leaf_states,
+void DeviceLeafManager (std::atomic<bool>& stoken, SharedLeafStates& shared_leaf_states,
                         SharedLeafSolution& shared_leaf_solution, uint64_t& num_gpu_positions, const int& thread_idx, uint8_t current_depth, int current_scramble) {
     // set the device for this thread
     int gpu_device_idx = thread_idx % Settings::GetDeviceCount();
@@ -612,7 +611,7 @@ void DeviceLeafManager (std::stop_token stocken, SharedLeafStates& shared_leaf_s
     LocalBuffer local_buffer = std::make_shared<std::vector<std::pair<State, uint8_t>>>();;
     size_t local_buffer_idx = 0;
 
-    while (local_buffer_idx != local_buffer->size() || pos_queue_num_elements != 0 || !stocken.stop_requested() || num_reg_states != 0) {
+    while (local_buffer_idx != local_buffer->size() || pos_queue_num_elements != 0 || !stoken || num_reg_states != 0) {
         GetNewStates<<<grid_dim, kBlockDim, 0, cuda_stream>>>(d_position_queue, d_pos_queue_idx, d_pos_queue_num_elements, d_atomic_offset_idx, d_free_splitmix_idx, d_possible_splitmix_idx, d_starting_depths, d_reg_states, d_reg_rotations);
         PostGetNewStates<<<1, 1, 0, cuda_stream>>>(d_pos_queue_idx, d_pos_queue_num_elements, d_atomic_offset_idx, d_num_reg_states, d_atomic_splitmix);
         SplitMixStates<<<grid_dim, kBlockDim, 0, cuda_stream>>>(d_reg_rotations, d_reg_states, d_starting_depths, d_possible_splitmix_idx, d_free_splitmix_idx, d_num_reg_states, d_atomic_splitmix);
