@@ -56,6 +56,9 @@ __device__ inline uint8_t GetMaxHeuristic(RegState& reg_state, Heuristics& heuri
     if (heuristic.corner == uint16_t(-1)) {
         heuristic.corner = d_corner_heuristics[(reg_state.corner_orientation*kNumCornerPositions) + reg_state.corner_position];
     }
+    if ((heuristic.corner & ((uint16_t(1) << 8) - 1)) >= 11) {
+        return (heuristic.corner & ((uint16_t(1) << 8) - 1));
+    }
     if (heuristic.edge_1 == uint8_t(-1)) {
         heuristic.edge_1 = d_edge_heuristics[(reg_state.edge_orientation*kNumEdgePositions) + reg_state.edge_position_1];
     }
