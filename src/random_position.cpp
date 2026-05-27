@@ -1,4 +1,5 @@
 #include <cstddef>
+#include <iostream>
 #include <random>
 #include <vector>
 
@@ -16,7 +17,9 @@ std::vector<State> RandomPositions (const size_t& num_elements, size_t seed_offs
 
         State state = State(0, 0, 0, 0, kNumEdgePositions-1);
         for (int j = 0; j < Settings::GetScramblingDepth(); j++) {
-            std::pair<bool, State> res = Cube::Rotate(state, dist(gen));
+            uint8_t rotation = dist(gen);
+            std::cout << int(rotation) << "\n";
+            std::pair<bool, State> res = Cube::Rotate(state, rotation);
             state = res.second;
         }
 

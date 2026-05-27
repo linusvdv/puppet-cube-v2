@@ -8,6 +8,7 @@
 #include "cube.hpp"
 #include "logger.hpp"
 #include "settings.hpp"
+#include "utils.hpp"
 #include "tablebase.hpp"
 
 
@@ -39,14 +40,8 @@ void TablebaseSearch (const std::vector<State>& previous, const std::vector<Stat
 }
 
 
-// place where the precomputation is stored
-std::string GetFilePath (std::string file_name, int depth) {
-    // path/to/puppet-cube-v2/precomputation/file_name
-    return Settings::GetRootPath() + "precomputation/" + file_name + "_" + std::to_string(depth) + ".bin";
-}
-
 bool ExistsPrecomputation(std::vector<std::vector<State>>& tablebase, int depth) {
-    std::string file_path = GetFilePath("tablebase", depth);
+    std::string file_path = GetFilePath("tablebase_" + std::to_string(depth) + ".bin");
     if (std::FILE* file = std::fopen(file_path.c_str(), "rb")) {
         size_t size = 0;
         if (std::fread(&size, sizeof(size), 1, file) != 1) {
@@ -71,7 +66,7 @@ bool ExistsPrecomputation(std::vector<std::vector<State>>& tablebase, int depth)
 
 
 void SavePrecomputation(std::vector<State>& tablebase_layer, int depth) {
-    std::string file_path = GetFilePath("tablebase", depth);
+    std::string file_path = GetFilePath("tablebase_" + std::to_string(depth) + ".bin");
     if (std::FILE* file = std::fopen(file_path.c_str(), "wb")) {
         size_t size = tablebase_layer.size();
         if (std::fwrite(&size, sizeof(size), 1, file) != 1) {

@@ -4,10 +4,11 @@
 #include <cstdint>
 #include <vector>
 
+#include "rotation.hpp"
+
 
 constexpr int kNumCorners = 8;
 constexpr int kNumEdges = 12;
-constexpr int kNumRotations = 18;
 
 constexpr int kNumCornerOrientation = 2187;  // 3^7
 constexpr int kCornerOrientationSize = kNumCornerOrientation * kNumRotations; // 3^7 * 18

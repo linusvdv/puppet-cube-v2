@@ -6,6 +6,7 @@
 #include <iomanip>
 #include <iostream>
 #include <mutex>
+#include <set>
 #include <source_location>
 #include <sstream>
 #include <stack>
@@ -80,6 +81,15 @@ inline constexpr bool kIsSkippedSpace = false;
 template<typename T>
 inline constexpr bool kIsSkippedSpace<SkipSpace<T>> = true;
 
+// Detects std::vector<T> or std::array<T, N> or std::sets ...
+template<typename T>
+inline constexpr bool kIsIterableContainer = std::ranges::range<std::remove_cvref_t<T>>;
+
+// Gets the element type of a container
+template<typename T>
+using ContainerValueT = typename std::remove_cvref_t<T>::value_type;
+
+
 template<typename... Args>
 void Logger::Log (LoggerLevel level, const std::source_location& source_location, Args&&... args) {
     if (level > logger_level) {
@@ -103,6 +113,25 @@ void Logger::Log (LoggerLevel level, const std::source_location& source_location
 
     oss << kTextFormat[level_idx].level_name;
 
+    auto log_elem = [&oss](auto& self, const auto& val, int indent) -> void {
+        using T = std::remove_cvref_t<decltype(val)>;
+        std::string pad(indent * 2, ' ');
+
+        if constexpr (kIsIterableContainer<T>) {
+            oss << '\n';
+            oss << pad;
+            for (const auto& elem : val) {
+                self(self, elem, indent + 1);
+            }
+        }
+        else if constexpr (std::is_same_v<T, uint8_t>) {
+            oss << int(val) << ' ';
+        }
+        else {
+            oss << val << ' ';
+        }
+    };
+
     if (level <= LoggerLevel::kWarning) {
         const std::string_view file = source_location.file_name();
         const std::string_view file_name = file.substr(file.find_last_of("/\\") + 1);
@@ -118,16 +147,21 @@ void Logger::Log (LoggerLevel level, const std::source_location& source_location
     }
     else {
         (([&] {
-            if constexpr (kIsSkippedSpace<std::decay_t<Args>>) {
+            using CleanArg = std::remove_cvref_t<decltype(args)>;
+            if constexpr (kIsSkippedSpace<CleanArg>) {
                 oss << args.value;
             }
-            else if constexpr (std::is_same_v<std::remove_cvref_t<decltype(args)>, uint8_t>) {
+            else if constexpr (std::is_same_v<CleanArg, uint8_t>) {
                 oss << int(args) << ' ';
             }
-            else if constexpr (std::is_same_v<std::remove_cvref_t<decltype(args)>, std::vector<Rotations>>) {
+            else if constexpr (std::is_same_v<CleanArg, std::vector<Rotations>>) {
                 for (Rotations rotation : args) {
                     oss << rotation << ' ';
                 }
+            }
+            else if constexpr (kIsIterableContainer<CleanArg>) {
+                log_elem(log_elem, args, 0);
+                oss << '\n';
             }
             else {
                 oss << args << ' ';

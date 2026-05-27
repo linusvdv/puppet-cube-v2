@@ -1,0 +1,198 @@
+#include <array>
+#include <cstdint>
+#include <map>
+#include <string>
+
+#include "rotation.hpp"
+
+
+std::map<std::string, RotationRepresentations> name_to_rotation_representations;
+std::map<uint8_t, RotationRepresentations> index_to_rotation_representations;
+std::map<std::pair<std::array<std::array<int, 3>, 3>, int>, RotationRepresentations> matrix_to_rotation_representations;
+
+
+constexpr std::array<RotationRepresentations, kNumRotations> kRotations = {{
+    // right left
+    {
+        "R",
+        0,
+        {{
+            { 1,  0,  0},
+            { 0,  0,  1},
+            { 0, -1,  0}}},
+        1
+    },
+    {
+        "R'",
+        1,
+        {{
+            { 1,  0,  0},
+            { 0,  0, -1},
+            { 0,  1,  0}}},
+        1
+    },
+    {
+        "M",
+        12,
+        {{
+            { 1,  0,  0},
+            { 0,  0,  1},
+            { 0, -1,  0}}},
+        0
+    },
+    {
+        "M'",
+        13,
+        {{
+            { 1,  0,  0},
+            { 0,  0, -1},
+            { 0,  1,  0}}},
+        0
+    },
+    {
+        "L'",
+        3,
+        {{
+            { 1,  0,  0},
+            { 0,  0,  1},
+            { 0, -1,  0}}},
+        -1
+    },
+    {
+        "L",
+        2,
+        {{
+            { 1,  0,  0},
+            { 0,  0, -1},
+            { 0,  1,  0}}},
+        -1
+    },
+
+    // up down
+    {
+        "U",
+        4,
+        {{
+            { 0,  0, -1},
+            { 0,  1,  0},
+            { 1,  0,  0}}},
+        1
+    },
+    {
+        "U'",
+        5,
+        {{
+            { 0,  0,  1},
+            { 0,  1,  0},
+            {-1,  0,  0}}},
+        1
+    },
+    {
+        "E",
+        14,
+        {{
+            { 0,  0, -1},
+            { 0,  1,  0},
+            { 1,  0,  0}}},
+        0
+    },
+    {
+        "E'",
+        15,
+        {{
+            { 0,  0,  1},
+            { 0,  1,  0},
+            {-1,  0,  0}}},
+        0
+    },
+    {
+        "D'",
+        7,
+        {{
+            { 0,  0, -1},
+            { 0,  1,  0},
+            { 1,  0,  0}}},
+        -1
+    },
+    {
+        "D",
+        6,
+        {{
+            { 0,  0,  1},
+            { 0,  1,  0},
+            {-1,  0,  0}}},
+        -1
+    },
+
+    // front back
+    {
+        "F",
+        8,
+        {{
+            { 0,  1,  0},
+            {-1,  0,  0},
+            { 0,  0,  1}}},
+        1
+    },
+    {
+        "F'",
+        9,
+        {{
+            { 0, -1,  0},
+            { 1,  0,  0},
+            { 0,  0,  1}}},
+        1
+    },
+    {
+        "S'",
+        17,
+        {{
+            { 0,  1,  0},
+            {-1,  0,  0},
+            { 0,  0,  1}}},
+        0
+    },
+    {
+        "S",
+        16,
+        {{
+            { 0, -1,  0},
+            { 1,  0,  0},
+            { 0,  0,  1}}},
+        0
+    },
+    {
+        "B'",
+        11,
+        {{
+            { 0,  1,  0},
+            {-1,  0,  0},
+            { 0,  0,  1}}},
+        -1
+    },
+    {
+        "B",
+        10,
+        {{
+            { 0, -1,  0},
+            { 1,  0,  0},
+            { 0,  0,  1}}},
+        -1
+    },
+}};
+
+
+void RotationInit() {
+    // name to rotation representation
+    for (RotationRepresentations rotation : kRotations) {
+        name_to_rotation_representations[rotation.name] = rotation;
+    }
+    // index to rotation representation
+    for (RotationRepresentations rotation : kRotations) {
+        index_to_rotation_representations[rotation.index] = rotation;
+    }
+    // index to rotation representation
+    for (RotationRepresentations rotation : kRotations) {
+        matrix_to_rotation_representations[{rotation.matrix, rotation.activate}] = rotation;
+    }
+}

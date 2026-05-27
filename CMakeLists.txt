@@ -90,6 +90,8 @@ add_executable(PuppetCubeV2
     src/info.cpp
     src/duplicate_rotations.cpp
     src/transposition_table.cpp
+    src/rotation.cpp
+    src/edge.cpp
 )
 
 if(USE_CUDA)

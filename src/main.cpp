@@ -13,7 +13,7 @@
 #endif
 
 
-int main (int argc, char *argv[]) {
+int main_(int argc, char *argv[]) {
     // settings initialization
     Settings(argc, argv);
 

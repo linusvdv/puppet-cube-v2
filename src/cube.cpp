@@ -16,6 +16,7 @@
 #include "edge_orientation.hpp"
 #include "edge_position.hpp"
 #include "logger.hpp"
+#include "utils.hpp"
 #include "settings.hpp"
 
 
@@ -33,55 +34,6 @@ uint8_t GetRevRotation(uint8_t rotation) {
         return rotation + 1;
     }
     return rotation - 1;
-}
-
-
-// place where the precomputation is stored
-std::string GetFilePath (std::string file_name) {
-    // path/to/puppet-cube-v2/precomputation/file_name
-    return Settings::GetRootPath() + "precomputation/" + file_name;
-}
-
-
-// if there is no file storing the precomputation run the precomputation
-template<typename T, typename Generator>
-void LoadOrGenerate(const std::string file_name, std::vector<T>& target, size_t expected_size,
-                    Generator&& generate_func, const std::string& step_tag) {
-    const std::string path = GetFilePath(file_name);
-    if (std::FILE* file = std::fopen(path.c_str(), "rb")) {
-        // read content of file
-        target.resize(expected_size);
-        if (std::fread(target.data(), sizeof(T), expected_size, file) == expected_size) {
-            LOG_ALL(step_tag, "read from file");
-            LOG_MEMORY();
-        }
-        else {
-            LOG_CRITICAL(step_tag, "was not able to read file", path);
-        }
-        std::fclose(file);
-    }
-    // opening of the file failed
-    else {
-        // do the precomputation
-        LOG_ALL(step_tag, "precompute ...");
-        target = generate_func();
-        LOG_MEMORY();
-
-        if (target.size() != expected_size) {
-            LOG_CRITICAL(step_tag, "Wrong precomputation size:", target.size(), "/", expected_size);
-        }
-
-        // save to file
-        if (std::FILE* file = std::fopen(path.c_str(), "wb")) {
-            if (std::fwrite(target.data(), sizeof(T), expected_size, file) != expected_size) {
-                LOG_ERROR(step_tag, "failed to write full file");
-            }
-            std::fclose(file);
-        }
-        else {
-            LOG_ERROR(step_tag, "not able to save precomputation to file");
-        }
-    }
 }
 
 
