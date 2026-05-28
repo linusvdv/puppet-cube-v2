@@ -82,8 +82,16 @@ template<typename T>
 inline constexpr bool kIsSkippedSpace<SkipSpace<T>> = true;
 
 // Detects std::vector<T> or std::array<T, N> or std::sets ...
+template <typename T>
+concept IsIterableContainer =
+std::ranges::range<T> &&
+// Exclude std::string and std::wstring, etc.
+!requires(T t) { typename T::traits_type; } &&
+// Exclude C-style strings (e.g., const char*, char[])
+!std::is_convertible_v<std::decay_t<T>, const char*> &&
+!std::is_convertible_v<std::decay_t<T>, const wchar_t*>;
 template<typename T>
-inline constexpr bool kIsIterableContainer = std::ranges::range<std::remove_cvref_t<T>>;
+inline constexpr bool kIsIterableContainer = IsIterableContainer<std::remove_cvref_t<T>>;
 
 // Gets the element type of a container
 template<typename T>
@@ -113,25 +121,6 @@ void Logger::Log (LoggerLevel level, const std::source_location& source_location
 
     oss << kTextFormat[level_idx].level_name;
 
-    auto log_elem = [&oss](auto& self, const auto& val, int indent) -> void {
-        using T = std::remove_cvref_t<decltype(val)>;
-        std::string pad(indent * 2, ' ');
-
-        if constexpr (kIsIterableContainer<T>) {
-            oss << '\n';
-            oss << pad;
-            for (const auto& elem : val) {
-                self(self, elem, indent + 1);
-            }
-        }
-        else if constexpr (std::is_same_v<T, uint8_t>) {
-            oss << int(val) << ' ';
-        }
-        else {
-            oss << val << ' ';
-        }
-    };
-
     if (level <= LoggerLevel::kWarning) {
         const std::string_view file = source_location.file_name();
         const std::string_view file_name = file.substr(file.find_last_of("/\\") + 1);
@@ -146,6 +135,25 @@ void Logger::Log (LoggerLevel level, const std::source_location& source_location
         return;
     }
     else {
+        auto log_elem = [&oss](auto& self, const auto& val, int indent) -> void {
+            using T = std::remove_cvref_t<decltype(val)>;
+            std::string pad(indent * 2, ' ');
+
+            if constexpr (kIsIterableContainer<T>) {
+                oss << '\n';
+                oss << pad;
+                for (const auto& elem : val) {
+                    self(self, elem, indent + 1);
+                }
+            }
+            else if constexpr (std::is_same_v<T, uint8_t>) {
+                oss << int(val) << ' ';
+            }
+            else {
+                oss << val << ' ';
+            }
+        };
+
         (([&] {
             using CleanArg = std::remove_cvref_t<decltype(args)>;
             if constexpr (kIsSkippedSpace<CleanArg>) {

@@ -49,6 +49,14 @@ constexpr uint32_t kPositionMask = (1<<kPositionShift)-1;
 std::vector<std::array<int, kNumEdges>> position_symmetry_change(kNumSymmetries);
 std::vector<uint32_t> position_to_symmetry_position(kNumTotalEdgePositions, uint32_t(-1)); // [position] -> symmetry position, symmetry
 std::vector<std::array<uint32_t, kNumSymmetries>> symmetry_position_to_position(kNumPositions); // [symmetry_position][symmetry] -> position
+
+// it is possible to have multiple symmetries which represent the same position (e.g. solved state has all symmetries the same)
+// the lowest symmetry is then used
+// there are 91 symmetries so that means it fits in uint8_t
+std::vector<uint8_t> symmetry_position_active_symmetries(kNumPositions);
+std::map<std::array<uint8_t, kNumSymmetries>, uint8_t> active_symmetries_map;
+std::vector<std::array<uint8_t, kNumSymmetries>> symmetries_to_active_symmetries; // [which_active_symmetry][symmetry] -> symmetry
+uint8_t active_symmetries_map_cnt = 0;
 }
 
 
@@ -159,8 +167,18 @@ void SymmetryPositionInit() {
         if (position_to_symmetry_position[lehmer_code_default] != uint32_t(-1)) {
             continue;
         }
+        std::array<uint8_t, kNumSymmetries> cur_active_symmetries;
+        std::unordered_map<uint32_t, uint8_t> lehman_to_active_symmetry;
         for (int i = 0; i < kNumSymmetries; i++) {
             uint64_t lehmer_code = LehmerCode(SymmetryPositionRotation(position_permutations, i));
+            // active symmetry
+            if (lehman_to_active_symmetry.contains(lehmer_code)) {
+                cur_active_symmetries[i] = lehman_to_active_symmetry[lehmer_code];
+            }
+            else {
+                lehman_to_active_symmetry[lehmer_code] = i;
+                cur_active_symmetries[i] = i;
+            }
 
             if (position_to_symmetry_position[lehmer_code] != uint32_t(-1)) {
                 continue;
@@ -173,11 +191,21 @@ void SymmetryPositionInit() {
             position_to_symmetry_position[lehmer_code] = cnt | (idx_symmetry_reverse[i] << 24);
             symmetry_position_to_position[cnt][idx_symmetry_reverse[i]] = lehmer_code;
         }
+        if (active_symmetries_map.contains(cur_active_symmetries)) {
+            symmetry_position_active_symmetries[lehmer_code_default] = active_symmetries_map[cur_active_symmetries];
+        }
+        else {
+            active_symmetries_map[cur_active_symmetries] = active_symmetries_map_cnt;
+            symmetries_to_active_symmetries.push_back(cur_active_symmetries);
+            symmetry_position_active_symmetries[lehmer_code_default] = active_symmetries_map_cnt;
+            active_symmetries_map_cnt++;
+        }
         cnt++;
     } while (std::next_permutation(position_permutations.begin(), position_permutations.end()));
     if (cnt != kNumPositions) {
         LOG_CRITICAL("wrong symmetry position count");
     }
+    // LOG_ALL("Active symmetries:", active_symmetries_map_cnt, symmetries_to_active_symmetries);
 }
 
 
