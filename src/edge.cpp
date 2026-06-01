@@ -38,6 +38,8 @@ std::array<Vec3i, kNumEdges> idx_to_xyz_pos;
 std::array<Mat3i, kNumSymmetries> idx_to_mat_symmetry;
 std::map<Mat3i, int> mat_to_idx_symmetry;
 std::array<int, kNumSymmetries> idx_symmetry_reverse;
+// symmetry_multiply [symmetry(change)][symmetry] -> symmetry
+std::array<std::array<int, kNumSymmetries>, kNumSymmetries> symmetry_multiply;
 
 // faster rotations by only looking at the indices
 std::array<std::array<int, kNumEdges>, kNumRotations> idx_rotations;
@@ -50,8 +52,6 @@ constexpr uint64_t kPositionMask = (1<<kPositionShift)-1;
 std::vector<std::array<int, kNumEdges>> position_symmetry_change(kNumSymmetries);
 std::vector<uint32_t> position_to_symmetry_position(kNumTotalEdgePositions, uint32_t(-1)); // [position] -> symmetry position, symmetry
 std::vector<std::array<uint32_t, kNumSymmetries>> symmetry_position_to_position(kNumPositions); // [symmetry_position][symmetry] -> position
-// symmetry_multiply [symmetry(change)][symmetry] -> symmetry
-std::array<std::array<int, kNumSymmetries>, kNumSymmetries> symmetry_multiply;
 
 // it is possible to have multiple symmetries which represent the same position (e.g. solved state has all symmetries the same)
 // the lowest symmetry is then used
@@ -59,7 +59,6 @@ std::array<std::array<int, kNumSymmetries>, kNumSymmetries> symmetry_multiply;
 std::vector<uint8_t> symmetry_position_active_symmetries(kNumPositions);
 std::map<std::array<uint8_t, kNumSymmetries>, uint8_t> active_symmetries_map;
 std::vector<std::array<uint8_t, kNumSymmetries>> symmetries_to_active_symmetries; // [which_active_symmetry][symmetry] -> symmetry
-std::vector<int> symmetries_to_active_symmetries_zcnt;
 uint8_t active_symmetries_map_cnt = 0;
 }
 
@@ -202,13 +201,6 @@ void SymmetryPositionInit() {
             active_symmetries_map[cur_active_symmetries] = active_symmetries_map_cnt;
 
             symmetries_to_active_symmetries.push_back(cur_active_symmetries);
-            int zcnt = 0;
-            for (int val : cur_active_symmetries) {
-                if (val == 0) {
-                    zcnt++;
-                }
-            }
-            symmetries_to_active_symmetries_zcnt.push_back(zcnt);
 
             symmetry_position_active_symmetries[position_to_symmetry_position[lehmer_code_default]&kPositionMask] = active_symmetries_map_cnt;
             active_symmetries_map_cnt++;
@@ -259,7 +251,6 @@ std::vector<std::array<uint64_t, kNumRotations>> EdgePositionsInit() {
     symmetry_changes.clear();
 
     for (uint32_t sym_position = 0; sym_position < kNumPositions; sym_position++) {
-        uint8_t pos_acitve_symmetry = symmetry_position_active_symmetries[sym_position];
         for (int sym_rotation = 0; sym_rotation < kNumRotations; sym_rotation++) {
             uint32_t position = symmetry_position_to_position[sym_position][0];
             uint32_t next_position = RotatePieces(position, sym_rotation);
@@ -270,27 +261,10 @@ std::vector<std::array<uint64_t, kNumRotations>> EdgePositionsInit() {
 
             std::array<uint16_t, kNumSymmetries> cur_symmmetry_changes;
             cur_symmmetry_changes.fill(uint16_t(-1));
-            // if ((symmetries_to_active_symmetries_zcnt[pos_acitve_symmetry] <= 1 && symmetries_to_active_symmetries_zcnt[next_pos_acitve_symmetry] <= 1) || true) {
-                // fast transition possible if both have all symmetries different
-                for (int sym = 0; sym < kNumSymmetries; sym++) {
-                    cur_symmmetry_changes[sym] = symmetries_to_active_symmetries[next_pos_acitve_symmetry][symmetry_multiply[next_sym_change][sym]];
-                }
-            // }
-            // else {
-            //     for (int sym = 0; sym < kNumSymmetries; sym++) {
-            //         uint32_t position = symmetry_position_to_position[sym_position][sym];
-            //         // invalid position as it is the same as another symmetry
-            //         if (position == uint32_t(-1)) {
-            //             continue;
-            //         }
-            //         uint32_t rotation = rotation_changes[idx_symmetry_reverse[sym]][sym_rotation];
-
-            //         uint32_t next_position = RotatePieces(position, rotation);
-            //         uint32_t next_sym = position_to_symmetry_position[next_position] >> kPositionShift;
-
-            //         cur_symmmetry_changes[sym] = next_sym;
-            //     }
-            // }
+            // fast transition possible if both have all symmetries different
+            for (int sym = 0; sym < kNumSymmetries; sym++) {
+                cur_symmmetry_changes[sym] = symmetries_to_active_symmetries[next_pos_acitve_symmetry][symmetry_multiply[next_sym_change][sym]];
+            }
 
             if (!symmetry_changes_contains.contains(cur_symmmetry_changes)) {
                 symmetry_changes.push_back(cur_symmmetry_changes);
@@ -368,7 +342,6 @@ void Init() {
     for (uint8_t& edge_piece : pos) {
         edge_piece = idx_rotations[rotation][edge_piece];
     }
-    LOG_ERROR(edge::LehmerCode(pos));
 
     SymmetryPositionInit();
     // TODO: do this with load from file
@@ -394,37 +367,35 @@ void Rotate(uint32_t& position, uint8_t& symmetry, uint16_t& orientation, uint8_
 }
 
 
-void TestEdge(int seed) {
-    std::array<uint8_t, kNumEdges> pos;
-    std::iota(pos.begin(), pos.end(), 0);
-    uint32_t position = 0;
-    uint8_t symmetry = 0;
+void TestEdgePosition() {
+    std::array<uint8_t, kNumEdges> cur_pos;
     uint16_t orientation = 0;
-    std::mt19937 rng(seed);
-    std::uniform_int_distribution<> gen(0, kNumRotations-1);
-
-    for (int i = 0; i < 10000; i++) {
-        int rotation = gen(rng);
-        //LOG_ALL("rotation", index_to_rotation_representations[rotation].name);
-        for (uint8_t& edge_piece : pos) {
-            edge_piece = idx_rotations[rotation][edge_piece];
+    std::iota(cur_pos.begin(), cur_pos.end(), 0);
+    int cnt = 0;
+    do {
+        uint32_t cur_position = position_to_symmetry_position[edge::LehmerCode(cur_pos)] & kPositionMask;
+        uint8_t cur_symmetry = position_to_symmetry_position[edge::LehmerCode(cur_pos)] >> kPositionShift;
+        for (int rotation = 0; rotation < kNumRotations; rotation++) {
+            uint32_t position = cur_position;
+            uint8_t symmetry = cur_symmetry;
+            std::array<uint8_t, kNumEdges> pos = cur_pos;
+            for (uint8_t& edge_piece : pos) {
+                edge_piece = idx_rotations[rotation][edge_piece];
+            }
+            edge::Rotate(position, symmetry, orientation, rotation);
+            uint64_t lehmer_code_old = edge::LehmerCode(pos);
+            uint64_t lehmer_code_new = symmetry_position_to_position[position][symmetry];
+            if (lehmer_code_old != lehmer_code_new) {
+                LOG_EXTRA("position", position_to_symmetry_position[lehmer_code_old] & kPositionMask, position_to_symmetry_position[lehmer_code_new] & kPositionMask);
+                LOG_EXTRA("symmetry", position_to_symmetry_position[lehmer_code_old] >> kPositionShift, position_to_symmetry_position[lehmer_code_new] >> kPositionShift);
+                LOG_CRITICAL("position or symmetry wrong");
+            }
         }
-        edge::Rotate(position, symmetry, orientation, rotation);
-        uint64_t lehmer_code_old = edge::LehmerCode(pos);
-        uint64_t lehmer_code_new = symmetry_position_to_position[position][symmetry];
-        if (lehmer_code_old == lehmer_code_new) {
-            //LOG_EXTRA(i, "correct");
+        if (cnt % 100000 == 0) {
+            LOG_EXTRA(cnt, "/", kNumTotalEdgePositions);
         }
-        else {
-            LOG_WARNING(i, "incorrect:", rotation, lehmer_code_old, "!=", lehmer_code_new);
-            LOG_EXTRA("position", position_to_symmetry_position[lehmer_code_old] & kPositionMask, position_to_symmetry_position[lehmer_code_new] & kPositionMask);
-            LOG_EXTRA("symmetry", position_to_symmetry_position[lehmer_code_old] >> kPositionShift, position_to_symmetry_position[lehmer_code_new] >> kPositionShift);
-            LOG_EXTRA("raw sym new", symmetry);
-            uint8_t next_pos_acitve_symmetry = symmetry_position_active_symmetries[position_to_symmetry_position[lehmer_code_old] & kPositionMask];
-            LOG_EXTRA("symmetries_to_active_symmetries", symmetries_to_active_symmetries[next_pos_acitve_symmetry]);
-            symmetry = position_to_symmetry_position[lehmer_code_old] >> kPositionShift;
-        }
-    }
+        cnt++;
+    } while(std::next_permutation(cur_pos.begin(), cur_pos.end()));
 }
 
 
@@ -434,7 +405,6 @@ int main (int argc, char *argv[]) {
     RotationInit();
     edge::Init();
     LOG_INFO("Finished Edge");
-    for (int i = 0; i < 10000; i++)
-        TestEdge(i);
-    LOG_INFO("Finished Test");
+    // TestEdgePosition();
+    // LOG_INFO("Finished Test");
 }
