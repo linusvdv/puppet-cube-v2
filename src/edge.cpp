@@ -6,6 +6,7 @@
 #include <functional>
 #include <numeric>
 #include <random>
+#include <vector>
 
 #include "cube.hpp"
 #include "edge.hpp"
@@ -59,7 +60,15 @@ std::vector<std::array<uint32_t, kNumSymmetries>> symmetry_position_to_position(
 std::vector<uint8_t> symmetry_position_active_symmetries(kNumPositions);
 std::map<std::array<uint8_t, kNumSymmetries>, uint8_t> active_symmetries_map;
 std::vector<std::array<uint8_t, kNumSymmetries>> symmetries_to_active_symmetries; // [which_active_symmetry][symmetry] -> symmetry
-uint8_t active_symmetries_map_cnt = 0;
+
+// edge orientation
+std::array<std::map<Vec3i, uint16_t>, kNumEdges> xyz_to_idx_orient; // [position_idx][xyz_orient] -> idx_orient (0 not flipped, 1 flipped)
+std::array<std::array<Vec3i, 2>, kNumEdges> idx_to_xyz_orient; // [position_idx][idx_orient] -> xyz_orient
+
+// these three lookups could be done if you do not want to do the one combined edge lookup
+std::array<std::array<uint16_t, kNumRotations>, kNumOrientations> orientation_rotation; // [orientation][rotation] -> orientation
+std::array<std::array<uint16_t, kNumOrientations>, kNumSymmetries> default_to_sym_orientation; // [sym][orientation] -> orientation
+std::array<std::array<uint16_t, kNumOrientations>, kNumSymmetries> sym_to_default_orientation; // [sym][orientation] -> orientation
 }
 
 
@@ -68,17 +77,19 @@ namespace edge {
 // needed for a rotation
 std::vector<std::array<uint8_t, kNumRotations>> rotation_changes(kNumSymmetries); // [symmetry][rotation] -> rotation
 std::vector<std::array<uint64_t, kNumRotations>> edge_positions(kNumPositions); // [position][rotation] -> (symmetry_change << 24) | position
-std::vector<std::array<uint16_t, kNumSymmetries>> symmetry_changes(kNumSymmetryChange); // [symmetry_change][symmetry] -> symmetry, relative symmetry
-std::vector<std::array<std::array<uint16_t, kNumRotations>, kNumSymmetries>> edge_orientations(kNumOrientations); // [orientation][symmetry_change][rotation]
+std::vector<std::array<uint8_t, kNumSymmetries>> symmetry_changes(kNumSymmetryChange); // [symmetry_change][symmetry] -> symmetry, relative symmetry
+std::vector<std::array<std::array<std::array<uint16_t, kNumRotations>, kNumSymmetries>, kNumOrientations>> edge_orientations(kNumSymmetries); // edge_orientations[symmetry][orientation][next_symmetry][rotation]
 
 
 Vec3i RotateXYZPiece(const Vec3i& position, uint8_t rotation) {
     RotationRepresentations cur_rotation = index_to_rotation_representations[rotation];
     for (int i = 0; i < 3; i++) {
         if (cur_rotation.matrix[i][i] != 0) {
+            // quarter slice moves
             if (cur_rotation.activate == 0 && position[i] == 0) {
                 return position;
             }
+            // quarter non slice moves
             if (cur_rotation.activate != 0 &&
                 cur_rotation.activate != position[i]) {
                 return position;
@@ -165,6 +176,7 @@ void SymmetryPositionInit() {
 
     uint32_t cnt = 0;
     uint32_t progress = 0;
+    uint8_t active_symmetries_map_cnt = 0;
     do {
         uint64_t lehmer_code_default = LehmerCode(position_permutations);
         if (position_to_symmetry_position[lehmer_code_default] != uint32_t(-1)) {
@@ -247,7 +259,7 @@ std::vector<std::array<uint64_t, kNumRotations>> EdgePositionsInit() {
     std::vector<std::array<uint64_t, kNumRotations>> edge_positions_init(kNumPositions);
 
     int symmetry_change_cnt = 0;
-    std::map<std::array<uint16_t, kNumSymmetries>, int> symmetry_changes_contains;
+    std::map<std::array<uint8_t, kNumSymmetries>, int> symmetry_changes_contains;
     symmetry_changes.clear();
 
     for (uint32_t sym_position = 0; sym_position < kNumPositions; sym_position++) {
@@ -259,8 +271,8 @@ std::vector<std::array<uint64_t, kNumRotations>> EdgePositionsInit() {
             uint8_t next_pos_acitve_symmetry = symmetry_position_active_symmetries[next_sym_position];
             uint32_t next_sym_change = position_to_symmetry_position[next_position] >> kPositionShift;
 
-            std::array<uint16_t, kNumSymmetries> cur_symmmetry_changes;
-            cur_symmmetry_changes.fill(uint16_t(-1));
+            std::array<uint8_t, kNumSymmetries> cur_symmmetry_changes;
+            cur_symmmetry_changes.fill(uint8_t(-1));
             // fast transition possible if both have all symmetries different
             for (int sym = 0; sym < kNumSymmetries; sym++) {
                 cur_symmmetry_changes[sym] = symmetries_to_active_symmetries[next_pos_acitve_symmetry][symmetry_multiply[next_sym_change][sym]];
@@ -327,7 +339,6 @@ void Init() {
         }
     }
 
-
     // generate the idx rotation
     for (int rotation = 0; rotation < kNumRotations; rotation++) {
         for (int i = 0; i < kNumEdges; i++) {
@@ -335,34 +346,99 @@ void Init() {
         }
     }
 
-
-    std::array<uint8_t, kNumEdges> pos;
-    std::iota(pos.begin(), pos.end(), 0);
-    int rotation = name_to_rotation_representations["M"].index;
-    for (uint8_t& edge_piece : pos) {
-        edge_piece = idx_rotations[rotation][edge_piece];
-    }
-
-    SymmetryPositionInit();
     // TODO: do this with load from file
+    SymmetryPositionInit();
     rotation_changes = RotationChangesInit();
     edge_positions = EdgePositionsInit();
 
+    // edge orientation
+    // ================
+    for (int i = 0; i < kNumEdges; i++) {
+        for (int j = 0; j < 2; j++) {
+            Vec3i edge_pos = idx_to_xyz_pos[i];
+            Vec3i edge_orient = {0, 0, 0};
+            for (int k = 0; k < 3; k++) {
+                if (edge_pos[k] == 0) { // there is only one zero
+                    edge_orient[(k+j+1)%3] = edge_pos[(k+j+1)%3]; // the standard orientation is the next axis after the 0 element
+                    idx_to_xyz_orient[i][j] = edge_orient;
+                    xyz_to_idx_orient[i][edge_orient] = j;
+                    break;
+                }
+            }
+        }
+    }
+
+    // orientation rotation
+    for (uint16_t i = 0; i < kNumOrientations; i++) {
+        uint16_t orientation = i | (uint16_t(std::popcount(i)%2 == 1) << (kNumEdges-1)); // this is flipping the last bit to the correct place
+        for (int rotation = 0; rotation < kNumRotations; rotation++) {
+            uint16_t next_orientation = 0;
+            for (int j = 0; j < kNumEdges; j++) {
+                Vec3i edge_orient = idx_to_xyz_orient[j][(orientation>>j)&1];
+                Vec3i next_edge_orient = edge_orient;
+                uint16_t next_pos = idx_rotations[rotation][j];
+                if (next_pos != j) { // changing this piece with the rotation
+                    next_edge_orient = MatVecMul(index_to_rotation_representations[rotation].matrix, edge_orient);
+                }
+                next_orientation |= xyz_to_idx_orient[next_pos][next_edge_orient] << next_pos;
+            }
+            orientation_rotation[i][rotation] = next_orientation & (kNumOrientations-1);
+        }
+    }
+    // LOG_EXTRA("orientation_rotation", orientation_rotation);
+
+    std::array<uint16_t, kNumSymmetries> default_orientation_change;
+    for (uint16_t i = 0; i < kNumOrientations; i++) {
+        uint16_t orientation = i | (uint16_t(std::popcount(i)%2 == 1) << (kNumEdges-1)); // this is flipping the last bit to the correct place
+        for (int sym = 0; sym < kNumSymmetries; sym++) {
+            uint16_t next_orientation = 0;
+            for (int j = 0; j < kNumEdges; j++) {
+                Vec3i edge_orient = idx_to_xyz_orient[j][(orientation>>j)&1];
+                uint16_t next_pos = position_symmetry_change[sym][j];
+                Vec3i next_edge_orient = MatVecMul(idx_to_mat_symmetry[sym], edge_orient);;
+                if ((next_orientation & xyz_to_idx_orient[next_pos][next_edge_orient] << next_pos) != 0) {
+                    LOG_CRITICAL("WRONG");
+                }
+                next_orientation |= xyz_to_idx_orient[next_pos][next_edge_orient] << next_pos;
+            }
+            if (i == 0) {
+                default_orientation_change[sym] = next_orientation;
+            }
+            next_orientation ^= default_orientation_change[sym];
+            next_orientation &= kNumOrientations-1;
+            default_to_sym_orientation[sym][i] = next_orientation;
+            sym_to_default_orientation[sym][next_orientation] = i;
+        }
+    }
+    // LOG_EXTRA("default_to_sym_orientation", default_to_sym_orientation);
+
+    for (uint8_t symmetry = 0; symmetry < kNumSymmetries; symmetry++) {
+        for (uint16_t orientation = 0; orientation < kNumOrientations; orientation++) {
+            for (uint8_t next_symmetry = 0; next_symmetry < kNumSymmetries; next_symmetry++) {
+                for (uint8_t rotation = 0; rotation < kNumRotations; rotation++) {
+                    uint16_t default_orientation = sym_to_default_orientation[symmetry][orientation];
+                    uint16_t next_orientation = orientation_rotation[default_orientation][rotation];
+                    uint16_t next_orientation_sym = default_to_sym_orientation[next_symmetry][next_orientation];
+                    edge_orientations[symmetry][orientation][next_symmetry][rotation] = next_orientation_sym;
+                }
+            }
+        }
+    }
 }
 
 // most important one!
 void Rotate(uint32_t& position, uint8_t& symmetry, uint16_t& orientation, uint8_t rotation) {
     // change rotation relative to symmetry
-    rotation = rotation_changes[symmetry][rotation];
+    uint8_t sym_rotation = rotation_changes[symmetry][rotation];
     // position lookup (pos + symmetry change)
-    uint64_t packed = edge_positions[position][rotation];
+    uint64_t packed = edge_positions[position][sym_rotation];
     uint32_t symmetry_change = packed >> kPositionShift;
     position = packed & kPositionMask;
     // change symmetry abs
-    uint16_t packed2 = symmetry_changes[symmetry_change][symmetry];
-    symmetry = uint8_t(packed2);
+    uint8_t next_symmetry = symmetry_changes[symmetry_change][symmetry];
     // orientation lookup
-    // orientation = edge_orientations[orientation][uint8_t(packed2>>8)][rotation];
+    orientation = edge_orientations[symmetry][orientation][next_symmetry][rotation]; // this rotation is not correct
+    symmetry = next_symmetry;
 }
 }
 
@@ -399,6 +475,60 @@ void TestEdgePosition() {
 }
 
 
+void TestEdgeOrientationPosition1() {
+    uint32_t position = 0;
+    uint8_t symmetry = 0;
+    uint16_t orientation = 0;
+    for (int i = 0; i < kNumRotations; i++) {
+        LOG_EXTRA("Rotation:", index_to_rotation_representations[i].name);
+        uint32_t pos = position;
+        uint8_t sym = symmetry;
+        uint16_t ori = orientation;
+        edge::Rotate(pos, sym, ori, i);
+        LOG_EXTRA("pos:", pos, "sym:", sym, "ori:", ori);
+    }
+}
+
+
+void TestEdgeOrientationPosition2(int seed, int num_rotations) {
+    uint32_t position = 0;
+    uint8_t symmetry = 0;
+    uint16_t orientation = 0;
+
+    std::mt19937 rng(seed);
+    std::uniform_int_distribution<int> gen(0, kNumRotations-1);
+
+    std::vector<int> random_rotations;
+    for (int i = 0; i < num_rotations; i++) { // generate 10 rotations
+        int rotation = gen(rng);
+        random_rotations.push_back(rotation);
+        LOG_EXTRA(index_to_rotation_representations[rotation].name);
+    }
+
+    std::vector<int> ori_sym(num_rotations);
+    for (int i = 0; i < kNumSymmetries; i++) {
+        uint32_t pos = position;
+        uint8_t sym = symmetry;
+        uint16_t ori = orientation;
+        for (int j = 0; j < num_rotations; j++) {
+            edge::Rotate(pos, sym, ori, edge::rotation_changes[i][random_rotations[j]]);
+            if (i == 0) {
+                ori_sym[j] = ori;
+            }
+            if (ori_sym[j] != ori) {
+                LOG_EXTRA("i:", i, "j:", j, ori, ori_sym[j]);
+                std::array<uint8_t, kNumSymmetries> cur_active_symmetries = symmetries_to_active_symmetries[symmetry_position_active_symmetries[pos]];
+                LOG_EXTRA(cur_active_symmetries);
+                for (int i = 0; i < kNumSymmetries; i++) {
+                    if (cur_active_symmetries[i] == 0) {
+                        LOG_ALL(i, ":", default_to_sym_orientation[i][ori]);
+                    }
+                }
+            }
+        }
+    }
+}
+
 int main (int argc, char *argv[]) {
     // settings initialization
     Settings(argc, argv);
@@ -407,4 +537,6 @@ int main (int argc, char *argv[]) {
     LOG_INFO("Finished Edge");
     // TestEdgePosition();
     // LOG_INFO("Finished Test");
+    // TestEdgeOrientationPosition1();
+    // TestEdgeOrientationPosition2(0, 1000);
 }
