@@ -1,9 +1,11 @@
 #include <algorithm>
 #include <bit>
+#include <bitset>
 #include <cassert>
 #include <cstdint>
 #include <map>
 #include <functional>
+#include <memory>
 #include <numeric>
 #include <random>
 #include <vector>
@@ -60,6 +62,7 @@ std::vector<std::array<uint32_t, kNumSymmetries>> symmetry_position_to_position(
 std::vector<uint8_t> symmetry_position_active_symmetries(kNumPositions);
 std::map<std::array<uint8_t, kNumSymmetries>, uint8_t> active_symmetries_map;
 std::vector<std::array<uint8_t, kNumSymmetries>> symmetries_to_active_symmetries; // [which_active_symmetry][symmetry] -> symmetry
+std::vector<uint8_t> symmetry_position_active_cnt(kNumPositions);
 
 // edge orientation
 std::array<std::map<Vec3i, uint16_t>, kNumEdges> xyz_to_idx_orient; // [position_idx][xyz_orient] -> idx_orient (0 not flipped, 1 flipped)
@@ -424,6 +427,15 @@ void Init() {
             }
         }
     }
+
+    std::vector<uint8_t> symmetries_to_active_symmetries_cnt;
+    for (std::array<uint8_t, kNumSymmetries>& cur : symmetries_to_active_symmetries) {
+        uint8_t cnt = std::count(cur.begin(), cur.end(), 0);
+        symmetries_to_active_symmetries_cnt.push_back(cnt);
+    }
+    for (int i = 0; i < kNumPositions; i++) {
+        symmetry_position_active_cnt[i] = symmetries_to_active_symmetries_cnt[symmetry_position_active_symmetries[i]];
+    }
 }
 
 // most important one!
@@ -529,6 +541,116 @@ void TestEdgeOrientationPosition2(int seed, int num_rotations) {
     }
 }
 
+
+// reverse moves always results in same position
+void TestEdge(int seed, int num_positions) {
+    std::mt19937 rng(seed);
+    std::uniform_int_distribution<uint32_t> gen_pos(0, kNumPositions-1);
+    std::uniform_int_distribution<uint8_t> gen_sym(0, kNumSymmetries-1);
+    std::uniform_int_distribution<uint16_t> gen_ori(0, kNumOrientations-1);
+    std::uniform_int_distribution<uint8_t> gen_rotation(0, kNumRotations-1);
+
+    for (int i = 0; i < num_positions; i++) {
+        uint32_t pos = gen_pos(rng);
+        uint8_t sym = symmetries_to_active_symmetries[symmetry_position_active_symmetries[pos]][gen_sym(rng)];
+        uint16_t ori = gen_ori(rng);
+        uint8_t rotation = gen_rotation(rng);
+        uint32_t cur_pos = pos;
+        uint8_t cur_sym = sym;
+        uint16_t cur_ori = ori;
+        edge::Rotate(cur_pos, cur_sym, cur_ori, rotation);
+        edge::Rotate(cur_pos, cur_sym, cur_ori, rotation + (rotation % 2 == 0 ? 1 : -1));
+        if (cur_pos != pos || cur_sym != sym || cur_ori != ori) {
+            LOG_ERROR("pos:", cur_pos, "!=", pos);
+            LOG_ERROR("sym:", cur_sym, "!=", sym);
+            LOG_ERROR("ori:", cur_ori, "!=", ori);
+        }
+    }
+}
+
+void TestEdge2(int seed, int num_positions) {
+    std::mt19937 rng(seed);
+    std::uniform_int_distribution<uint32_t> gen_pos(0, kNumPositions-1);
+    std::uniform_int_distribution<uint8_t> gen_rotation(0, kNumRotations-1);
+
+    for (int i = 0; i < num_positions; i++) {
+        uint32_t pos = gen_pos(rng);
+        uint8_t rotation = gen_rotation(rng);
+        std::vector<int> check_all_ori(kNumOrientations, 0);
+        for (int ori = 0; ori < kNumOrientations; ori++) {
+            uint32_t cur_pos = pos;
+            uint8_t sym = 0;
+            uint16_t cur_ori = ori;
+            edge::Rotate(cur_pos, sym, cur_ori, rotation);
+            if (check_all_ori[cur_ori] == 1) {
+                LOG_CRITICAL("twice mapped to the same orientation");
+            }
+            check_all_ori[cur_ori] = 1;
+        }
+    }
+}
+
+
+void Precompute() {
+    std::unique_ptr<std::bitset<uint64_t(kNumPositions)*kNumOrientations>> last = std::make_unique<std::bitset<uint64_t(kNumPositions)*kNumOrientations>>();
+    std::unique_ptr<std::bitset<uint64_t(kNumPositions)*kNumOrientations>> curr = std::make_unique<std::bitset<uint64_t(kNumPositions)*kNumOrientations>>();
+    std::unique_ptr<std::bitset<uint64_t(kNumPositions)*kNumOrientations>> next = std::make_unique<std::bitset<uint64_t(kNumPositions)*kNumOrientations>>();
+    curr->set(0);
+    uint64_t found = 1;
+    uint64_t level = 0;
+    uint64_t level_cnt = 1;
+    while (found < uint64_t(kNumPositions)*kNumOrientations) {
+        #if defined(__GNUC__) || defined(__clang__) // fast way to find the next element
+        for (uint64_t i = curr->_Find_first(); i < curr->size(); i = curr->_Find_next(i)) {
+        #else
+        for (uint64_t i = 0; i < curr->size(); i++) {
+            if (!(*curr)[i]) {
+                continue;
+            }
+        #endif
+            // get position
+            uint32_t position = i % kNumPositions;
+            uint16_t orientation = i / kNumPositions;
+            for (int rotation = 0; rotation < kNumRotations; rotation++) {
+                uint8_t symmetry = 0;
+                uint32_t next_position = position;
+                uint8_t next_symmetry = symmetry;
+                uint16_t next_orientation = orientation;
+                edge::Rotate(next_position, next_symmetry, next_orientation, rotation);
+                uint64_t next_idx = (uint64_t(next_orientation)*kNumPositions)+next_position;
+                if ((*last)[next_idx] ||
+                    (*curr)[next_idx] ||
+                    (*next)[next_idx]) {
+                    continue;
+                }
+                next->set(next_idx);
+                level++;
+                found++;
+                if (symmetry_position_active_cnt[next_position] > 1) {
+                    for (int sym = 0; sym < kNumSymmetries; sym++) {
+                        if (symmetries_to_active_symmetries[symmetry_position_active_symmetries[next_position]][sym] == 0) {
+                            uint64_t next_idx_sym = (uint64_t(default_to_sym_orientation[sym][next_orientation])*kNumPositions)+next_position;
+                            if ((*next)[next_idx_sym]) {
+                                continue;
+                            }
+                            next->set(next_idx_sym);
+                            level++;
+                            found++;
+                        }
+                    }
+                }
+            }
+        }
+        LOG_ALL("Level", level_cnt, ":", level);
+        std::swap(last, curr);
+        std::swap(curr, next);
+        next->reset();
+        level_cnt++;
+        level = 0;
+    }
+}
+
+
 int main (int argc, char *argv[]) {
     // settings initialization
     Settings(argc, argv);
@@ -539,4 +661,7 @@ int main (int argc, char *argv[]) {
     // LOG_INFO("Finished Test");
     // TestEdgeOrientationPosition1();
     // TestEdgeOrientationPosition2(0, 1000);
+    // TestEdge(0, 100000);
+    // TestEdge2(0, 10000);
+    Precompute();
 }
