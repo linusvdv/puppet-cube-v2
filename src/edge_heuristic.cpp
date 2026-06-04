@@ -21,9 +21,8 @@ struct Edges {
 #pragma pack(pop)
 
 
-std::vector<uint8_t> EdgeHeuristicInitialization(const std::vector<uint16_t>& edge_orientation, const std::vector<uint32_t>& edge_position, uint16_t solved_orientation, uint32_t solved_position) {
-    std::vector<uint8_t> edge_heuristic(kEdgeHeuristicSize, 0);
-
+void EdgeHeuristicInitialization(const std::vector<uint16_t>& edge_orientation, const std::vector<uint32_t>& edge_position, uint16_t solved_orientation, uint32_t solved_position, std::vector<uint8_t>& edge_heuristic) {
+    edge_heuristic.assign(kEdgeHeuristicSize, 0);
     int cnt = 0;
     std::queue<Edges> next_queue;
     next_queue.push({solved_orientation, solved_position});
@@ -66,6 +65,4 @@ std::vector<uint8_t> EdgeHeuristicInitialization(const std::vector<uint16_t>& ed
         LOG_CRITICAL("Found", cnt, "instead of", kNumEdgeHeuristic, "positions");
     }
     LOG_EXTRA("max depth:", depth-1);
-
-    return edge_heuristic;
 }

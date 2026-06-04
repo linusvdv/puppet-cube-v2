@@ -156,8 +156,8 @@ void ParallelCornerHeuristic(const std::vector<uint16_t>& corner_orientation, co
 }
 
 
-std::vector<uint16_t> CornerHeuristicInitialization(const std::vector<uint16_t>& corner_orientation, const std::vector<uint16_t>& corner_position) {
-    std::vector<uint16_t> corner_heuristic(kNumCornerHeuristic, 0);
+void CornerHeuristicInitialization(const std::vector<uint16_t>& corner_orientation, const std::vector<uint16_t>& corner_position, std::vector<uint16_t>& corner_heuristic) {
+    corner_heuristic.assign(kNumCornerHeuristic, 0);
 
     std::array<bool, kSizeLegalMap> legal_map;
     LegalMapInitialisation(legal_map);
@@ -204,6 +204,4 @@ std::vector<uint16_t> CornerHeuristicInitialization(const std::vector<uint16_t>&
     }
     LOG_EXTRA(cnt, "legal corner configurations");
     LOG_EXTRA("max depth:", depth-1);
-
-    return corner_heuristic;
 }

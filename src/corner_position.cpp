@@ -66,8 +66,8 @@ std::array<uint8_t, kNumCorners> Rotate(std::array<uint8_t, kNumCorners> positio
 }
 
 
-std::vector<uint16_t> CornerPositionInitialization() {
-    std::vector<uint16_t> corner_positions(kCornerPositionsSize, 0);
+void CornerPositionInitialization(std::vector<uint16_t>& corner_positions) {
+    corner_positions.assign(kCornerPositionsSize, 0);
     std::vector<bool> visited(kNumCornerPositions, false);
 
     // index - position in 3D space (x y z)
@@ -108,5 +108,4 @@ std::vector<uint16_t> CornerPositionInitialization() {
     if (cnt != kNumCornerPositions) {
         LOG_CRITICAL("Did not find all positions", cnt);
     }
-    return corner_positions;
 }

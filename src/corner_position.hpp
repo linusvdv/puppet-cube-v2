@@ -3,4 +3,4 @@
 #include <vector>
 
 
-std::vector<uint16_t> CornerPositionInitialization();
+void CornerPositionInitialization(std::vector<uint16_t>& corner_positions);

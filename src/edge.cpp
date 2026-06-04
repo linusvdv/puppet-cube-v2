@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <atomic>
 #include <bit>
 #include <bitset>
 #include <cassert>
@@ -8,6 +9,7 @@
 #include <memory>
 #include <numeric>
 #include <random>
+#include <thread>
 #include <vector>
 
 #include "cube.hpp"
@@ -15,6 +17,7 @@
 #include "logger.hpp"
 #include "rotation.hpp"
 #include "settings.hpp"
+#include "tablebase.hpp"
 #include "utils.hpp"
 
 // TODO: only assign the vecors space when the are needed for the generation of the precomputation, delete it afterwads, and else do not generate it at all
@@ -24,6 +27,7 @@ constexpr int kNumPositions = 9985968;
 constexpr int kNumOrientations = 1 << (kNumEdges-1);
 constexpr int kNumSymmetries = Factorial(3) * (1<<3);
 constexpr int kNumSymmetryChange = 981; // this is unfortunatly more than 256 (which would fit in uint8_t and could therefore be packed in a uint32_t with the position
+constexpr uint64_t kNumEdgeHeuristicSym = uint64_t(kNumPositions)*kNumOrientations;
 
 constexpr std::array<uint64_t, kNumEdges+1> kFactorials = []{
     std::array<uint64_t, kNumEdges+1> arr{};
@@ -82,6 +86,8 @@ std::vector<std::array<uint8_t, kNumRotations>> rotation_changes(kNumSymmetries)
 std::vector<std::array<uint64_t, kNumRotations>> edge_positions(kNumPositions); // [position][rotation] -> (symmetry_change << 24) | position
 std::vector<std::array<uint8_t, kNumSymmetries>> symmetry_changes(kNumSymmetryChange); // [symmetry_change][symmetry] -> symmetry, relative symmetry
 std::vector<std::array<std::array<std::array<uint16_t, kNumRotations>, kNumSymmetries>, kNumOrientations>> edge_orientations(kNumSymmetries); // edge_orientations[symmetry][orientation][next_symmetry][rotation]
+
+std::vector<uint64_t> heuristic(kNumEdgeHeuristicSym / 16, ~uint64_t(0)); // 10 GB
 
 
 Vec3i RotateXYZPiece(const Vec3i& position, uint8_t rotation) {
@@ -225,7 +231,6 @@ void SymmetryPositionInit() {
     if (cnt != kNumPositions) {
         LOG_CRITICAL("wrong symmetry position count");
     }
-    LOG_ALL("Active symmetries:", active_symmetries_map_cnt, symmetries_to_active_symmetries);
 }
 
 
@@ -251,7 +256,6 @@ std::vector<std::array<uint8_t, kNumRotations>> RotationChangesInit() {
             rotation_changes_init[symmetry][i] = matrix_to_rotation_representations[{matrix, activate}].index;
         }
     }
-    LOG_EXTRA(rotation_changes_init);
     return rotation_changes_init;
 }
 
@@ -294,7 +298,6 @@ std::vector<std::array<uint64_t, kNumRotations>> EdgePositionsInit() {
     }
 
     LOG_INFO("Symmetry Change CNT:", symmetry_change_cnt);
-    LOG_EXTRA("symmetry_changes:", symmetry_changes);
     return edge_positions_init;
 }
 
@@ -333,7 +336,6 @@ void Init() {
     for (int i = 0; i < kNumSymmetries; i++) {
         idx_symmetry_reverse[i] = mat_to_idx_symmetry[MatTrans(idx_to_mat_symmetry[i])];
     }
-    LOG_EXTRA("symmetry: ", idx_to_mat_symmetry);
 
     // symmetry multiply
     for (int i = 0; i < kNumSymmetries; i++) {
@@ -388,7 +390,6 @@ void Init() {
             orientation_rotation[i][rotation] = next_orientation & (kNumOrientations-1);
         }
     }
-    // LOG_EXTRA("orientation_rotation", orientation_rotation);
 
     std::array<uint16_t, kNumSymmetries> default_orientation_change;
     for (uint16_t i = 0; i < kNumOrientations; i++) {
@@ -413,7 +414,6 @@ void Init() {
             sym_to_default_orientation[sym][next_orientation] = i;
         }
     }
-    // LOG_EXTRA("default_to_sym_orientation", default_to_sym_orientation);
 
     for (uint8_t symmetry = 0; symmetry < kNumSymmetries; symmetry++) {
         for (uint16_t orientation = 0; orientation < kNumOrientations; orientation++) {
@@ -455,85 +455,38 @@ void Rotate(uint32_t& position, uint8_t& symmetry, uint16_t& orientation, uint8_
 }
 
 
-void TestEdgePosition() {
-    std::array<uint8_t, kNumEdges> cur_pos;
-    uint16_t orientation = 0;
-    std::iota(cur_pos.begin(), cur_pos.end(), 0);
-    int cnt = 0;
-    do {
-        uint32_t cur_position = position_to_symmetry_position[edge::LehmerCode(cur_pos)] & kPositionMask;
-        uint8_t cur_symmetry = position_to_symmetry_position[edge::LehmerCode(cur_pos)] >> kPositionShift;
+uint8_t GetEdgeHeuristicIdx(uint64_t idx) {
+    return (edge::heuristic[idx/16]>>((idx%16)*4))&uint8_t(15);
+}
+
+
+inline void SetAtomicNextVisited(std::vector<std::atomic<uint64_t>>& next_visited, uint64_t idx) {
+    next_visited[idx/64].fetch_or(uint64_t(1)<<(idx%64), std::memory_order_relaxed);
+}
+
+
+void PrecomputeMultithread(uint64_t left, uint64_t right, std::vector<std::atomic<uint64_t>>& next_visited, uint8_t depth) {
+    for (uint64_t idx = left; idx < right; idx++) {
+        if (GetEdgeHeuristicIdx(idx) != depth-1) {
+            continue;
+        }
+        uint32_t position = idx % kNumPositions;
+        uint16_t orientation = idx / kNumPositions;
         for (int rotation = 0; rotation < kNumRotations; rotation++) {
-            uint32_t position = cur_position;
-            uint8_t symmetry = cur_symmetry;
-            std::array<uint8_t, kNumEdges> pos = cur_pos;
-            for (uint8_t& edge_piece : pos) {
-                edge_piece = idx_rotations[rotation][edge_piece];
+            uint32_t next_position = position;
+            uint8_t next_symmetry = 0;
+            uint16_t next_orientation = orientation;
+            edge::Rotate(next_position, next_symmetry, next_orientation, rotation);
+            uint64_t next_idx = (uint64_t(next_orientation)*kNumPositions)+next_position;
+            if (GetEdgeHeuristicIdx(next_idx) != 15) {
+                continue;
             }
-            edge::Rotate(position, symmetry, orientation, rotation);
-            uint64_t lehmer_code_old = edge::LehmerCode(pos);
-            uint64_t lehmer_code_new = symmetry_position_to_position[position][symmetry];
-            if (lehmer_code_old != lehmer_code_new) {
-                LOG_EXTRA("position", position_to_symmetry_position[lehmer_code_old] & kPositionMask, position_to_symmetry_position[lehmer_code_new] & kPositionMask);
-                LOG_EXTRA("symmetry", position_to_symmetry_position[lehmer_code_old] >> kPositionShift, position_to_symmetry_position[lehmer_code_new] >> kPositionShift);
-                LOG_CRITICAL("position or symmetry wrong");
-            }
-        }
-        if (cnt % 100000 == 0) {
-            LOG_EXTRA(cnt, "/", kNumTotalEdgePositions);
-        }
-        cnt++;
-    } while(std::next_permutation(cur_pos.begin(), cur_pos.end()));
-}
-
-
-void TestEdgeOrientationPosition1() {
-    uint32_t position = 0;
-    uint8_t symmetry = 0;
-    uint16_t orientation = 0;
-    for (int i = 0; i < kNumRotations; i++) {
-        LOG_EXTRA("Rotation:", index_to_rotation_representations[i].name);
-        uint32_t pos = position;
-        uint8_t sym = symmetry;
-        uint16_t ori = orientation;
-        edge::Rotate(pos, sym, ori, i);
-        LOG_EXTRA("pos:", pos, "sym:", sym, "ori:", ori);
-    }
-}
-
-
-void TestEdgeOrientationPosition2(int seed, int num_rotations) {
-    uint32_t position = 0;
-    uint8_t symmetry = 0;
-    uint16_t orientation = 0;
-
-    std::mt19937 rng(seed);
-    std::uniform_int_distribution<int> gen(0, kNumRotations-1);
-
-    std::vector<int> random_rotations;
-    for (int i = 0; i < num_rotations; i++) { // generate 10 rotations
-        int rotation = gen(rng);
-        random_rotations.push_back(rotation);
-        LOG_EXTRA(index_to_rotation_representations[rotation].name);
-    }
-
-    std::vector<int> ori_sym(num_rotations);
-    for (int i = 0; i < kNumSymmetries; i++) {
-        uint32_t pos = position;
-        uint8_t sym = symmetry;
-        uint16_t ori = orientation;
-        for (int j = 0; j < num_rotations; j++) {
-            edge::Rotate(pos, sym, ori, edge::rotation_changes[i][random_rotations[j]]);
-            if (i == 0) {
-                ori_sym[j] = ori;
-            }
-            if (ori_sym[j] != ori) {
-                LOG_EXTRA("i:", i, "j:", j, ori, ori_sym[j]);
-                std::array<uint8_t, kNumSymmetries> cur_active_symmetries = symmetries_to_active_symmetries[symmetry_position_active_symmetries[pos]];
-                LOG_EXTRA(cur_active_symmetries);
-                for (int i = 0; i < kNumSymmetries; i++) {
-                    if (cur_active_symmetries[i] == 0) {
-                        LOG_ALL(i, ":", default_to_sym_orientation[i][ori]);
+            SetAtomicNextVisited(next_visited, next_idx);
+            if (symmetry_position_active_cnt[next_position] > 1) {
+                for (int sym = 0; sym < kNumSymmetries; sym++) {
+                    if (symmetries_to_active_symmetries[symmetry_position_active_symmetries[next_position]][sym] == 0) {
+                        uint64_t next_idx_sym = (uint64_t(default_to_sym_orientation[sym][next_orientation])*kNumPositions)+next_position;
+                        SetAtomicNextVisited(next_visited, next_idx_sym);
                     }
                 }
             }
@@ -542,111 +495,78 @@ void TestEdgeOrientationPosition2(int seed, int num_rotations) {
 }
 
 
-// reverse moves always results in same position
-void TestEdge(int seed, int num_positions) {
-    std::mt19937 rng(seed);
-    std::uniform_int_distribution<uint32_t> gen_pos(0, kNumPositions-1);
-    std::uniform_int_distribution<uint8_t> gen_sym(0, kNumSymmetries-1);
-    std::uniform_int_distribution<uint16_t> gen_ori(0, kNumOrientations-1);
-    std::uniform_int_distribution<uint8_t> gen_rotation(0, kNumRotations-1);
+void UpdateHeuristicMultithread(uint64_t left, uint64_t right,
+                                std::vector<std::atomic<uint64_t>>& next_visited,
+                                uint64_t& local_count, uint8_t level) {
+    uint64_t thread_local_count = 0;
+    for (uint64_t i = left; i < right; i++) {
+        uint64_t value = next_visited[i].load(std::memory_order_relaxed);
+        if (value == 0) {
+            continue;
+        }
+        next_visited[i].store(uint64_t(0), std::memory_order_relaxed);
 
-    for (int i = 0; i < num_positions; i++) {
-        uint32_t pos = gen_pos(rng);
-        uint8_t sym = symmetries_to_active_symmetries[symmetry_position_active_symmetries[pos]][gen_sym(rng)];
-        uint16_t ori = gen_ori(rng);
-        uint8_t rotation = gen_rotation(rng);
-        uint32_t cur_pos = pos;
-        uint8_t cur_sym = sym;
-        uint16_t cur_ori = ori;
-        edge::Rotate(cur_pos, cur_sym, cur_ori, rotation);
-        edge::Rotate(cur_pos, cur_sym, cur_ori, rotation + (rotation % 2 == 0 ? 1 : -1));
-        if (cur_pos != pos || cur_sym != sym || cur_ori != ori) {
-            LOG_ERROR("pos:", cur_pos, "!=", pos);
-            LOG_ERROR("sym:", cur_sym, "!=", sym);
-            LOG_ERROR("ori:", cur_ori, "!=", ori);
+        thread_local_count += std::popcount(value);
+        while (value != 0U) {
+            uint64_t global_bit = (i * 64) + std::countr_zero(value);
+            edge::heuristic[global_bit / 16] ^= uint64_t(15 - level) << ((global_bit % 16) * 4);
+            value &= value - 1;
         }
     }
-}
-
-void TestEdge2(int seed, int num_positions) {
-    std::mt19937 rng(seed);
-    std::uniform_int_distribution<uint32_t> gen_pos(0, kNumPositions-1);
-    std::uniform_int_distribution<uint8_t> gen_rotation(0, kNumRotations-1);
-
-    for (int i = 0; i < num_positions; i++) {
-        uint32_t pos = gen_pos(rng);
-        uint8_t rotation = gen_rotation(rng);
-        std::vector<int> check_all_ori(kNumOrientations, 0);
-        for (int ori = 0; ori < kNumOrientations; ori++) {
-            uint32_t cur_pos = pos;
-            uint8_t sym = 0;
-            uint16_t cur_ori = ori;
-            edge::Rotate(cur_pos, sym, cur_ori, rotation);
-            if (check_all_ori[cur_ori] == 1) {
-                LOG_CRITICAL("twice mapped to the same orientation");
-            }
-            check_all_ori[cur_ori] = 1;
-        }
-    }
+    local_count = thread_local_count;
 }
 
 
 void Precompute() {
-    std::unique_ptr<std::bitset<uint64_t(kNumPositions)*kNumOrientations>> last = std::make_unique<std::bitset<uint64_t(kNumPositions)*kNumOrientations>>();
-    std::unique_ptr<std::bitset<uint64_t(kNumPositions)*kNumOrientations>> curr = std::make_unique<std::bitset<uint64_t(kNumPositions)*kNumOrientations>>();
-    std::unique_ptr<std::bitset<uint64_t(kNumPositions)*kNumOrientations>> next = std::make_unique<std::bitset<uint64_t(kNumPositions)*kNumOrientations>>();
-    curr->set(0);
-    uint64_t found = 1;
-    uint64_t level = 0;
-    uint64_t level_cnt = 1;
-    while (found < uint64_t(kNumPositions)*kNumOrientations) {
-        #if defined(__GNUC__) || defined(__clang__) // fast way to find the next element
-        for (uint64_t i = curr->_Find_first(); i < curr->size(); i = curr->_Find_next(i)) {
-        #else
-        for (uint64_t i = 0; i < curr->size(); i++) {
-            if (!(*curr)[i]) {
-                continue;
-            }
-        #endif
-            // get position
-            uint32_t position = i % kNumPositions;
-            uint16_t orientation = i / kNumPositions;
-            for (int rotation = 0; rotation < kNumRotations; rotation++) {
-                uint8_t symmetry = 0;
-                uint32_t next_position = position;
-                uint8_t next_symmetry = symmetry;
-                uint16_t next_orientation = orientation;
-                edge::Rotate(next_position, next_symmetry, next_orientation, rotation);
-                uint64_t next_idx = (uint64_t(next_orientation)*kNumPositions)+next_position;
-                if ((*last)[next_idx] ||
-                    (*curr)[next_idx] ||
-                    (*next)[next_idx]) {
-                    continue;
-                }
-                next->set(next_idx);
-                level++;
-                found++;
-                if (symmetry_position_active_cnt[next_position] > 1) {
-                    for (int sym = 0; sym < kNumSymmetries; sym++) {
-                        if (symmetries_to_active_symmetries[symmetry_position_active_symmetries[next_position]][sym] == 0) {
-                            uint64_t next_idx_sym = (uint64_t(default_to_sym_orientation[sym][next_orientation])*kNumPositions)+next_position;
-                            if ((*next)[next_idx_sym]) {
-                                continue;
-                            }
-                            next->set(next_idx_sym);
-                            level++;
-                            found++;
-                        }
-                    }
-                }
+    edge::heuristic[0] ^= uint64_t(15);
+    uint64_t total_positions = 1;
+    std::vector<std::atomic<uint64_t>> next_visited(kNumEdgeHeuristicSym/64);
+    uint8_t level = 1;
+    while (total_positions < kNumEdgeHeuristicSym) {
+        {
+            int num_threads = Settings::GetNumThreads();
+            std::vector<std::jthread> threads;
+            threads.reserve(num_threads);
+
+            const uint64_t chunk = kNumEdgeHeuristicSym / num_threads;
+            for (int thread = 0; thread < num_threads; thread++) {
+                uint64_t left  = thread * chunk;
+                uint64_t right = (thread == num_threads - 1) ? kNumEdgeHeuristicSym : left + chunk;
+                threads.emplace_back(PrecomputeMultithread,
+                                     left, right,
+                                     std::ref(next_visited),
+                                     level);
             }
         }
-        LOG_ALL("Level", level_cnt, ":", level);
-        std::swap(last, curr);
-        std::swap(curr, next);
-        next->reset();
-        level_cnt++;
-        level = 0;
+        std::atomic_thread_fence(std::memory_order_acq_rel);
+        uint64_t level_positions = 0;
+        {
+            int num_threads = Settings::GetNumThreads();
+            const uint64_t chunk = (kNumEdgeHeuristicSym / 64 + num_threads - 1) / num_threads;
+
+            std::vector<uint64_t> per_thread_count(num_threads, 0);
+            {
+                std::vector<std::jthread> threads;
+                threads.reserve(num_threads);
+                for (int i = 0; i < num_threads; i++) {
+                    uint64_t left  = i * chunk;
+                    uint64_t right = std::min(left + chunk, kNumEdgeHeuristicSym / 64);
+                    threads.emplace_back(UpdateHeuristicMultithread,
+                                         left, right,
+                                         std::ref(next_visited),
+                                         std::ref(per_thread_count[i]),
+                                         level);
+                }
+            }
+
+            for (int i = 0; i < num_threads; i++) {
+                level_positions += per_thread_count[i];
+            }
+        }
+        std::atomic_thread_fence(std::memory_order_acq_rel);
+        total_positions += level_positions;
+        LOG_ALL("Level", level, ":", level_positions);
+        level++;
     }
 }
 
@@ -657,11 +577,6 @@ int main (int argc, char *argv[]) {
     RotationInit();
     edge::Init();
     LOG_INFO("Finished Edge");
-    // TestEdgePosition();
-    // LOG_INFO("Finished Test");
-    // TestEdgeOrientationPosition1();
-    // TestEdgeOrientationPosition2(0, 1000);
-    // TestEdge(0, 100000);
-    // TestEdge2(0, 10000);
-    Precompute();
+    LOG_MEMORY();
+    LoadOrGenerate("edge_heuristic.bin", edge::heuristic, kNumEdgeHeuristicSym/16, [&](){Precompute();}, "[? / ?] whatever");
 }

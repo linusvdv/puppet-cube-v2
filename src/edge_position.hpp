@@ -3,4 +3,4 @@
 #include <vector>
 
 
-std::vector<uint32_t> EdgePositionInitialization();
+void EdgePositionInitialization(std::vector<uint32_t>& edge_positions);

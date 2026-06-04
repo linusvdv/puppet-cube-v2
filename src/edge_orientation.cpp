@@ -55,8 +55,8 @@ uint16_t Rotate(uint16_t old_orientations, uint8_t rotation) {
 }
 
 
-std::vector<uint16_t> EdgeOrientationInitialization() {
-    std::vector<uint16_t> edge_orientation(kEdgeOrientationSize, 0);
+void EdgeOrientationInitialization(std::vector<uint16_t>& edge_orientation) {
+    edge_orientation.assign(kEdgeOrientationSize, 0);
     std::vector<bool> visited(kNumEdgeOrientation, false);
 
     uint16_t start_orientation = 0;
@@ -94,5 +94,4 @@ std::vector<uint16_t> EdgeOrientationInitialization() {
         LOG_WARNING(cnt, "/", kNumEdgeOrientation);
         LOG_CRITICAL("Didn't find all");
     }
-    return edge_orientation;
 }

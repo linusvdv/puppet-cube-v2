@@ -48,22 +48,22 @@ void Cube::Initialize() {
     }
 
     LoadOrGenerate("corner_orientations.bin", corner_orientations, kCornerOrientationSize,
-        [](){return CornerOrientationInitialization();}, "[1/6] Corner Orientations");
+        [&](){CornerOrientationInitialization(corner_orientations);}, "[1/6] Corner Orientations");
 
     LoadOrGenerate("corner_positions.bin", corner_positions, kCornerPositionsSize,
-        [](){return CornerPositionInitialization();}, "[2/6] Corner Positions");
+        [&](){CornerPositionInitialization(corner_positions);}, "[2/6] Corner Positions");
 
     LoadOrGenerate("corner_heuristics.bin", corner_heuristics, kNumCornerHeuristic,
-        [](){return CornerHeuristicInitialization(corner_orientations, corner_positions);}, "[3/6] Corner Heuristics");
+        [&](){CornerHeuristicInitialization(corner_orientations, corner_positions, corner_heuristics);}, "[3/6] Corner Heuristics");
 
     LoadOrGenerate("edge_orientations.bin", edge_orientations, kEdgeOrientationSize,
-        [](){return EdgeOrientationInitialization();}, "[4/6] Edge Orientations");
+        [&](){EdgeOrientationInitialization(edge_orientations);}, "[4/6] Edge Orientations");
 
     LoadOrGenerate("edge_positions.bin", edge_positions, kEdgePositionsSize,
-        [](){return EdgePositionInitialization();}, "[5/6] Edge Positions");
+        [&](){EdgePositionInitialization(edge_positions);}, "[5/6] Edge Positions");
 
     LoadOrGenerate("edge_heuristics.bin", edge_heuristics, kNumEdgeHeuristic,
-        [](){return EdgeHeuristicInitialization(edge_orientations, edge_positions, 0, 0);}, "[6/6] Edge Heuristics");
+        [&](){EdgeHeuristicInitialization(edge_orientations, edge_positions, 0, 0, edge_heuristics);}, "[6/6] Edge Heuristics");
 }
 
 

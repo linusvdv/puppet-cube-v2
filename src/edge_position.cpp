@@ -68,8 +68,9 @@ std::array<uint8_t, kNumPieces> Rotate(std::array<uint8_t, kNumPieces> positions
 }
 
 
-std::vector<uint32_t> EdgePositionInitialization() {
-    std::vector<uint32_t> edge_positions(kEdgePositionsSize, 0);
+void EdgePositionInitialization(std::vector<uint32_t>& edge_positions) {
+    edge_positions.assign(kEdgePositionsSize, 0);
+
     std::vector<bool> visited(kNumEdgePositions, false);
 
     constexpr std::array<uint8_t, kNumPieces> kStartingPositions = {0, 1, 2, 3, 4, 5};
@@ -103,5 +104,4 @@ std::vector<uint32_t> EdgePositionInitialization() {
     if (cnt != kNumEdgePositions) {
         LOG_CRITICAL("Did not find all positions", cnt);
     }
-    return edge_positions;
 }

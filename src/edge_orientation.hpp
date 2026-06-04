@@ -3,4 +3,4 @@
 #include <vector>
 
 
-std::vector<uint16_t> EdgeOrientationInitialization();
+void EdgeOrientationInitialization(std::vector<uint16_t>& edge_orientation);

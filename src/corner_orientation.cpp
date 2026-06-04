@@ -104,8 +104,8 @@ std::array<uint8_t, kNumCorners> OrientationRotate (const std::array<uint8_t, kN
 
 
 // precomputation of the corner orientations
-std::vector<uint16_t> CornerOrientationInitialization () {
-    std::vector<uint16_t> corner_orientation(kCornerOrientationSize, 0);
+void CornerOrientationInitialization (std::vector<uint16_t>& corner_orientation) {
+    corner_orientation.assign(kCornerOrientationSize, 0);
     std::vector<bool> visited(kNumCornerOrientation, false);
 
     // distinguish the different orientations
@@ -154,5 +154,4 @@ std::vector<uint16_t> CornerOrientationInitialization () {
         LOG_WARNING(cnt, "/", kNumCornerOrientation);
         LOG_CRITICAL("Didn't find all");
     }
-    return corner_orientation;
 }

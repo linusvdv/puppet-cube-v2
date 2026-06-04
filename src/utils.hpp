@@ -101,7 +101,7 @@ void LoadOrGenerate(const std::string file_name, std::vector<T>& target, size_t 
     else {
         // do the precomputation
         LOG_ALL(step_tag, "precompute ...");
-        target = generate_func();
+        generate_func();
         LOG_MEMORY();
 
         if (target.size() != expected_size) {
