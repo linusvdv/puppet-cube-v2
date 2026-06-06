@@ -5,7 +5,7 @@
 #include "cuddObj.hh" // CUDD C++ Wrapper
 
 // Divide and Conquer function to build the ADD
-ADD BuildADDFromVector(Cudd& mgr, const std::vector<uint8_t>& data, 
+ADD BuildADDFromVector(Cudd& mgr, const std::vector<uint64_t>& data, 
                        const std::vector<ADD>& vars,
                        size_t start, size_t end, int var_idx, size_t actual_size) {
     
@@ -25,7 +25,7 @@ ADD BuildADDFromVector(Cudd& mgr, const std::vector<uint8_t>& data,
     // If all elements in this chunk are identical, return a single constant node.
     // This dramatically reduces intermediate RAM usage during construction.
     bool uniform = true;
-    uint8_t first_val = data[start];
+    uint64_t first_val = data[start];
     size_t check_end = std::min(end, actual_size);
     for (size_t i = start + 1; i < check_end; ++i) {
         if (data[i] != first_val) {
@@ -54,22 +54,19 @@ ADD BuildADDFromVector(Cudd& mgr, const std::vector<uint8_t>& data,
 }
 
 int main() {
-    const std::string path = "../precomputation/edge_heuristics.bin";
+    const std::string path = "../precomputation/edge_heuristic.bin";
     
     // Reusing your constants
-    constexpr int kNumEdgeOrientation = 2048;  
-    constexpr int kNumEdgePositions = 665280; 
-    constexpr size_t kNumEdgeHeuristic = (size_t)kNumEdgePositions * kNumEdgeOrientation; // ~1.36 Billion
+    constexpr int kNumEdgeOrientation = 2048;
+    constexpr int kNumEdgePositions = 9985968;
+    constexpr size_t kNumEdgeHeuristic = (size_t)kNumEdgePositions * kNumEdgeOrientation / 16; // ~1.36 Billion
 
-    std::vector<uint8_t> data(kNumEdgeHeuristic);
-    for (auto& d : data) {
-        d %= 3;
-    }
+    std::vector<uint64_t> data(kNumEdgeHeuristic);
 
     // Simplified file reading
     std::cout << "Loading file..." << std::endl;
     if (std::FILE* file = std::fopen(path.c_str(), "rb")) {
-        if (std::fread(data.data(), 1, kNumEdgeHeuristic, file) != kNumEdgeHeuristic) {
+        if (std::fread(data.data(), sizeof(uint64_t), kNumEdgeHeuristic, file) != kNumEdgeHeuristic) {
             std::cerr << "Failed to read full file!" << std::endl;
             return 1;
         }
