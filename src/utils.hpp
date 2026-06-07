@@ -120,3 +120,75 @@ void LoadOrGenerate(const std::string file_name, std::vector<T>& target, size_t 
         }
     }
 }
+
+
+// Load pass
+inline bool TryLoadAll(const std::string& /*unused*/) {
+    return true;
+}
+
+template<typename T, typename... Rest>
+bool TryLoadAll(const std::string& tag,
+                const std::string& file_name, std::vector<T>& target, size_t expected_size,
+                Rest&&... rest) {
+    const std::string path = GetFilePath(file_name);
+
+    if (std::FILE* file = std::fopen(path.c_str(), "rb")) {
+        target.resize(expected_size);
+        bool read_correctly = std::fread(target.data(), sizeof(T), expected_size, file) == expected_size;
+        std::fclose(file);
+        if (!read_correctly) {
+            LOG_CRITICAL(tag, "failed to read", path); return false;
+        }
+    } else {
+        LOG_ALL(tag, file_name, "not found, will precompute");
+        return false;
+    }
+
+    return TryLoadAll(tag, std::forward<Rest>(rest)...);
+}
+
+
+// Save pass
+inline void SaveAll(const std::string& /*unused*/) {}
+
+template<typename T, typename... Rest>
+void SaveAll(const std::string& tag,
+             const std::string& file_name, std::vector<T>& target, size_t expected_size,
+             Rest&&... rest) {
+    if (target.size() != expected_size) {
+        LOG_CRITICAL(tag, "wrong precomputation size for", file_name,
+                     ":", target.size(), "/", expected_size);
+    }
+
+    const std::string path = GetFilePath(file_name);
+    if (std::FILE* file = std::fopen(path.c_str(), "wb")) {
+        if (std::fwrite(target.data(), sizeof(T), expected_size, file) != expected_size) {
+            LOG_ERROR(tag, "failed to write full file for", file_name);
+        }
+        std::fclose(file);
+    } else {
+        LOG_ERROR(tag, "not able to save precomputation to file for", file_name);
+    }
+
+    SaveAll(tag, std::forward<Rest>(rest)...);
+}
+
+
+// LoadMultipleOrGenerate("step_tag", generate_func, "file_name", target, target_size, "file_name_2", target_2, target_size_2, ...)
+template<typename Generator, typename... Triples>
+void LoadMultipleOrGenerate(const std::string& step_tag,
+                             Generator&& generate_func,
+                             Triples&&... triples) {
+    if (TryLoadAll(step_tag, std::forward<Triples>(triples)...)) {
+        LOG_ALL(step_tag, "all vectors read from file");
+        LOG_MEMORY();
+        return;
+    }
+
+    LOG_ALL(step_tag, "precompute ...");
+    generate_func();
+    LOG_MEMORY();
+
+    SaveAll(step_tag, std::forward<Triples>(triples)...);
+}

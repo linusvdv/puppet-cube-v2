@@ -1,14 +1,10 @@
 #include <algorithm>
 #include <atomic>
 #include <bit>
-#include <bitset>
 #include <cassert>
 #include <cstdint>
 #include <map>
 #include <functional>
-#include <memory>
-#include <numeric>
-#include <random>
 #include <thread>
 #include <vector>
 
@@ -17,7 +13,6 @@
 #include "logger.hpp"
 #include "rotation.hpp"
 #include "settings.hpp"
-#include "tablebase.hpp"
 #include "utils.hpp"
 
 // TODO: only assign the vecors space when the are needed for the generation of the precomputation, delete it afterwads, and else do not generate it at all
@@ -84,7 +79,7 @@ namespace edge {
 // needed for a rotation
 std::vector<std::array<uint8_t, kNumRotations>> rotation_changes(kNumSymmetries); // [symmetry][rotation] -> rotation
 std::vector<std::array<uint64_t, kNumRotations>> positions_change(kNumPositions); // [position][rotation] -> (symmetry_change << 24) | position
-std::vector<std::array<uint8_t, kNumSymmetries>> symmetry_changes(kNumSymmetryChange); // [symmetry_change][symmetry] -> symmetry, relative symmetry
+std::vector<std::array<uint16_t, kNumSymmetries>> symmetry_changes(kNumSymmetryChange); // [symmetry_change][symmetry] -> symmetry, relative symmetry
 std::vector<std::array<std::array<std::array<uint16_t, kNumRotations>, kNumSymmetries>, kNumOrientations>> orientations_change(kNumSymmetries); // edge_orientations[symmetry][orientation][next_symmetry][rotation]
 
 std::vector<std::array<uint64_t, kNumOrientations/16>> heuristic(kNumPositions); // 10 GB
@@ -266,7 +261,7 @@ std::vector<std::array<uint64_t, kNumRotations>> EdgePositionsInit() {
     std::vector<std::array<uint64_t, kNumRotations>> edge_positions_init(kNumPositions);
 
     int symmetry_change_cnt = 0;
-    std::map<std::array<uint8_t, kNumSymmetries>, int> symmetry_changes_contains;
+    std::map<std::array<uint16_t, kNumSymmetries>, int> symmetry_changes_contains;
     symmetry_changes.clear();
 
     for (uint32_t sym_position = 0; sym_position < kNumPositions; sym_position++) {
@@ -278,9 +273,8 @@ std::vector<std::array<uint64_t, kNumRotations>> EdgePositionsInit() {
             uint8_t next_pos_acitve_symmetry = symmetry_position_active_symmetries[next_sym_position];
             uint32_t next_sym_change = position_to_symmetry_position[next_position] >> kPositionShift;
 
-            std::array<uint8_t, kNumSymmetries> cur_symmmetry_changes;
-            cur_symmmetry_changes.fill(uint8_t(-1));
-            // fast transition possible if both have all symmetries different
+            std::array<uint16_t, kNumSymmetries> cur_symmmetry_changes;
+            cur_symmmetry_changes.fill(uint16_t(-1));
             for (int sym = 0; sym < kNumSymmetries; sym++) {
                 cur_symmmetry_changes[sym] = symmetries_to_active_symmetries[next_pos_acitve_symmetry][symmetry_multiply[next_sym_change][sym]];
             }
@@ -294,6 +288,17 @@ std::vector<std::array<uint64_t, kNumRotations>> EdgePositionsInit() {
         }
         if (sym_position % 100000 == 0) {
             LOG_EXTRA(sym_position, "/", kNumPositions);
+        }
+    }
+
+    // the symmetry_change shall also include the relative symmetry change and not only the absolute
+    for (std::array<uint16_t, kNumSymmetries>& cur_symmetry_changes : symmetry_changes) {
+        for (int sym = 0; sym < kNumSymmetries; sym++) {
+            int from_sym = sym;
+            int to_sym = cur_symmetry_changes[sym];
+            // C = B*A^-1 = B * A^T
+            uint16_t relative_sym = mat_to_idx_symmetry[MatMul(idx_to_mat_symmetry[to_sym], MatTrans(idx_to_mat_symmetry[from_sym]))];
+            cur_symmetry_changes[sym] |= relative_sym << 8;
         }
     }
 
@@ -428,6 +433,30 @@ void Init() {
         }
     }
 
+    std::vector<std::array<std::array<uint16_t, kNumRotations>, kNumSymmetries>> new_orientation_change(kNumOrientations); // [orientation][relative_sym][rotation_change]
+    for (uint16_t orientation = 0; orientation < kNumOrientations; orientation++) {
+        for (uint8_t relative_sym = 0; relative_sym < kNumSymmetries; relative_sym++) {
+            for (uint8_t rotation = 0; rotation < kNumRotations; rotation++) {
+                new_orientation_change[orientation][relative_sym][rotation] = orientations_change[0][orientation][relative_sym][rotation];
+            }
+        }
+    }
+    LOG_INFO("start testing new orientations change");
+    for (uint8_t symmetry = 0; symmetry < kNumSymmetries; symmetry++) {
+        for (uint16_t orientation = 0; orientation < kNumOrientations; orientation++) {
+            for (uint8_t next_symmetry = 0; next_symmetry < kNumSymmetries; next_symmetry++) {
+                for (uint8_t rotation = 0; rotation < kNumRotations; rotation++) {
+                    uint8_t relative_sym = mat_to_idx_symmetry[MatMul(idx_to_mat_symmetry[next_symmetry], MatTrans(idx_to_mat_symmetry[symmetry]))];
+                    uint8_t sym_rotation = rotation_changes[symmetry][rotation];
+                    if (new_orientation_change[orientation][relative_sym][sym_rotation] != orientations_change[symmetry][orientation][next_symmetry][rotation]) {
+                        LOG_CRITICAL("Not Same", symmetry, orientation, next_symmetry, rotation);
+                    }
+                }
+            }
+        }
+    }
+    LOG_INFO("finished testing new orientations change");
+
     std::vector<uint8_t> symmetries_to_active_symmetries_cnt;
     for (std::array<uint8_t, kNumSymmetries>& cur : symmetries_to_active_symmetries) {
         uint8_t cnt = std::count(cur.begin(), cur.end(), 0);
@@ -447,10 +476,11 @@ void Rotate(uint32_t& position, uint8_t& symmetry, uint16_t& orientation, uint8_
     uint32_t symmetry_change = packed >> kPositionShift;
     position = packed & kPositionMask;
     // change symmetry abs
-    uint8_t next_symmetry = symmetry_changes[symmetry_change][symmetry];
+    uint16_t packed_symmetry = symmetry_changes[symmetry_change][symmetry];
+    uint8_t rel_symmetry = uint8_t(packed_symmetry>>8);
     // orientation lookup
-    orientation = orientations_change[symmetry][orientation][next_symmetry][rotation]; // this rotation is not correct
-    symmetry = next_symmetry;
+    orientation = orientations_change[symmetry][orientation][uint8_t(packed_symmetry)][rotation]; // this rotation is not correct
+    symmetry = uint8_t(packed_symmetry);
 }
 }
 
@@ -574,52 +604,6 @@ void Precompute() {
 }
 
 
-void TestEdgeHeuristic(int seed, int num_rotations) {
-    uint32_t position = 0;
-    uint8_t symmetry = 0;
-    uint16_t orientation = 0;
-    std::mt19937 rng(seed);
-    std::uniform_int_distribution<int> gen(0, kNumRotations-1);
-
-    std::vector<uint8_t> rotations(num_rotations);
-    for (uint8_t& rotation : rotations) {
-        rotation = gen(rng);
-    }
-
-    int last_heuristic = 0;
-    std::vector<uint8_t> heuristic_normal(num_rotations);
-    std::vector<uint32_t> position_normal(num_rotations);
-    for (int i = 0; i < num_rotations; i++) {
-        edge::Rotate(position, symmetry, orientation, rotations[i]);
-        position_normal[i] = position;
-        int cur_heuristic = GetEdgeHeuristic(position, orientation);
-        heuristic_normal[i] = cur_heuristic;
-        if (std::abs(cur_heuristic-last_heuristic) > 1) {
-            LOG_WARNING("wrong heuristic");
-        }
-        last_heuristic = cur_heuristic;
-    }
-
-    position = 0;
-    symmetry = 0;
-    orientation = 0;
-    for (int i = 0; i < num_rotations; i++) {
-        int rotation = rotations[i];
-        LOG_EXTRA(index_to_rotation_representations[rotation].name);
-        if (index_to_rotation_representations[rotation].matrix[0][0] == 1) { // R, R', L, L', M, M'
-            rotation += (rotation%2==0) ? 1 : -1;
-        }
-        LOG_EXTRA(index_to_rotation_representations[rotation].name);
-        edge::Rotate(position, symmetry, orientation, rotation);
-        int cur_heuristic = GetEdgeHeuristic(position, orientation);
-        if (heuristic_normal[i] != cur_heuristic) {
-            LOG_EXTRA(i);
-            LOG_CRITICAL("Does not work", heuristic_normal[i], cur_heuristic);
-        }
-    }
-}
-
-
 int main (int argc, char *argv[]) {
     // settings initialization
     Settings(argc, argv);
@@ -628,5 +612,14 @@ int main (int argc, char *argv[]) {
     LOG_INFO("Finished Edge");
     LOG_MEMORY();
     LoadOrGenerate("edge_heuristic.bin", edge::heuristic, kNumPositions, [&](){Precompute();}, "[? / ?] whatever");
-    TestEdgeHeuristic(0, 10000);
+    // approximately like this
+    std::map<uint64_t, uint64_t> edge_heuristic_orientation_cnt;
+    for (int i = 0; i < kNumPositions; i++) {
+        for (int j = 0; j < kNumOrientations/16; j++) {
+            edge_heuristic_orientation_cnt[edge::heuristic[i][j]]++;
+        }
+        if (i % 10000 == 0) {
+            std::cout << i << " / " << kNumPositions << " : " << edge_heuristic_orientation_cnt.size() << "\n";
+        }
+    }
 }
