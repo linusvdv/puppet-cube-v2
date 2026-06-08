@@ -78,9 +78,6 @@ add_executable(PuppetCubeV2
     src/corner_orientation.cpp
     src/corner_position.cpp
     src/corner_heuristic.cpp
-    src/edge_orientation.cpp
-    src/edge_position.cpp
-    src/edge_heuristic.cpp
     src/tablebase.cpp
     src/BCHTSet.cpp
     src/random_position.cpp
@@ -123,8 +120,8 @@ if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Release)
 endif()
 
-set(Debug_Options -O0 -fno-inline -fno-omit-frame-pointer)
-set(Release_Options -O3)
+set(Debug_Options -O0 -fno-inline -fno-omit-frame-pointer -Wshadow -Wall -Wextra)
+set(Release_Options -O3 -Wshadow -Wall -Wextra)
 
 set(CUDA_KEEP_DIR "${CMAKE_BINARY_DIR}/comp")
 file(MAKE_DIRECTORY ${CUDA_KEEP_DIR})

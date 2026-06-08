@@ -29,7 +29,7 @@ constexpr int kNumHeuristicLayers = 60;
 
 void SolutionTB(std::vector<Rotations>& tb_rotations, int tb_layer, State state) {
     for (int layer = tb_layer - 1; layer >= 0; layer--) {
-        for (uint8_t rotation = 0; rotation < kNumRotations; rotation++) {
+        for (uint8_t rotation = 0; rotation < kNumRot; rotation++) {
             State next_state = Cube::Rotate(state, rotation).second;
             if (BCHTSetContains(Tablebase::tablebase[layer], next_state)) {
                 state = next_state;
@@ -53,7 +53,7 @@ void SolutionSearch(std::vector<Rotations>& search_rotations, int depth, State s
     while (!current_level.empty() && depth != 0) {
         State cur_state = *current_level.begin();
         current_level.erase(current_level.begin());
-        for (uint8_t rotation = 0; rotation < kNumRotations; rotation++) {
+        for (uint8_t rotation = 0; rotation < kNumRot; rotation++) {
             State next_state = Cube::Rotate(cur_state, rotation).second;
             InTT in_tt = TranspositionTable::ContainsState(next_state, depth-1);
             if (in_tt == InTT::kFalse) {
@@ -115,7 +115,7 @@ void DFSNextFrontierSearch (const State& state, Frontier& next_frontier,
 
     bool frontier_insert = false;
     // rotate to the next position
-    for (uint8_t rotation = 0; rotation < kNumRotations; rotation++) {
+    for (uint8_t rotation = 0; rotation < kNumRot; rotation++) {
         std::pair<bool, State> next_state = Cube::Rotate(state, rotation);
         // illegal move
         if (!next_state.first) {

@@ -12,9 +12,6 @@
 #include "corner_position.hpp"
 #include "cube.hpp"
 #include "cube_bridge.hpp"
-#include "edge_heuristic.hpp"
-#include "edge_orientation.hpp"
-#include "edge_position.hpp"
 #include "logger.hpp"
 #include "utils.hpp"
 #include "settings.hpp"
@@ -47,27 +44,18 @@ void Cube::Initialize() {
         }
     }
 
-    LoadOrGenerate("corner_orientations.bin", corner_orientations, kCornerOrientationSize,
-        [&](){CornerOrientationInitialization(corner_orientations);}, "[1/6] Corner Orientations");
+    LoadOrGenerate("[1/6] Corner Orientations", [](){CornerOrientationInitialization(corner_orientations);},
+                   "corner_orientations.bin", Cube::corner_orientations, kCornerOrientationSize);
 
-    LoadOrGenerate("corner_positions.bin", corner_positions, kCornerPositionsSize,
-        [&](){CornerPositionInitialization(corner_positions);}, "[2/6] Corner Positions");
+    LoadOrGenerate("[2/6] Corner Positions", [&](){CornerPositionInitialization(corner_positions);},
+                   "corner_positions.bin", corner_positions, kCornerPositionsSize);
 
-    LoadOrGenerate("corner_heuristics.bin", corner_heuristics, kNumCornerHeuristic,
-        [&](){CornerHeuristicInitialization(corner_orientations, corner_positions, corner_heuristics);}, "[3/6] Corner Heuristics");
-
-    LoadOrGenerate("edge_orientations.bin", edge_orientations, kEdgeOrientationSize,
-        [&](){EdgeOrientationInitialization(edge_orientations);}, "[4/6] Edge Orientations");
-
-    LoadOrGenerate("edge_positions.bin", edge_positions, kEdgePositionsSize,
-        [&](){EdgePositionInitialization(edge_positions);}, "[5/6] Edge Positions");
-
-    LoadOrGenerate("edge_heuristics.bin", edge_heuristics, kNumEdgeHeuristic,
-        [&](){EdgeHeuristicInitialization(edge_orientations, edge_positions, 0, 0, edge_heuristics);}, "[6/6] Edge Heuristics");
+    LoadOrGenerate("[3/6] Corner Heuristics", [&](){CornerHeuristicInitialization(corner_orientations, corner_positions, corner_heuristics);},
+                   "corner_heuristics.bin", corner_heuristics, kNumCornerHeuristic);
 }
 
 
-constexpr std::array<uint8_t, kNumRotations> kLegalMoveIndex = {
+constexpr std::array<uint8_t, kNumRot> kLegalMoveIndex = {
     8, 9, 8, 9, 10, 11, 10, 11, 12, 13, 12, 13, 0, 0, 0, 0, 0, 0
 };
 
@@ -81,11 +69,11 @@ std::pair<bool, State> Cube::Rotate(const State& prev_state, const uint8_t& rota
     if (kLegalMoveIndex[rotation] != 0 && ((corner_heuristics[(corner_orientation*kNumCornerPositions) + corner_position] >> kLegalMoveIndex[rotation]) & 1) == 0) {
         return {false, prev_state};
     }
-    corner_orientation = corner_orientations[(corner_orientation*kNumRotations) + rotation];
-    corner_position = corner_positions[(corner_position*kNumRotations) + rotation];
-    edge_orientation = edge_orientations[(edge_orientation*kNumRotations) + rotation];
-    edge_position_1 = edge_positions[(edge_position_1*kNumRotations) + rotation];
-    edge_position_2 = edge_positions[(edge_position_2*kNumRotations) + rotation];
+    corner_orientation = corner_orientations[(corner_orientation*kNumRot) + rotation];
+    corner_position = corner_positions[(corner_position*kNumRot) + rotation];
+    edge_orientation = edge_orientations[(edge_orientation*kNumRot) + rotation];
+    edge_position_1 = edge_positions[(edge_position_1*kNumRot) + rotation];
+    edge_position_2 = edge_positions[(edge_position_2*kNumRot) + rotation];
     return {true, State(corner_orientation, corner_position, edge_orientation, edge_position_1, edge_position_2)};
 }
 

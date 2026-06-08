@@ -1,5 +1,6 @@
 #include "cube.hpp"
 #include "duplicate_rotations.hpp"
+#include "edge.hpp"
 #include "info.hpp"
 #include "logger.hpp"
 #include "search.hpp"
@@ -13,7 +14,7 @@
 #endif
 
 
-int main_(int argc, char *argv[]) {
+int main(int argc, char *argv[]) {
     // settings initialization
     Settings(argc, argv);
 
@@ -28,6 +29,8 @@ int main_(int argc, char *argv[]) {
         GetDeviceInfo();
     }
     #endif // USE_CUDA
+
+    edge::Init();
 
     Cube::Initialize();
     DuplicateRotations::Initialize();

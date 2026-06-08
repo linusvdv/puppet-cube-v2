@@ -25,7 +25,7 @@ void TablebaseSearch (const std::vector<State>& previous, const std::vector<Stat
         if (position == State()) {
             continue;
         }
-        for (uint8_t rotation = 0; rotation < kNumRotations; rotation++) {
+        for (uint8_t rotation = 0; rotation < kNumRot; rotation++) {
             std::pair<bool, State> next_position = Cube::Rotate(position, rotation);
             if (!next_position.first) {
                 continue;

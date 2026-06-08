@@ -5,13 +5,13 @@
 #include <string>
 
 
-constexpr int kNumRotations = 18;
+constexpr uint8_t kNumRot = 18;
 
 
 void RotationInit();
 
 
-struct RotationRepresentations {
+struct RotRep {
     std::string name;
     uint8_t index; // internal representation
 
@@ -20,6 +20,6 @@ struct RotationRepresentations {
 };
 
 
-extern std::map<std::string, RotationRepresentations> name_to_rotation_representations;
-extern std::map<uint8_t, RotationRepresentations> index_to_rotation_representations;
-extern std::map<std::pair<std::array<std::array<int, 3>, 3>, int>, RotationRepresentations> matrix_to_rotation_representations;
+extern std::map<std::string, RotRep> name_to_rotation_representations;
+extern std::map<uint8_t, RotRep> idx_to_rot_rep;
+extern std::map<std::pair<std::array<std::array<int, 3>, 3>, int>, RotRep> mat_to_rot_rep;

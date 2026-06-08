@@ -11,15 +11,15 @@ constexpr int kNumCorners = 8;
 constexpr int kNumEdges = 12;
 
 constexpr int kNumCornerOrientation = 2187;  // 3^7
-constexpr int kCornerOrientationSize = kNumCornerOrientation * kNumRotations; // 3^7 * 18
+constexpr int kCornerOrientationSize = kNumCornerOrientation * kNumRot; // 3^7 * 18
 constexpr int kNumCornerPositions = 40320;  // 8!
-constexpr int kCornerPositionsSize = kNumCornerPositions * kNumRotations;
+constexpr int kCornerPositionsSize = kNumCornerPositions * kNumRot;
 constexpr int kNumCornerHeuristic = kNumCornerOrientation * kNumCornerPositions;
 
 constexpr int kNumEdgeOrientation = 2048;  // 2^11
-constexpr int kEdgeOrientationSize = kNumEdgeOrientation * kNumRotations;  // 2^11 * 18
+constexpr int kEdgeOrientationSize = kNumEdgeOrientation * kNumRot;  // 2^11 * 18
 constexpr int kNumEdgePositions = 665280;  // 12! / 6!
-constexpr int kEdgePositionsSize = kNumEdgePositions * kNumRotations;  // 12! / 6! * 18
+constexpr int kEdgePositionsSize = kNumEdgePositions * kNumRot;  // 12! / 6! * 18
 constexpr int kNumEdgeHeuristic = kNumEdgePositions * kNumEdgeOrientation;
 
 

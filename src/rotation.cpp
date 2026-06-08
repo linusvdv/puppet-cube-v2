@@ -6,12 +6,12 @@
 #include "rotation.hpp"
 
 
-std::map<std::string, RotationRepresentations> name_to_rotation_representations;
-std::map<uint8_t, RotationRepresentations> index_to_rotation_representations;
-std::map<std::pair<std::array<std::array<int, 3>, 3>, int>, RotationRepresentations> matrix_to_rotation_representations;
+std::map<std::string, RotRep> name_to_rotation_representations;
+std::map<uint8_t, RotRep> idx_to_rot_rep;
+std::map<std::pair<std::array<std::array<int, 3>, 3>, int>, RotRep> mat_to_rot_rep;
 
 
-constexpr std::array<RotationRepresentations, kNumRotations> kRotations = {{
+constexpr std::array<RotRep, kNumRot> kRotations = {{
     // right left
     {
         "R",
@@ -184,15 +184,15 @@ constexpr std::array<RotationRepresentations, kNumRotations> kRotations = {{
 
 void RotationInit() {
     // name to rotation representation
-    for (RotationRepresentations rotation : kRotations) {
+    for (RotRep rotation : kRotations) {
         name_to_rotation_representations[rotation.name] = rotation;
     }
     // index to rotation representation
-    for (RotationRepresentations rotation : kRotations) {
-        index_to_rotation_representations[rotation.index] = rotation;
+    for (RotRep rotation : kRotations) {
+        idx_to_rot_rep[rotation.index] = rotation;
     }
     // index to rotation representation
-    for (RotationRepresentations rotation : kRotations) {
-        matrix_to_rotation_representations[{rotation.matrix, rotation.activate}] = rotation;
+    for (RotRep rotation : kRotations) {
+        mat_to_rot_rep[{rotation.matrix, rotation.activate}] = rotation;
     }
 }

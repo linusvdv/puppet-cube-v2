@@ -13,7 +13,7 @@ std::vector<State> RandomPositions (const size_t& num_elements, size_t seed_offs
 
     for (size_t i = 0; i < num_elements; i++) {
         std::mt19937 gen(seed_offset + i);
-        std::uniform_int_distribution<int> dist(0, kNumRotations-1);
+        std::uniform_int_distribution<int> dist(0, kNumRot-1);
 
         State state = State(0, 0, 0, 0, kNumEdgePositions-1);
         for (int j = 0; j < Settings::GetScramblingDepth(); j++) {

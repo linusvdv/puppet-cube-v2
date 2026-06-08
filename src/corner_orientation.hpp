@@ -8,4 +8,4 @@
 
 std::array<uint8_t, kNumCorners> OrientationRotate (const std::array<uint8_t, kNumCorners>& orientations, Rotations rotation);
 
-std::vector<uint16_t> CornerOrientationInitialization (std::vector<uint16_t>& corner_orientation);
+void CornerOrientationInitialization (std::vector<uint16_t>& corner_orientation);

@@ -32,7 +32,7 @@ uint8_t SwapBits (uint8_t bits) {
 
 // map the current position to next position
 // -1 marks no change in rotation direction
-constexpr std::array<std::array<int8_t, kNumCorners>, kNumRotations> kCornerRotation =
+constexpr std::array<std::array<int8_t, kNumCorners>, kNumRot> kCornerRotation =
 {{
     { 4, -1,  0, -1,  6, -1,  2, -1}, // R
     { 2, -1,  6, -1,  0, -1,  4, -1}, // R'
@@ -131,7 +131,7 @@ void CornerOrientationInitialization (std::vector<uint16_t>& corner_orientation)
         next_queue.pop();
         int old_hash = OrientationsToHash(orientations);
 
-        for (uint8_t j = 0; j < kNumRotations; j++) {
+        for (uint8_t j = 0; j < kNumRot; j++) {
             Rotations rotation = static_cast<Rotations>(j);
 
             std::array<uint8_t, kNumCorners> rotated = OrientationRotate(orientations, rotation);
@@ -140,7 +140,7 @@ void CornerOrientationInitialization (std::vector<uint16_t>& corner_orientation)
             if (hash >= kCornerOrientationSize) {
                 LOG_CRITICAL("Calculated hash too big");
             }
-            corner_orientation[(old_hash*kNumRotations) + j] = hash;
+            corner_orientation[(old_hash*kNumRot) + j] = hash;
             if (visited[hash]) {
                 continue;
             }

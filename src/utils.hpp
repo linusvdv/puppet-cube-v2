@@ -82,20 +82,20 @@ inline std::string GetFilePath (std::string file_name) {
 
 // if there is no file storing the precomputation run the precomputation
 template<typename T, typename Generator>
-void LoadOrGenerate(const std::string file_name, std::vector<T>& target, size_t expected_size,
-                    Generator&& generate_func, const std::string& step_tag) {
+void LoadOrGenerate(const std::string& step_tag, Generator&& generate_func,
+                    const std::string file_name, std::vector<T>& target, size_t expected_size) {
     const std::string path = GetFilePath(file_name);
-    if (std::FILE* file = std::fopen(path.c_str(), "rb")) {
+    if (std::FILE* read_file = std::fopen(path.c_str(), "rb")) {
         // read content of file
         target.resize(expected_size);
-        if (std::fread(target.data(), sizeof(T), expected_size, file) == expected_size) {
+        if (std::fread(target.data(), sizeof(T), expected_size, read_file) == expected_size) {
             LOG_ALL(step_tag, "read from file");
             LOG_MEMORY();
         }
         else {
             LOG_CRITICAL(step_tag, "was not able to read file", path);
         }
-        std::fclose(file);
+        std::fclose(read_file);
     }
     // opening of the file failed
     else {
@@ -109,11 +109,11 @@ void LoadOrGenerate(const std::string file_name, std::vector<T>& target, size_t 
         }
 
         // save to file
-        if (std::FILE* file = std::fopen(path.c_str(), "wb")) {
-            if (std::fwrite(target.data(), sizeof(T), expected_size, file) != expected_size) {
+        if (std::FILE* write_file = std::fopen(path.c_str(), "wb")) {
+            if (std::fwrite(target.data(), sizeof(T), expected_size, write_file) != expected_size) {
                 LOG_ERROR(step_tag, "failed to write full file");
             }
-            std::fclose(file);
+            std::fclose(write_file);
         }
         else {
             LOG_ERROR(step_tag, "not able to save precomputation to file");
@@ -133,10 +133,10 @@ bool TryLoadAll(const std::string& tag,
                 Rest&&... rest) {
     const std::string path = GetFilePath(file_name);
 
-    if (std::FILE* file = std::fopen(path.c_str(), "rb")) {
+    if (std::FILE* read_file = std::fopen(path.c_str(), "rb")) {
         target.resize(expected_size);
-        bool read_correctly = std::fread(target.data(), sizeof(T), expected_size, file) == expected_size;
-        std::fclose(file);
+        bool read_correctly = std::fread(target.data(), sizeof(T), expected_size, read_file) == expected_size;
+        std::fclose(read_file);
         if (!read_correctly) {
             LOG_CRITICAL(tag, "failed to read", path); return false;
         }
@@ -162,11 +162,11 @@ void SaveAll(const std::string& tag,
     }
 
     const std::string path = GetFilePath(file_name);
-    if (std::FILE* file = std::fopen(path.c_str(), "wb")) {
-        if (std::fwrite(target.data(), sizeof(T), expected_size, file) != expected_size) {
+    if (std::FILE* write_file = std::fopen(path.c_str(), "wb")) {
+        if (std::fwrite(target.data(), sizeof(T), expected_size, write_file) != expected_size) {
             LOG_ERROR(tag, "failed to write full file for", file_name);
         }
-        std::fclose(file);
+        std::fclose(write_file);
     } else {
         LOG_ERROR(tag, "not able to save precomputation to file for", file_name);
     }

@@ -32,7 +32,7 @@ int PositionToHash (const std::array<uint8_t, kNumCorners>& positions) {
 
 // map the current position to next position
 // -1 marks no change in rotation direction
-constexpr std::array<std::array<int8_t, kNumCorners>, kNumRotations> kCornerRotation =
+constexpr std::array<std::array<int8_t, kNumCorners>, kNumRot> kCornerRotation =
 {{
     { 4, -1,  0, -1,  6, -1,  2, -1}, // R
     { 2, -1,  6, -1,  0, -1,  4, -1}, // R'
@@ -88,14 +88,14 @@ void CornerPositionInitialization(std::vector<uint16_t>& corner_positions) {
         next_queue.pop();
         int old_hash = PositionToHash(positions);
 
-        for (uint8_t rotation = 0; rotation < kNumRotations; rotation++) {
+        for (uint8_t rotation = 0; rotation < kNumRot; rotation++) {
             std::array<uint8_t, kNumCorners> rotated = Rotate(positions, rotation);
             int hash = PositionToHash(rotated);
 
             if (hash >= kCornerPositionsSize) {
                 LOG_CRITICAL("Calculated hash too big");
             }
-            corner_positions[(old_hash*kNumRotations) + rotation] = hash;
+            corner_positions[(old_hash*kNumRot) + rotation] = hash;
             if (visited[hash]) {
                 continue;
             }

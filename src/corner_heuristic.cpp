@@ -111,8 +111,8 @@ bool IsLegal (const std::array<bool, kSizeLegalMap>& legal_map, const std::array
 
 
 Corners Rotate (const std::vector<uint16_t>& corner_orientation, const std::vector<uint16_t>& corner_position, Corners corners, int rotation) {
-    corners.orientation = corner_orientation[(corners.orientation*kNumRotations) + rotation];
-    corners.position = corner_position[(corners.position*kNumRotations) + rotation];
+    corners.orientation = corner_orientation[(corners.orientation*kNumRot) + rotation];
+    corners.position = corner_position[(corners.position*kNumRot) + rotation];
     corners.protruding = OrientationRotate(corners.protruding, static_cast<Rotations>(rotation));
     return corners;
 }
@@ -129,7 +129,7 @@ void ParallelCornerHeuristic(const std::vector<uint16_t>& corner_orientation, co
         }
 
         uint16_t legal_moves = 0;
-        for (int rotation = 0; rotation < kNumRotations; rotation++) {
+        for (int rotation = 0; rotation < kNumRot; rotation++) {
             Corners next_corners = Rotate(corner_orientation, corner_position, corners, rotation);
             if (last.contains(next_corners) || current.contains(next_corners)) {
                 if (rotation%4 <= 1 && rotation < 12) { // NOLINT

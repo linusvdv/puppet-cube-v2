@@ -70,7 +70,7 @@ void DuplicateRotations::Initialize() {
         {kFc, kBc}, // kBc, kFc
     };
     for (auto& [first, second] : unnecessary_rotatations) {
-        int index = (int(first) * kNumRotations) + int(second);
+        int index = (int(first) * kNumRot) + int(second);
         data[index/64] |= uint64_t(1) << (index%64);
     }
 }

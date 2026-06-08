@@ -30,7 +30,6 @@ struct Heuristics {
     uint8_t edge_2 = -1;
 };
 
-
 constexpr RegRotations kDefaultRegRotations = RegRotations();
 constexpr RegState kDefaultRegState = RegState();
 constexpr Heuristics kDefaultHeuristics = Heuristics();
@@ -86,11 +85,11 @@ __device__ inline uint8_t GetMaxHeuristic(RegState& reg_state, Heuristics& heuri
 
 __device__ inline void DRotate(RegState& reg_state, const uint8_t& rotation) {
     // no legality check
-    reg_state.corner_orientation = d_corner_orientations[(reg_state.corner_orientation*kNumRotations) + rotation];
-    reg_state.corner_position = d_corner_positions[(reg_state.corner_position*kNumRotations) + rotation];
-    reg_state.edge_orientation = d_edge_orientations[(reg_state.edge_orientation*kNumRotations) + rotation];
-    reg_state.edge_position_1 = d_edge_positions[(reg_state.edge_position_1*kNumRotations) + rotation];
-    reg_state.edge_position_2 = d_edge_positions[(reg_state.edge_position_2*kNumRotations) + rotation];
+    reg_state.corner_orientation = d_corner_orientations[(reg_state.corner_orientation*kNumRot) + rotation];
+    reg_state.corner_position = d_corner_positions[(reg_state.corner_position*kNumRot) + rotation];
+    reg_state.edge_orientation = d_edge_orientations[(reg_state.edge_orientation*kNumRot) + rotation];
+    reg_state.edge_position_1 = d_edge_positions[(reg_state.edge_position_1*kNumRot) + rotation];
+    reg_state.edge_position_2 = d_edge_positions[(reg_state.edge_position_2*kNumRot) + rotation];
 }
 
 
@@ -127,7 +126,7 @@ __device__ inline void DUndoRotate(RegState& reg_state, Heuristics& heuristic,
         prev_reg_state.corner_orientation = uint16_t(-1); // only one that needs to be reset this indecates that all are not usefull
         RotationsXOR(reg_rotations, 1<<7);  // NOLINT
         RotationsAdd(reg_rotations, 1);
-        if (RotationsAt(reg_rotations) == kNumRotations) {
+        if (RotationsAt(reg_rotations) == kNumRot) {
             RotationsSet(reg_rotations, 0);
             reg_rotations.idx--;
         }
@@ -149,7 +148,7 @@ __device__ inline void DRevRotation(uint8_t& rotation) {
 __device__ inline uint32_t GetNumRotationsLeft(const RegState& reg_state, const uint8_t& rotation) {
     uint32_t corner_heuristic = d_corner_heuristics[(reg_state.corner_orientation*kNumCornerPositions) + reg_state.corner_position];
     uint32_t cnt = 0;
-    for (uint8_t rot = (rotation ^ uint8_t(1 << 7)) + 1; rot < kNumRotations; rot++) {
+    for (uint8_t rot = (rotation ^ uint8_t(1 << 7)) + 1; rot < kNumRot; rot++) {
         if (rot >= 12 || ((corner_heuristic >> (rot / 4 * 2 + rot%2 + 8)) & 1) != 0) { // get important rotation bit
             cnt++;
         }
@@ -227,7 +226,7 @@ __global__ void DeviceLeafSearch (const uint8_t* d_starting_depths,
         }
         else {
             uint8_t prev_rotation = RotationsAtPrev(reg_rotations) & (uint8_t(-1)>>1);
-            if (rotation < kNumRotations && prev_rotation < kNumRotations && IsDuplicateRotation(prev_rotation, rotation, duplicate_rotations_sharedmem)) {
+            if (rotation < kNumRot && prev_rotation < kNumRot && IsDuplicateRotation(prev_rotation, rotation, duplicate_rotations_sharedmem)) {
                 passive_add_one = true;
             }
         }
@@ -249,7 +248,7 @@ __global__ void DeviceLeafSearch (const uint8_t* d_starting_depths,
 
         if (passive_add_one) {
             RotationsAdd(reg_rotations, 1);
-            if (RotationsAt(reg_rotations) == kNumRotations) {
+            if (RotationsAt(reg_rotations) == kNumRot) {
                 RotationsSet(reg_rotations, 0);
                 DUndoRotate(reg_state, heuristic, prev_reg_state, prev_heuristic, reg_rotations);
             }
@@ -385,7 +384,7 @@ __global__ void SplitMixStates (RegRotations* d_reg_rotations, RegState* d_reg_s
     while (true) {
         uint8_t cur_rotation = RotationsAt(reg_rotations);
         // reverse rotation
-        if (cur_rotation > kNumRotations) {
+        if (cur_rotation > kNumRot) {
             cur_rotation ^= uint8_t(1<<7);
             DRevRotation(cur_rotation);
             DRotate(reg_state_start, cur_rotation);
@@ -414,7 +413,7 @@ __global__ void SplitMixStates (RegRotations* d_reg_rotations, RegState* d_reg_s
 
     // do the splitmix
     uint32_t corner_heuristic = d_corner_heuristics[(reg_state_start.corner_orientation*kNumCornerPositions) + reg_state_start.corner_position];
-    for (uint8_t rot = (rotation_start ^ uint8_t(1 << 7)) + 1; rot < kNumRotations; rot++) {
+    for (uint8_t rot = (rotation_start ^ uint8_t(1 << 7)) + 1; rot < kNumRot; rot++) {
         if (rot >= 12 || ((corner_heuristic >> (rot / 4 * 2 + rot%2 + 8)) & 1) != 0) { // get important rotation bit
             int32_t splitmix_idx = d_free_splitmix_idx[atomic_splitmix++];
             RotationsSet(reg_rotations, rot);
