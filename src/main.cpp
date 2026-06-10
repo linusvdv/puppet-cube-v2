@@ -3,6 +3,7 @@
 #include "edge.hpp"
 #include "info.hpp"
 #include "logger.hpp"
+#include "rotation.hpp"
 #include "search.hpp"
 #include "settings.hpp"
 #include "tablebase.hpp"
@@ -30,6 +31,7 @@ int main(int argc, char *argv[]) {
     }
     #endif // USE_CUDA
 
+    RotationInit();
     edge::Init();
 
     Cube::Initialize();
