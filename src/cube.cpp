@@ -44,13 +44,13 @@ void Cube::Initialize() {
         }
     }
 
-    LoadOrGenerate("[1/6] Corner Orientations", [](){CornerOrientationInitialization(corner_orientations);},
+    LoadOrGenerate("[5/7] Corner Orientations", [](){CornerOrientationInitialization(corner_orientations);},
                    "corner_orientations.bin", Cube::corner_orientations, kCornerOrientationSize);
 
-    LoadOrGenerate("[2/6] Corner Positions", [&](){CornerPositionInitialization(corner_positions);},
+    LoadOrGenerate("[6/7] Corner Positions", [&](){CornerPositionInitialization(corner_positions);},
                    "corner_positions.bin", corner_positions, kCornerPositionsSize);
 
-    LoadOrGenerate("[3/6] Corner Heuristics", [&](){CornerHeuristicInitialization(corner_orientations, corner_positions, corner_heuristics);},
+    LoadOrGenerate("[7/7] Corner Heuristics", [&](){CornerHeuristicInitialization(corner_orientations, corner_positions, corner_heuristics);},
                    "corner_heuristics.bin", corner_heuristics, kNumCornerHeuristic);
 }
 

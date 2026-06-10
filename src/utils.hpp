@@ -181,7 +181,7 @@ void LoadMultipleOrGenerate(const std::string& step_tag,
                              Generator&& generate_func,
                              Triples&&... triples) {
     if (TryLoadAll(step_tag, std::forward<Triples>(triples)...)) {
-        LOG_ALL(step_tag, "all vectors read from file");
+        LOG_ALL(step_tag, "read from file");
         LOG_MEMORY();
         return;
     }

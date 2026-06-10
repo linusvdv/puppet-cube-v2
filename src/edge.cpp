@@ -13,6 +13,7 @@
 #include "rotation.hpp"
 #include "utils.hpp"
 #include "edge.hpp"
+#include "parallel_hashmap/phmap.h"
 
 
 namespace edge {
@@ -536,8 +537,34 @@ void InitHeuristic(const std::array<Vec3i, kNumEdges>& idx_to_xyz_pos,
             num_pos_level += local_cnt;
         }
         num_pos += num_pos_level;
-        LOG_ALL("Level", heuristic_level, ":", num_pos_level);
+        LOG_EXTRA("Level", heuristic_level, ":", num_pos_level);
         heuristic_level++;
+    }
+    LOG_ALL("Finished Generation");
+    NextVistited().swap(next_visited);
+    LOG_MEMORY();
+
+    heuristic_bucket.assign(kNumPos, {});
+    heuristic_value.assign(kNumHeuristicBuckets, 0);
+    LOG_MEMORY();
+    phmap::flat_hash_map<uint64_t, uint32_t> heuristic_value_bucket;
+    uint32_t bucket_cnt = 0;
+    for (uint32_t pos = 0; pos < kNumPos; pos++) {
+        for (uint16_t orient_bucket = 0; orient_bucket < kNumOrient/kNumStoredPerBucket; orient_bucket++) {
+            uint64_t cur_heuristic = heuristic[pos][orient_bucket];
+            auto [it, inserted] = heuristic_value_bucket.try_emplace(cur_heuristic, bucket_cnt);
+            if (inserted) {
+                heuristic_value[bucket_cnt] = cur_heuristic;
+                bucket_cnt++;
+            }
+            heuristic_bucket[pos][orient_bucket] = it->second;
+        }
+        if (pos % 100000 == 0) {
+            LOG_EXTRA(pos, "/", kNumPos);
+        }
+    }
+    if (bucket_cnt != kNumHeuristicBuckets) {
+        LOG_CRITICAL("Heuristic bucket cnt incorrect", bucket_cnt, kNumHeuristicBuckets);
     }
 }
 
@@ -598,14 +625,14 @@ void Init() {
         sym_trans[i] = mat_to_idx_sym[MatTrans(idx_to_mat_sym[i])];
     }
 
-    LoadOrGenerate("[? / ?] Edge Rotation Change", [&](){InitRotationChange(idx_to_mat_sym);},
+    LoadOrGenerate("[1/7] Edge Rotation Change", [&](){InitRotationChange(idx_to_mat_sym);},
                    "edge_rotation_change.bin", rotation_change, kNumSym);
-    LoadMultipleOrGenerate("[? / ?] Edge Position Change, Symmetry Change", [&](){InitPositionChangeSymmetryChange(idx_piece_rot, idx_piece_sym, sym_mul_sym, sym_trans);},
+    LoadMultipleOrGenerate("[2/7] Edge Position Change, Symmetry Change", [&](){InitPositionChangeSymmetryChange(idx_piece_rot, idx_piece_sym, sym_mul_sym, sym_trans);},
                            "edge_position_change.bin", position_change, kNumPos,
                            "edge_symmetry_change.bin", symmetry_change, kNumSymChange);
-    LoadOrGenerate("[? / ?] Edge Orientation Change", [&](){InitOrientationChange(idx_to_xyz_pos, idx_to_mat_sym, idx_piece_rot, idx_piece_sym);},
+    LoadOrGenerate("[3/7] Edge Orientation Change", [&](){InitOrientationChange(idx_to_xyz_pos, idx_to_mat_sym, idx_piece_rot, idx_piece_sym);},
                    "edge_orientation_change.bin", orientation_change, kNumOrient);
-    LoadMultipleOrGenerate("[? / ?] Edge Heuristic", [&](){InitHeuristic(idx_to_xyz_pos, idx_to_mat_sym, idx_piece_sym, sym_mul_sym, sym_trans);},
+    LoadMultipleOrGenerate("[4/7] Edge Heuristic", [&](){InitHeuristic(idx_to_xyz_pos, idx_to_mat_sym, idx_piece_sym, sym_mul_sym, sym_trans);},
                            "edge_heuristic_bucket.bin", heuristic_bucket, kNumPos,
                            "edge_heuristic_value.bin", heuristic_value, kNumHeuristicBuckets);
 }
