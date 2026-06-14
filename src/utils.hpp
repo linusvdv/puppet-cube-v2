@@ -141,7 +141,7 @@ bool TryLoadAll(const std::string& tag,
             LOG_CRITICAL(tag, "failed to read", path); return false;
         }
     } else {
-        LOG_ALL(tag, file_name, "not found, will precompute");
+        LOG_ALL(tag, file_name, "not found");
         return false;
     }
 

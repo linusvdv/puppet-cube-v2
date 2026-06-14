@@ -1,13 +1,12 @@
 #include <array>
-#include <cstdint>
 #include <map>
 #include <string>
 
 #include "rotation.hpp"
 
 
-std::map<std::string, RotRep> name_to_rotation_representations;
-std::map<uint8_t, RotRep> idx_to_rot_rep;
+std::map<std::string, RotRep> name_to_rot_rep;
+std::array<RotRep, kNumRot> idx_to_rot_rep;
 std::map<std::pair<std::array<std::array<int, 3>, 3>, int>, RotRep> mat_to_rot_rep;
 
 
@@ -185,7 +184,7 @@ constexpr std::array<RotRep, kNumRot> kRotations = {{
 void RotationInit() {
     // name to rotation representation
     for (RotRep rotation : kRotations) {
-        name_to_rotation_representations[rotation.name] = rotation;
+        name_to_rot_rep[rotation.name] = rotation;
     }
     // index to rotation representation
     for (RotRep rotation : kRotations) {

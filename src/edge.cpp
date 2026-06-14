@@ -53,6 +53,30 @@ std::vector<std::array<std::array<uint16_t, kNumRot>, kNumSym>> orientation_chan
 std::vector<std::array<uint32_t, kNumOrient/kNumStoredPerBucket>> heuristic_bucket;
 std::vector<uint64_t> heuristic_value;
 
+
+// most important one!
+// ===================
+void Rotate(uint32_t& pos, uint8_t& sym, uint16_t& orient, uint8_t rot) {
+    // change rotation relative to symmetry
+    rot = rotation_change[sym][rot];
+    // position lookup (pos + symmetry change)
+    uint64_t packed = position_change[pos][rot];
+    uint32_t sym_change = packed >> kPosShift;
+    pos = packed & kPosMask;
+    // change symmetry
+    uint16_t packed_sym = symmetry_change[sym_change][sym];
+    uint8_t rel_sym = uint8_t(packed_sym>>8); // NOLINT
+    sym = uint8_t(packed_sym);
+    // orientation lookup
+    orient = orientation_change[orient][rel_sym][rot]; // this rotation is not correct
+}
+
+
+uint8_t GetHeuristic(uint32_t pos, uint16_t orient) {
+    return heuristic_value[heuristic_bucket[pos][orient/kNumStoredPerBucket]] >> ((orient%kNumStoredPerBucket) * 4) & kSingleHeuristicValue;
+}
+
+
 void InitXYZPos(std::map<Vec3i, uint8_t, std::greater<>>& xyz_to_idx_pos, std::array<Vec3i, kNumEdges>& idx_to_xyz_pos) {
     uint8_t cnt = 0;
     for (int i = 1; i >= -1; i--) {
@@ -396,7 +420,7 @@ void InitOrientationChange(const std::array<Vec3i, kNumEdges>& idx_to_xyz_pos,
 }
 
 
-inline uint8_t GetHeuristic(const Heuristic& heuristic, uint32_t pos, uint16_t orient) {
+inline uint8_t GetPreHeuristic(const Heuristic& heuristic, uint32_t pos, uint16_t orient) {
     return heuristic[pos][orient/kNumStoredPerBucket] >> ((orient%kNumStoredPerBucket) * 4) & kSingleHeuristicValue;
 }
 
@@ -412,7 +436,7 @@ void HeuristicMultithread(const Heuristic& heuristic, NextVistited& next_visited
                           uint32_t pos_left, uint32_t pos_right, uint8_t next_depth) {
     for (uint32_t pos = pos_left; pos < pos_right && pos < kNumPos; pos++) {
         for (uint16_t orient = 0; orient < kNumOrient; orient++) {
-            if (GetHeuristic(heuristic, pos, orient) != next_depth-1) {
+            if (GetPreHeuristic(heuristic, pos, orient) != next_depth-1) {
                 continue;
             }
             for (uint8_t rot = 0; rot < kNumRot; rot++) {
@@ -420,7 +444,7 @@ void HeuristicMultithread(const Heuristic& heuristic, NextVistited& next_visited
                 uint8_t next_sym = 0;
                 uint16_t next_orient = orient;
                 Rotate(next_pos, next_sym, next_orient, rot);
-                if (GetHeuristic(heuristic, next_pos, next_orient) != kSingleHeuristicValue) {
+                if (GetPreHeuristic(heuristic, next_pos, next_orient) != kSingleHeuristicValue) {
                     continue;
                 }
                 SetAtomicNextVisited(next_visited, next_pos, next_orient);
@@ -566,24 +590,6 @@ void InitHeuristic(const std::array<Vec3i, kNumEdges>& idx_to_xyz_pos,
     if (bucket_cnt != kNumHeuristicBuckets) {
         LOG_CRITICAL("Heuristic bucket cnt incorrect", bucket_cnt, kNumHeuristicBuckets);
     }
-}
-
-
-// most important one!
-// ===================
-void Rotate(uint32_t& pos, uint8_t& sym, uint16_t& orient, uint8_t rot) {
-    // change rotation relative to symmetry
-    rot = rotation_change[sym][rot];
-    // position lookup (pos + symmetry change)
-    uint64_t packed = position_change[pos][rot];
-    uint32_t sym_change = packed >> kPosShift;
-    pos = packed & kPosMask;
-    // change symmetry
-    uint16_t packed_sym = symmetry_change[sym_change][sym];
-    uint8_t rel_sym = uint8_t(packed_sym>>8); // NOLINT
-    sym = uint8_t(packed_sym);
-    // orientation lookup
-    orient = orientation_change[orient][rel_sym][rot]; // this rotation is not correct
 }
 
 

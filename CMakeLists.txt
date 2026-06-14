@@ -89,6 +89,7 @@ add_executable(PuppetCubeV2
     src/transposition_table.cpp
     src/rotation.cpp
     src/edge.cpp
+    src/corner.cpp
 )
 
 if(USE_CUDA)
@@ -133,3 +134,18 @@ target_compile_options(PuppetCubeV2 PRIVATE
     $<$<CONFIG:Debug>:$<$<COMPILE_LANGUAGE:CUDA>:-G>>
     $<$<CONFIG:Release>:${Release_Options}>
 )
+
+# ============
+# LTO (Release only, C++ only — not compatible with CUDA)
+# Link time optimization
+# ============
+if(CMAKE_BUILD_TYPE STREQUAL "Release")
+    include(CheckIPOSupported)
+    check_ipo_supported(RESULT ipo_supported OUTPUT ipo_error LANGUAGES CXX)
+    if(ipo_supported)
+        set_property(TARGET PuppetCubeV2 PROPERTY INTERPROCEDURAL_OPTIMIZATION TRUE)
+        message(STATUS "LTO enabled")
+    else()
+        message(WARNING "LTO not supported: ${ipo_error}")
+    endif()
+endif()

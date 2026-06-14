@@ -5,10 +5,9 @@
 #include <vector>
 
 #include "rotation.hpp"
+#include "edge.hpp"
+#include "corner.hpp"
 
-
-constexpr int kNumCorners = 8;
-constexpr int kNumEdges = 12;
 
 constexpr int kNumCornerOrientation = 2187;  // 3^7
 constexpr int kCornerOrientationSize = kNumCornerOrientation * kNumRot; // 3^7 * 18
@@ -145,3 +144,16 @@ private:
     uint8_t cur_edge_heuristic_1_ = -1;
     uint8_t cur_edge_heuristic_2_ = -1;
 };
+
+
+struct NewState {
+    uint32_t edge_pos;
+    uint16_t corner_pos;
+    uint16_t corner_orient;
+    uint16_t edge_orient;
+    uint8_t edge_sym;
+    std::strong_ordering operator<=>(const NewState&) const = default;
+};
+
+constexpr NewState kSolvedNewState{uint32_t(0), uint16_t(0), uint16_t(0), uint16_t(0), uint8_t(0)};
+constexpr NewState kNonLegalNewState{uint32_t(~0U), uint16_t(~0U), uint16_t(~0U), uint16_t(~0U), uint8_t(~0U)};

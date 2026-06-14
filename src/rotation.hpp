@@ -20,6 +20,6 @@ struct RotRep {
 };
 
 
-extern std::map<std::string, RotRep> name_to_rotation_representations;
-extern std::map<uint8_t, RotRep> idx_to_rot_rep;
+extern std::map<std::string, RotRep> name_to_rot_rep;
+extern std::array<RotRep, kNumRot> idx_to_rot_rep;
 extern std::map<std::pair<std::array<std::array<int, 3>, 3>, int>, RotRep> mat_to_rot_rep;
