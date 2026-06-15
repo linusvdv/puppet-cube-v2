@@ -22,6 +22,7 @@ If:
 CompileFlags:
   Add:
     - -std=c++23
+    - -stdlib=libstdc++
     - -ferror-limit=0
   Remove:
     - -forward-unknown-to-host-compiler
