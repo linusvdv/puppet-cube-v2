@@ -1,3 +1,5 @@
+#include <filesystem>
+
 #include "cube.hpp"
 #include "duplicate_rotations.hpp"
 #include "edge.hpp"
@@ -8,6 +10,7 @@
 #include "settings.hpp"
 #include "tablebase.hpp"
 #include "transposition_table.hpp"
+#include "utils.hpp"
 
 #ifdef USE_CUDA
 #include "info_bridge.hpp"
@@ -31,18 +34,28 @@ int main(int argc, char *argv[]) {
     }
     #endif // USE_CUDA
 
+    // precomputation
+    if (!std::filesystem::exists(GetFilePath(""))) {
+        if (std::filesystem::create_directories(GetFilePath(""))) {
+            LOG_ALL("Create precomputation folder for binaries");
+        }
+        else {
+            LOG_ERROR("Failed to create folder for binaries");
+        }
+    }
     RotationInit();
     edge::Init();
+    corner::Init();
 
-    Cube::Initialize();
-    DuplicateRotations::Initialize();
-    LOG_INFO("Cube Initialized");
-    Cube::UploadComputationToDevice();
+    // Cube::Initialize();
+    // DuplicateRotations::Initialize();
+    // LOG_INFO("Cube Initialized");
+    // Cube::UploadComputationToDevice();
 
-    Tablebase::Initialize();
-    LOG_INFO("Tablebase Initialized");
-    Tablebase::UploadComputationToDevice();
-    LOG_MEMORY();
+    // Tablebase::Initialize();
+    // LOG_INFO("Tablebase Initialized");
+    // Tablebase::UploadComputationToDevice();
+    // LOG_MEMORY();
 
     TranspositionTable::Initialize(Settings::GetTTSize());
     LOG_INFO("Transposition Table Initialized");

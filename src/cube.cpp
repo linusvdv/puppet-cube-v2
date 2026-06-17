@@ -6,9 +6,6 @@
 #include <string>
 #include <vector>
 
-#include "corner_heuristic.hpp"
-#include "corner_orientation.hpp"
-#include "corner_position.hpp"
 #include "cube.hpp"
 #include "cube_bridge.hpp"
 #include "logger.hpp"
@@ -42,15 +39,6 @@ void Cube::Initialize() {
             LOG_ERROR("Failed to create folder for binaries");
         }
     }
-
-    LoadOrGenerate("[5/7] Corner Orientations", [](){CornerOrientationInitialization(corner_orientations);},
-                   "corner_orientations.bin", Cube::corner_orientations, kCornerOrientationSize);
-
-    LoadOrGenerate("[6/7] Corner Positions", [&](){CornerPositionInitialization(corner_positions);},
-                   "corner_positions.bin", corner_positions, kCornerPositionsSize);
-
-    LoadOrGenerate("[7/7] Corner Heuristics", [&](){CornerHeuristicInitialization(corner_orientations, corner_positions, corner_heuristics);},
-                   "corner_heuristics.bin", corner_heuristics, kNumCornerHeuristic);
 }
 
 

@@ -75,9 +75,6 @@ add_executable(PuppetCubeV2
     src/logger.cpp
     src/settings.cpp
     src/cube.cpp
-    src/corner_orientation.cpp
-    src/corner_position.cpp
-    src/corner_heuristic.cpp
     src/tablebase.cpp
     src/BCHTSet.cpp
     src/random_position.cpp

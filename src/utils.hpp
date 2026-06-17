@@ -17,6 +17,27 @@ constexpr uint64_t Factorial(int n) {
     return n <= 1 ? 1 : n * Factorial(n-1);
 }
 
+template <typename T>
+constexpr T Power(T base, unsigned int exp) {
+    T result = 1;
+    while (exp > 0) {
+        if (exp & 1) {
+            if (base != 0 && result > std::numeric_limits<T>::max() / base) {
+                throw std::overflow_error("power: overflow");
+            }
+            result *= base;
+        }
+        if (exp > 1) { // avoid overflow on final squaring when we won't use it
+            if (base != 0 && base > std::numeric_limits<T>::max() / base) {
+                throw std::overflow_error("power: overflow");
+            }
+        }
+        base *= base;
+        exp >>= 1;
+    }
+    return result;
+}
+
 
 template <typename T>
 inline void AtomicMin(std::atomic<T>& lhs, T rhs) {
