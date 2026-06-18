@@ -13,6 +13,8 @@
 #include "utils.hpp"
 
 #ifdef USE_CUDA
+#include "corner_bridge.hpp"
+#include "edge_bridge.hpp"
 #include "info_bridge.hpp"
 #include "search_bridge.hpp"
 #endif
@@ -46,6 +48,16 @@ int main(int argc, char *argv[]) {
     RotationInit();
     edge::Init();
     corner::Init();
+
+    #ifdef USE_CUDA
+    LOG_EXTRA("Start Cube Uploading Precomputation to Device");
+    edge::UploadPrecomputationToDevice();
+    corner::UploadPrecomputationToDevice();
+    LOG_INFO("Cube Precomputation Uploaded to Device");
+    LOG_MEMORY();
+    #endif // USE_CUDA
+
+    return 0;
 
     // Cube::Initialize();
     // DuplicateRotations::Initialize();

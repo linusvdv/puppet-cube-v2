@@ -11,6 +11,7 @@ CompileFlags:
   Remove:
     - -forward-unknown-to-host-compiler
     - --generate-code=arch=compute_89,code=[compute_89,sm_89]
+    - --generate-code=arch=compute_89,code=[compute_89,lto_89]
     - --expt-extended-lambda
     - -rdc=true
     - -Xptxas

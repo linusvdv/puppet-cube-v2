@@ -8,27 +8,23 @@
 #include <unordered_map>
 #include <vector>
 
-#include "cube.hpp"
+#include "edge.hpp"
 #include "logger.hpp"
 #include "rotation.hpp"
 #include "utils.hpp"
-#include "edge.hpp"
 #include "parallel_hashmap/phmap.h"
 
 
 namespace edge {
-constexpr uint8_t kNumSym = Factorial(3) * (1<<3);
 constexpr uint32_t kNumLehmerPos = Factorial(12);
 constexpr uint32_t kNumPos = 9985968;
 constexpr uint32_t kPosShift = 24;
 constexpr uint32_t kPosMask = (1<<kPosShift)-1;
 constexpr uint16_t kNumSymChange = 921; // this is unfortunatly more than 256 (which would fit in uint8_t and could therefore be packed in a uint32_t with the position)
-constexpr uint16_t kNumOrient = 1 << (kNumEdges-1);
 
 constexpr uint64_t kNumHeuristic = uint64_t(kNumPos)*kNumOrient;
 constexpr int kMyAtomicBitsetSizePerEl = 64;
 constexpr uint64_t kSingleHeuristicValue = 15;
-constexpr int kNumStoredPerBucket = 16;
 constexpr uint32_t kNumHeuristicBuckets = 81609107;
 
 using Heuristic = std::vector<std::array<uint64_t, kNumOrient/kNumStoredPerBucket>>;

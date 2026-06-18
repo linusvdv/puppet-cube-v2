@@ -11,9 +11,25 @@ concept SameDataTypeStructure =
     sizeof(T1) == sizeof(T2) &&
     alignof(T1) == alignof(T2);
 
+// Primary template assumes T is already the base type
+template <typename T>
+struct GetBaseType {
+    using Type = T;
+};
+
+// Specialization for std::array
+template <typename T, std::size_t N>
+struct GetBaseType<std::array<T, N>> {
+    using Type = typename GetBaseType<T>::Type;
+};
 
 template<typename T1, typename T2>
-requires SameDataTypeStructure<T1, T2>
+concept SameBaseDataTypeStructure =
+SameDataTypeStructure<typename GetBaseType<T1>::Type, T2>;
+
+
+template<typename T1, typename T2>
+requires SameBaseDataTypeStructure<T1, T2>
 inline void MallocOnDevice(const std::vector<T1>& data, T2*& pointer) {
     cudaError_t err = cudaMalloc((void **)&pointer, sizeof(T1)*data.size());
     if (err != cudaSuccess) {
@@ -51,7 +67,7 @@ void MallocOnDeviceStream(T*& pointer, size_t size, const cudaStream_t& cuda_str
 
 
 template<typename T1, typename T2>
-requires SameDataTypeStructure<T1, T2>
+requires SameBaseDataTypeStructure<T1, T2>
 inline void MemcpyToDevice(const std::vector<T1>& data, T2*& pointer) {
     cudaError_t err = cudaMemcpy(pointer, data.data(), sizeof(T1)*data.size(), cudaMemcpyHostToDevice);
     if (err != cudaSuccess) {
@@ -172,7 +188,7 @@ inline void FreeCudaPointerStream(T& d_pointer, const cudaStream_t& cuda_stream)
 
 
 template<typename T1, typename T2>
-requires SameDataTypeStructure<T1, T2>
+requires SameBaseDataTypeStructure<T1, T2>
 void UploadToDeviceSymbol(const std::vector<T1>& data, T2*& d_pointer) {
     T2* temp_pointer = nullptr;
     MallocOnDevice(data, temp_pointer);

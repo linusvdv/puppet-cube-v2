@@ -178,7 +178,7 @@ void Settings::SetDefault (std::vector<std::string>& arguments) {
     // device_count
     #ifdef USE_CUDA
     device_count = GetCUDADeviceCount();
-    #elif
+    #else
     device_count = 0;
     #endif  // USE_CUDA
 
@@ -189,7 +189,7 @@ void Settings::SetDefault (std::vector<std::string>& arguments) {
     #ifdef USE_CUDA
     // only the first device gets checked
     num_gputhreads = (GetThreadsPerDevice(0) / kBlockDim / 4) * kBlockDim;
-    #elif
+    #else
     num_gputhreads = 0;
     #endif  // USE_CUDA
 

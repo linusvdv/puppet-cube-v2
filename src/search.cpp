@@ -299,8 +299,8 @@ void SearchManager () {
             // Start LeafManagers on seperate threads
             std::vector<uint64_t> num_positions_leaf_threads(num_leaf_threads, 0);
 
-            #ifdef USE_CUDA
             std::atomic<bool> leaf_stoken{false};
+            #ifdef USE_CUDA
             if (Settings::UseCuda()) {
                 CudaConstMemChangeCurDepth(id_depth);
 

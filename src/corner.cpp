@@ -12,8 +12,6 @@
 
 
 namespace corner {
-constexpr uint16_t kNumPos = Factorial(kNumCorners);
-constexpr uint16_t kNumOrient = Power(3, 7);
 constexpr std::array<uint32_t, kNumCorners+1> kFactorials = []{
     std::array<uint32_t, kNumCorners+1> arr{};
     for (int i = 0; i <= kNumCorners; i++) {

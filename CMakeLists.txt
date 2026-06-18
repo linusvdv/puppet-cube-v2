@@ -93,9 +93,11 @@ if(USE_CUDA)
     add_compile_definitions(USE_CUDA)
 
     target_sources(PuppetCubeV2 PRIVATE
-        src/search.cu
+        src/corner.cu
         src/cube.cu
+        src/edge.cu
         src/info.cu
+        src/search.cu
     )
 
     target_link_libraries(PuppetCubeV2 PRIVATE Threads::Threads)

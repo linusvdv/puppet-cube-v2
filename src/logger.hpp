@@ -14,7 +14,6 @@
 #include <type_traits>
 #include <vector>
 
-#include "cube.hpp"
 #include "nadeau.h"
 
 
