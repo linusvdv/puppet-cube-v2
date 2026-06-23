@@ -1,3 +1,4 @@
+/*
 #include "cube.hpp"
 #include "logger.hpp"
 
@@ -38,3 +39,4 @@ State HardestCubeMatura() {
     LOG_EXTRA("HARDEST:", int(cur.GetMaxHeuristic(state)));
     return state;
 }
+*/

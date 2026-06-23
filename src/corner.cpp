@@ -25,6 +25,17 @@ std::vector<std::array<uint16_t, kNumRot>> position_change;
 std::vector<std::array<uint16_t, kNumRot>> orientation_change;
 std::vector<std::array<uint64_t, kNumOrient>> heuristic;
 
+
+uint64_t GetHeuristic(uint16_t pos, uint16_t orient) {
+    return heuristic[pos][orient];
+}
+
+void Rotate(uint16_t& pos, uint16_t& orient, uint8_t rot) {
+    pos = position_change[pos][rot];
+    orient = orientation_change[orient][rot];
+}
+
+
 uint16_t OrientPermToLehmerOrient(std::map<Vec3i, uint8_t>& xyz_to_idx_orient,
                                   const std::array<Vec3i, kNumCorners>& orient_perm) {
     uint16_t result = 0;

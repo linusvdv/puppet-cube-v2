@@ -1,3 +1,4 @@
+/*
 #include <atomic>
 #include <cassert>
 #include <cstddef>
@@ -80,3 +81,4 @@ InTT TranspositionTable::ContainsState(const State& state, const uint8_t& depth)
     }
     return InTT::kTrue;
 }
+*/

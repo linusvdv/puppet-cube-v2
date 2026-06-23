@@ -1,159 +1,68 @@
 #pragma once
 #include <compare>
-#include <cstddef>
 #include <cstdint>
-#include <vector>
 
-#include "rotation.hpp"
-#include "edge.hpp"
-#include "corner.hpp"
-
-
-constexpr int kNumCornerOrientation = 2187;  // 3^7
-constexpr int kCornerOrientationSize = kNumCornerOrientation * kNumRot; // 3^7 * 18
-constexpr int kNumCornerPositions = 40320;  // 8!
-constexpr int kCornerPositionsSize = kNumCornerPositions * kNumRot;
-constexpr int kNumCornerHeuristic = kNumCornerOrientation * kNumCornerPositions;
-
-constexpr int kNumEdgeOrientation = 2048;  // 2^11
-constexpr int kEdgeOrientationSize = kNumEdgeOrientation * kNumRot;  // 2^11 * 18
-constexpr int kNumEdgePositions = 665280;  // 12! / 6!
-constexpr int kEdgePositionsSize = kNumEdgePositions * kNumRot;  // 12! / 6! * 18
-constexpr int kNumEdgeHeuristic = kNumEdgePositions * kNumEdgeOrientation;
-
-
-enum Rotations : uint8_t {
-    kR,
-    kRc,
-    kL,
-    kLc,
-    kU,
-    kUc,
-    kD,
-    kDc,
-    kF,
-    kFc,
-    kB,
-    kBc,
-    kM,
-    kMc,
-    kE,
-    kEc,
-    kS,
-    kSc
-};
-
-
-uint8_t GetRevRotation(uint8_t rotation);
-
-
-// 10 bytes
 struct State {
-    uint16_t hash_1 = -1;
-    uint32_t hash_2 = -1;
-    uint32_t hash_3 = -1;
-
-    constexpr State(const uint16_t& corner_orientation,  // 12 bites
-                    const uint16_t& corner_position,     // 16 bites
-                    const uint16_t& edge_orientation,    // 11 bites
-                    const uint32_t& edge_position_1,     // 20 bites
-                    const uint32_t& edge_position_2) {   // 20 bites
-        // hash 1
-        hash_1 = corner_position;    // 16 bites
-
-        // hash 2
-        hash_2 = corner_orientation; // 12 bites
-        hash_2 <<= 20; // NOLINT
-        hash_2 |= edge_position_1;   // 20 bites
-
-        // hash 3
-        hash_3 = edge_orientation;   // 11 bites
-        hash_3 <<= 20; // NOLINT
-        hash_3 |= edge_position_2;   // 20 bites
-    }
-
-    // Default not legal State
-    constexpr State() {}
-
+    uint32_t edge_pos;      // 9985968 -> 24 bits
+    uint16_t corner_pos;    //   40320 -> 16 bits
+    uint16_t corner_orient; //    2187 -> 12 bits
+    uint16_t edge_orient;   //    2048 -> 11 bits
+    uint8_t edge_sym;       //      48 ->  6 bits
     std::strong_ordering operator<=>(const State&) const = default;
-
-    static constexpr uint64_t kMulA = 0x2545f4914f6cdd1dULL;
-    static constexpr uint64_t kMulB = 0x9e3779b97f4a7c15ULL;
-
-    static constexpr uint64_t kXORlow1 = 0x123456789abcdef0ULL;
-    static constexpr uint64_t kXORhigh1 = 0xfedcba9876543210ULL;
-    static constexpr uint64_t kXORlow2 = 0x0f1e2d3c4b5a6978ULL;
-    static constexpr uint64_t kXORhigh2 = 0x87654321abcdef09ULL;
-
-    static uint64_t Mix64(uint64_t num) {
-        num ^= num >> 31;  // NOLINT
-        num *= kMulA;
-        num ^= num >> 33;  // NOLINT
-        num *= kMulB;
-        num ^= num >> 28;  // NOLINT
-        return num;
-    }
-
-    template<uint64_t hash_low, uint64_t hash_high>
-    uint64_t SplitMix64() const {
-        return Mix64(uint64_t(hash_1) ^ hash_low) ^ Mix64(((uint64_t(hash_2) << 32) | uint64_t(hash_3)) ^ hash_high); // NOLINT
-    }
-
-    // Used for phmap
-    friend std::size_t hash_value(const State& state) {  // NOLINT
-        return state.SplitMix64<kXORlow1, kXORhigh1>(); // NOLINT
-    }
 };
 
 
-constexpr State kSolvedState = State(0, 0, 0, 0, kNumEdgePositions-1);
+// David Stafford Mix13
+// standart implementation of a SplitMix64 found in the paper: https://dl.acm.org/doi/epdf/10.1145/2714064.2660195
+// This version of hashing is reverable (so no loss of data)
+inline void SplitMix64(uint64_t& num) {
+    num ^= num >> 30;               // NOLINT
+    num *= 0xbf58476d1ce4e5b9ULL;   // NOLINT
+    num ^= num >> 27;               // NOLINT
+    num *= 0x94d049bb133111ebULL;   // NOLINT
+    num ^= num >> 31;               // NOLINT
+}
 
 
-// A cube instance is not long living
-class Cube {
-public:
-    // corner and edge precomputation
-    static void Initialize();
-
-    static void UploadComputationToDevice();
-
-    static std::pair<bool, State> Rotate(const State& prev_state, const uint8_t& rotation);
-
-    Cube(){}
-
-    uint8_t GetMaxHeuristic(const State& state);
-    float GetAppHeuristic(const State& state);
-
-    static uint16_t GetCurCornerHeuristic(const State& state);
-
-private:
-    // precomputation
-    static std::vector<uint16_t> corner_orientations;
-    static std::vector<uint16_t> corner_positions;
-    static std::vector<uint16_t> corner_heuristics;
-
-    static std::vector<uint16_t> edge_orientations;
-    static std::vector<uint32_t> edge_positions;
-    static std::vector<uint8_t> edge_heuristics;
-
-    void SetCurCornerHeuristic(const State& state);
-    void SetCurEdgeHeuristic1(const State& state);
-    void SetCurEdgeHeuristic2(const State& state);
-
-    uint8_t cur_corner_heuristic_ = -1;
-    uint8_t cur_edge_heuristic_1_ = -1;
-    uint8_t cur_edge_heuristic_2_ = -1;
-};
+// neutral element for each index is: index ^ 63
+constexpr uint64_t kNeurtralElementXOR = 63;
 
 
-struct NewState {
-    uint32_t edge_pos;
-    uint16_t corner_pos;
-    uint16_t corner_orient;
-    uint16_t edge_orient;
-    uint8_t edge_sym;
-    std::strong_ordering operator<=>(const NewState&) const = default;
-};
+// hashing State such that it is recostructable
+inline void GetStateHash1(const uint64_t tb_size, uint64_t& idx, uint64_t& value, const State& state) {
+    value = state.edge_pos;
+    value |= uint64_t(state.corner_pos) << 24;      // NOLINT
+    value |= uint64_t(state.corner_orient) << 40;   // NOLINT
+    value |= uint64_t(state.edge_orient) << 52;     // NOLINT
+    value ^= uint64_t(state.edge_sym) << (58); // NOLINT this overlaps with the previous value so edge_sym has to be able to be retrieved later
 
-constexpr NewState kSolvedNewState{uint32_t(0), uint16_t(0), uint16_t(0), uint16_t(0), uint8_t(0)};
-constexpr NewState kNonLegalNewState{uint32_t(~0U), uint16_t(~0U), uint16_t(~0U), uint16_t(~0U), uint8_t(~0U)};
+    SplitMix64(value);
+    // TODO: Do this as a multiplication and shifting for speedup
+    idx = value % tb_size;
+
+    // this only works if the tb_size is bigger than 2**6
+    // as now we can reconstruct the state symmetry
+    value ^= state.edge_sym;
+}
+
+// hashing State such that it is recostructable
+inline void GetStateHash2(const uint64_t tb_size, uint64_t& idx, uint64_t& value, const State& state) {
+    value = state.edge_pos;
+    value |= uint64_t(state.corner_pos) << 24;      // NOLINT
+    value |= uint64_t(state.corner_orient) << 40;   // NOLINT
+    value |= uint64_t(state.edge_orient) << 52;     // NOLINT
+    value ^= uint64_t(state.edge_sym) << (58); // NOLINT this overlaps with the previous value so edge_sym has to be able to be retrieved later
+
+    value ^= 0x5555555555555555ULL; // NOLINT
+
+    SplitMix64(value);
+    // TODO: Do this as a multiplication and shifting for speedup
+    idx = value % tb_size;
+
+    // this only works if the tb_size is bigger than 2**6
+    // as now we can reconstruct the state symmetry
+    value ^= state.edge_sym;
+}
+
+constexpr State kSolvedState{uint32_t(0), uint16_t(0), uint16_t(0), uint16_t(0), uint8_t(0)};
+constexpr State kNonLegalState{uint32_t(~0U), uint16_t(~0U), uint16_t(~0U), uint16_t(~0U), uint8_t(~0U)};

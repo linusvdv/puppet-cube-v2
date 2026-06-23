@@ -1,3 +1,4 @@
+/*
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
@@ -383,3 +384,4 @@ void SearchManager () {
     LOG_ALL("Average number of positions:", acc_total_num_positions/Settings::GetNumRuns());
     LOG_ALL("Positions per seconds:", acc_total_num_positions * 1000 / millis.count());
 }
+*/

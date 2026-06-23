@@ -1,3 +1,4 @@
+/*
 #include <cuda.h>
 #include <cuda_runtime_api.h>
 #include <algorithm>
@@ -11,7 +12,6 @@
 
 #include "BCHTSet.cuh"
 #include "cuda_memory_transfer.cuh"
-#include "cube.cuh"
 #include "cube.hpp"
 #include "duplicate_rotations.hpp"
 #include "duplicate_rotations.cuh"
@@ -693,3 +693,4 @@ void DeviceLeafManager (std::atomic<bool>& stoken, SharedLeafStates& shared_leaf
     cudaStreamSynchronize(cuda_stream);
     cudaStreamDestroy(cuda_stream);
 }
+*/

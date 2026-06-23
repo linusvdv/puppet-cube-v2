@@ -1,7 +1,6 @@
 #include <filesystem>
 
-#include "cube.hpp"
-#include "duplicate_rotations.hpp"
+#include "corner.hpp"
 #include "edge.hpp"
 #include "info.hpp"
 #include "logger.hpp"
@@ -21,10 +20,10 @@
 
 
 int main(int argc, char *argv[]) {
+    LOG_INFO("Puppet Cube V2 by Linus VandeVondele");
+
     // settings initialization
     Settings(argc, argv);
-
-    LOG_INFO("Puppet Cube V2 by Linus VandeVondele");
     LOG_MEMORY();
 
     if (Settings::GetHardwareInfo()) {
@@ -57,18 +56,10 @@ int main(int argc, char *argv[]) {
     LOG_MEMORY();
     #endif // USE_CUDA
 
+    tablebase::Init();
     return 0;
 
-    // Cube::Initialize();
-    // DuplicateRotations::Initialize();
-    // LOG_INFO("Cube Initialized");
-    // Cube::UploadComputationToDevice();
-
-    // Tablebase::Initialize();
-    // LOG_INFO("Tablebase Initialized");
-    // Tablebase::UploadComputationToDevice();
-    // LOG_MEMORY();
-
+    /*
     TranspositionTable::Initialize(Settings::GetTTSize());
     LOG_INFO("Transposition Table Initialized");
     LOG_MEMORY();
@@ -84,5 +75,6 @@ int main(int argc, char *argv[]) {
     SearchManager();
     LOG_INFO("Search Computed");
     LOG_MEMORY();
+    */
     return 0;
 }

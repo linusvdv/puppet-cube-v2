@@ -1,3 +1,4 @@
+/*
 #pragma once
 #include <atomic>
 #include <cassert>
@@ -81,3 +82,4 @@ private:
 
     static void GetTTstate(const State& state, uint64_t& tt_key, uint64_t& tt_check_hash);
 };
+*/

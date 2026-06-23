@@ -1,60 +1,50 @@
 #pragma once
-#include <compare>
-
 #include "cube.hpp"
 
 
-extern __constant__ uint16_t* d_corner_orientations;
-extern __constant__ uint16_t* d_corner_positions;
-extern __constant__ uint16_t* d_corner_heuristics;
-
-extern __constant__ uint16_t* d_edge_orientations;
-extern __constant__ uint32_t* d_edge_positions;
-extern __constant__ uint8_t* d_edge_heuristics;
-
-
-constexpr uint64_t kDMulA = 0x2545f4914f6cdd1dULL;
-constexpr uint64_t kDMulB = 0x9e3779b97f4a7c15ULL;
-
-
-// 10 bytes
-struct DState {
-    uint16_t hash_1 = -1;
-    uint32_t hash_2 = -1;
-    uint32_t hash_3 = -1;
-
-    __device__ constexpr DState(const uint16_t& corner_orientation,  // 12 bytes
-                                const uint16_t& corner_position,     // 16 bytes
-                                const uint16_t& edge_orientation,    // 11 bytes
-                                const uint32_t& edge_position_1,     // 20 bytes
-                                const uint32_t& edge_position_2) {   // 20 bytes
-        // hash 1
-        hash_1 = corner_position; // 16 bytes
-
-        // hash 2
-        hash_2 = corner_orientation; // 12 bytes
-        hash_2 <<= 20; // NOLINT
-        hash_2 |= edge_position_1; // 20 bytes
-
-        // hash 3
-        hash_3 = edge_orientation; // 11 bytes
-        hash_3 <<= 20; // NOLINT
-        hash_3 |= edge_position_2; // 20 bytes
-    }
-
-    // Default not legal State
-    __host__ __device__ constexpr DState() {}
-
-    DState(const State& host_state) {
-        hash_1 = host_state.hash_1;
-        hash_2 = host_state.hash_2;
-        hash_3 = host_state.hash_3;
-    }
+// David Stafford Mix13
+// standart implementation of a SplitMix64 found in the paper: https://dl.acm.org/doi/epdf/10.1145/2714064.2660195
+// This version of hashing is reverable (so no loss of data)
+__device__ inline void SplitMix64(uint64_t& num) {
+    num ^= num >> 30;               // NOLINT
+    num *= 0xbf58476d1ce4e5b9ULL;   // NOLINT
+    num ^= num >> 27;               // NOLINT
+    num *= 0x94d049bb133111ebULL;   // NOLINT
+    num ^= num >> 31;               // NOLINT
+}
 
 
-    std::strong_ordering operator<=>(const DState&) const = default;
-};
+// hashing State such that it is reconstructable
+__device__ inline void GetStateHash1(const uint64_t mask, uint64_t& idx, uint64_t& value, const State& state) {
+    value = state.edge_pos;
+    value |= uint64_t(state.corner_pos) << 24;      // NOLINT
+    value |= uint64_t(state.corner_orient) << 40;   // NOLINT
+    value |= uint64_t(state.edge_orient) << 52;     // NOLINT
+
+    SplitMix64(value);
+    idx = state.edge_sym;
+    value ^= idx;
+
+    uint64_t temp = (value ^ idx) & mask;
+    value ^= temp;
+    idx ^= temp;
+}
 
 
-extern __constant__ DState* d_tablebase;
-extern __constant__ size_t d_tablebase_size;
+// hashing State for another hash
+__device__ inline void GetStateHash2(const uint64_t mask, uint64_t& idx, uint64_t& value, const State& state) {
+    value = state.edge_pos;
+    value |= uint64_t(state.corner_pos) << 24;      // NOLINT
+    value |= uint64_t(state.corner_orient) << 40;   // NOLINT
+    value |= uint64_t(state.edge_orient) << 52;     // NOLINT
+
+    value ^= 0x5555555555555555ULL; // NOLINT
+
+    SplitMix64(value);
+    idx = state.edge_sym;
+    value ^= idx;
+
+    uint64_t temp = (value ^ idx) & mask;
+    value ^= temp;
+    idx ^= temp;
+}

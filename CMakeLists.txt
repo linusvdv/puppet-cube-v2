@@ -74,9 +74,7 @@ add_executable(PuppetCubeV2
     src/main.cpp
     src/logger.cpp
     src/settings.cpp
-    src/cube.cpp
     src/tablebase.cpp
-    src/BCHTSet.cpp
     src/random_position.cpp
     src/thread_pool.cpp
     src/search.cpp
@@ -94,7 +92,6 @@ if(USE_CUDA)
 
     target_sources(PuppetCubeV2 PRIVATE
         src/corner.cu
-        src/cube.cu
         src/edge.cu
         src/info.cu
         src/search.cu

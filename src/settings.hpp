@@ -6,7 +6,6 @@
 
 
 constexpr size_t kBlockDim = 64;
-constexpr int kMaxDFSDepth = 6;
 
 
 class Settings {
