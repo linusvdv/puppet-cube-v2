@@ -1,4 +1,3 @@
-/*
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
@@ -6,12 +5,12 @@
 #include <numeric>
 #include <vector>
 
-#include "BCHTSet.hpp"
+#include "corner.hpp"
 #include "cube.hpp"
+#include "edge.hpp"
 #include "logger.hpp"
-#include "parallel_hashmap/phmap.h"
+#include "rotation.hpp"
 #include "transposition_table.hpp"
-#include "utils.hpp"
 #include "random_position.hpp"
 #include "search.hpp"
 #include "settings.hpp"
@@ -28,11 +27,18 @@ using Frontier = std::vector<std::vector<std::vector<std::pair<State, uint8_t>>>
 constexpr int kNumHeuristicLayers = 60;
 
 
+
 void SolutionTB(std::vector<Rotations>& tb_rotations, int tb_layer, State state) {
     for (int layer = tb_layer - 1; layer >= 0; layer--) {
+        uint64_t corner_heuristic = corner::GetHeuristic(state.corner_pos, state.corner_orient);
         for (uint8_t rotation = 0; rotation < kNumRot; rotation++) {
-            State next_state = Cube::Rotate(state, rotation).second;
-            if (BCHTSetContains(Tablebase::tablebase[layer], next_state)) {
+            if (((corner_heuristic >> (8+2*rotation)) & 3) == 3) { // illegal rotation
+                continue;
+            }
+            State next_state = state;
+            corner::Rotate(next_state.corner_pos, next_state.corner_orient, rotation);
+            edge::Rotate(next_state.edge_pos, next_state.edge_sym, next_state.edge_orient, rotation);
+            if (tablebase::Contains(next_state, layer)) {
                 state = next_state;
                 tb_rotations[tb_rotations.size()-layer-1] = Rotations(rotation);
                 break;
@@ -45,27 +51,34 @@ void SolutionTB(std::vector<Rotations>& tb_rotations, int tb_layer, State state)
 // recursive solution
 // bfs-like
 void SolutionSearch(std::vector<Rotations>& search_rotations, int depth, State state) {
-    phmap::flat_hash_map<State, uint8_t> visited;
-    phmap::flat_hash_set<State> current_level;
-    phmap::flat_hash_set<State> next_level;
+    std::map<State, uint8_t> visited;
+    std::set<State> current_level;
+    std::set<State> next_level;
     current_level.insert(state);
 
     int last_depth = depth;
     while (!current_level.empty() && depth != 0) {
         State cur_state = *current_level.begin();
         current_level.erase(current_level.begin());
+        uint64_t corner_heuristic = corner::GetHeuristic(cur_state.corner_pos, cur_state.corner_orient);
         for (uint8_t rotation = 0; rotation < kNumRot; rotation++) {
-            State next_state = Cube::Rotate(cur_state, rotation).second;
-            InTT in_tt = TranspositionTable::ContainsState(next_state, depth-1);
-            if (in_tt == InTT::kFalse) {
+            if (((corner_heuristic >> (8+2*rotation)) & 3) == 3) { // illegal rotation
                 continue;
             }
-            if (in_tt == InTT::kTrue) {
+            State next_state = cur_state;
+            corner::Rotate(next_state.corner_pos, next_state.corner_orient, rotation);
+            edge::Rotate(next_state.edge_pos, next_state.edge_sym, next_state.edge_orient, rotation);
+            transposition_table::InTT in_tt = transposition_table::Contains(next_state, depth-1);
+            if (in_tt == transposition_table::InTT::kFalse) {
+                continue;
+            }
+            if (in_tt == transposition_table::InTT::kTrue) {
                 search_rotations[depth-1] = Rotations(GetRevRotation(rotation));
                 int temp_depth = depth;
                 while (last_depth > temp_depth) {
                     uint8_t to_rotation = visited[cur_state];
-                    cur_state = Cube::Rotate(cur_state, GetRevRotation(to_rotation)).second;
+                    corner::Rotate(cur_state.corner_pos, cur_state.corner_orient, GetRevRotation(to_rotation));
+                    edge::Rotate(cur_state.edge_pos, cur_state.edge_sym, cur_state.edge_orient, GetRevRotation(to_rotation));
                     search_rotations[temp_depth] = Rotations(GetRevRotation(to_rotation));
                     temp_depth++;
                 }
@@ -77,7 +90,7 @@ void SolutionSearch(std::vector<Rotations>& search_rotations, int depth, State s
                 break;
             }
             // this is only really rarely the case and thus most of the time this function should be really fast
-            if (in_tt == InTT::kCollision || in_tt == InTT::kHighDepth) {
+            if (in_tt == transposition_table::InTT::kCollision || in_tt == transposition_table::InTT::kHighDepth) {
                 next_level.insert(next_state);
                 visited.insert(std::make_pair(next_state, rotation));
                 continue;
@@ -96,13 +109,14 @@ void SolutionSearch(std::vector<Rotations>& search_rotations, int depth, State s
 // else return -1
 int GetTBLayer(const State& state) {
     for (int i = 0; i <= Settings::GetTBDepth(); i++) {
-        if (BCHTSetContains(Tablebase::tablebase[i], state)) {
+        if (tablebase::Contains(state, i)) {
             LOG_EXTRA("Position in tablebase");
             return i;
         }
     }
     return -1;
 }
+
 
 
 void DFSNextFrontierSearch (const State& state, Frontier& next_frontier,
@@ -116,29 +130,32 @@ void DFSNextFrontierSearch (const State& state, Frontier& next_frontier,
 
     bool frontier_insert = false;
     // rotate to the next position
+    uint64_t corner_heuristic = corner::GetHeuristic(state.corner_pos, state.corner_orient);
     for (uint8_t rotation = 0; rotation < kNumRot; rotation++) {
-        std::pair<bool, State> next_state = Cube::Rotate(state, rotation);
-        // illegal move
-        if (!next_state.first) {
+        if (((corner_heuristic >> (8+2*rotation)) & 3) == 3) { // illegal rotation
             continue;
         }
+
+        State next_state = state;
+        corner::Rotate(next_state.corner_pos, next_state.corner_orient, rotation);
+        edge::Rotate(next_state.edge_pos, next_state.edge_sym, next_state.edge_orient, rotation);
         num_positions_search++;
 
         // already visited
         // if not insert this position
-        if (TranspositionTable::ContainsState(next_state.second, cur_depth+1) == InTT::kTrue) {
+        if (transposition_table::Contains(next_state, cur_depth+1) == transposition_table::InTT::kTrue) {
             continue;
         }
 
-        Cube next_cube;
-        uint8_t max_heuristic = next_cube.GetMaxHeuristic(next_state.second);
+        uint8_t max_heuristic = std::max(edge::GetHeuristic(next_state.edge_pos, next_state.edge_orient),
+                                         uint8_t(uint8_t(corner_heuristic) + ((corner_heuristic >> (8+2*rotation)) & 3) - 1));
 
         // in tablebase
-        if (max_heuristic <= Settings::GetTBDepth() && BCHTSetContains(Tablebase::tablebase.back(), next_state.second)) {
+        if (max_heuristic <= Settings::GetTBDepth() && tablebase::Contains(next_state)) {
             bool expected = false;
             if (shared_leaf_solution.finished.compare_exchange_strong(expected, true, std::memory_order_acq_rel, std::memory_order_acquire)) {
                 shared_leaf_states.cv.notify_all();
-                shared_leaf_solution.state = next_state.second;
+                shared_leaf_solution.state = next_state;
             }
             LOG_EXTRA("found solution of length ", Settings::GetTBDepth()+cur_depth+1);
             return;
@@ -153,12 +170,13 @@ void DFSNextFrontierSearch (const State& state, Frontier& next_frontier,
 
         // send the position to GPU search
         // this means that the state has to be again part of the new frontier
+        /*
         if (std::max(max_heuristic, uint8_t(Settings::GetTBDepth()+1)) + cur_depth + 1 >= depth - 3 &&
             depth - cur_depth - 1 - Settings::GetTBDepth() < 16 &&  // fits in the rotation registers
             cur_depth + 1 > 5 &&  // more than 5 moves need to be already made
             depth - cur_depth - 1 - Settings::GetTBDepth() < 10) { // this value can be tweeked to have more cpu calculation needed
 
-            local_buffer->push_back({next_state.second, cur_depth + 1});
+            local_buffer->push_back({next_state, cur_depth + 1});
 
             // insert local buffer when there is space
             if (local_buffer->size() >= size_t(Settings::GetNumPositionsPerBatch())) {
@@ -173,17 +191,18 @@ void DFSNextFrontierSearch (const State& state, Frontier& next_frontier,
             frontier_insert = true;
             continue;
         }
+        */
 
         // insert into visited_search
-        TranspositionTable::InsertState(next_state.second, cur_depth+1);
+        transposition_table::Insert(next_state, cur_depth+1);
 
 
         // Do further DFS
-        DFSNextFrontierSearch(next_state.second, next_frontier, shared_leaf_solution, shared_leaf_states, local_buffer, num_positions_search, cur_depth+1, depth, thread_idx);
+        DFSNextFrontierSearch(next_state, next_frontier, shared_leaf_solution, shared_leaf_states, local_buffer, num_positions_search, cur_depth+1, depth, thread_idx);
     }
 
     if (frontier_insert) {
-        uint8_t heuristic = Cube().GetAppHeuristic(state);
+        uint8_t heuristic = uint8_t(corner_heuristic) + edge::GetHeuristic(state.edge_pos, state.edge_orient);
         next_frontier[heuristic][thread_idx].push_back({state, cur_depth});
     }
 }
@@ -246,7 +265,7 @@ void SearchManager () {
         num_leaf_threads = Settings::GetNumGPUUploadThreads();
     }
     #endif
-    ThreadPool leaf_thread_pool(num_leaf_threads);
+    // ThreadPool leaf_thread_pool(num_leaf_threads);
     ThreadPool search_thread_pool(Settings::GetNumThreads());
 
     // start timing
@@ -273,8 +292,8 @@ void SearchManager () {
             continue;
         }
         // Transposition Table
-        search_thread_pool.Run([](size_t thread_id){TranspositionTable::Clear(thread_id, Settings::GetNumThreads());});
-        TranspositionTable::InsertState(random_positions[random_positions_idx], 0);
+        search_thread_pool.Run([](size_t thread_id){transposition_table::Clear(thread_id, Settings::GetNumThreads());});
+        transposition_table::Insert(random_positions[random_positions_idx], 0);
 
         // queue shared between search
         SharedLeafStates shared_leaf_states;
@@ -292,7 +311,8 @@ void SearchManager () {
 
 
         // go over the different depths (iterative deepening)
-        uint8_t id_depth = Cube().GetMaxHeuristic(random_positions[random_positions_idx])+1;
+        State state = random_positions[random_positions_idx];
+        uint8_t id_depth = std::max(uint8_t(corner::GetHeuristic(state.corner_pos, state.corner_orient)), edge::GetHeuristic(state.edge_pos, state.edge_orient))+1;
 
         for (; true; id_depth++) {
             LOG_EXTRA("Start with depth", id_depth);
@@ -301,6 +321,7 @@ void SearchManager () {
             std::vector<uint64_t> num_positions_leaf_threads(num_leaf_threads, 0);
 
             std::atomic<bool> leaf_stoken{false};
+            /*
             #ifdef USE_CUDA
             if (Settings::UseCuda()) {
                 CudaConstMemChangeCurDepth(id_depth);
@@ -308,6 +329,7 @@ void SearchManager () {
                 leaf_thread_pool.AsyncRun([&](size_t thread_id){DeviceLeafManager(leaf_stoken, shared_leaf_states, shared_leaf_solution, num_positions_leaf_threads[thread_id], thread_id, id_depth, random_positions_idx);});
             }
             #endif
+            */
             // is always off if it is compiled without cuda
             if (!Settings::UseCuda()) {
                 LOG_CRITICAL("currently not supported");
@@ -332,7 +354,7 @@ void SearchManager () {
 
             // Stop LeafManager
             leaf_stoken = true;
-            leaf_thread_pool.Wait();
+            // leaf_thread_pool.Wait();
             for (int i = 0; i < num_leaf_threads; i++) {
                 num_positions_leaf += num_positions_leaf_threads[i];
             }
@@ -345,6 +367,7 @@ void SearchManager () {
                 LOG_EXTRA("Proven optimal solution");
                 break;
             }
+
         }
 
         id_depth--;
@@ -352,7 +375,7 @@ void SearchManager () {
         acc_total_num_positions += total_num_positions;
 
         // guarantie that the starting position is in TT
-        TranspositionTable::InsertState<true>(random_positions[random_positions_idx], 0);
+        transposition_table::Insert<true>(random_positions[random_positions_idx], 0);
 
         // Tablebase
         std::vector<Rotations> solution_rotations(id_depth);
@@ -363,10 +386,12 @@ void SearchManager () {
 
         LOG_ALL(SkipSpace("["), SkipSpace(random_positions_idx+1), SkipSpace("/"), SkipSpace(Settings::GetNumRuns()), "] Depth:", int(id_depth), "num_positions:", total_num_positions);
         LOG_MEMORY();
+
         if (Logger::GetLoggerLevel() >= LoggerLevel::kExtra) { // test if the solution works
             State test_state = random_positions[random_positions_idx];
             for (Rotations rotation : solution_rotations) {
-                test_state = Cube::Rotate(test_state, uint8_t(rotation)).second;
+                corner::Rotate(test_state.corner_pos, test_state.corner_orient, uint8_t(rotation));
+                edge::Rotate(test_state.edge_pos, test_state.edge_sym, test_state.edge_orient, uint8_t(rotation));
             }
             if (test_state != kSolvedState) {
                 LOG_WARNING("Not correct solution!");
@@ -384,4 +409,3 @@ void SearchManager () {
     LOG_ALL("Average number of positions:", acc_total_num_positions/Settings::GetNumRuns());
     LOG_ALL("Positions per seconds:", acc_total_num_positions * 1000 / millis.count());
 }
-*/

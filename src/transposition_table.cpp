@@ -27,7 +27,7 @@ void Clear(size_t thread_idx, size_t num_threads) {
 
 
 void Init() {
-    uint64_t num_elements = (Settings::GetTTSize()*1024*1024) / sizeof(std::atomic<uint64_t>); // NOLINT
+    uint64_t num_elements = (uint64_t(Settings::GetTTSize())*1024*1024) / sizeof(std::atomic<uint64_t>); // NOLINT
     constexpr uint64_t kMinTTSize = (1<<6) * (1<<8);
     if (num_elements < kMinTTSize) {
         LOG_ERROR("Trabsposition Table too small");

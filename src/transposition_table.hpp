@@ -1,8 +1,10 @@
 #pragma once
 #include <atomic>
+#include <bitset>
 #include <vector>
 
 #include "cube.hpp"
+#include "logger.hpp"
 
 
 namespace transposition_table {
@@ -21,12 +23,13 @@ extern std::vector<std::atomic<uint64_t>> tt; // NOLINT
 
 inline void GetTTHash(const State& state, uint8_t depth, uint64_t& idx, uint64_t& value) {
     GetStateHash1(tt.size()>>8, idx, value, state);
-    idx = (idx<<8) | uint8_t(value);
-    value = (value & (~uint64_t(~uint8_t(0)))) | depth;
+    idx = (idx<<8) | (value >> 56);
+    value = (value << 8) | depth;
 }
 
 
 void Init();
+void Clear(size_t thread_idx, size_t num_threads);
 InTT Contains(const State& state, const uint8_t& depth);
 
 

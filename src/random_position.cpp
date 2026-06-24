@@ -1,11 +1,13 @@
-/*
 #include <cstddef>
 #include <iostream>
 #include <random>
 #include <vector>
 
+#include "corner.hpp"
 #include "cube.hpp"
 #include "random_position.hpp"
+#include "edge.hpp"
+#include "rotation.hpp"
 #include "settings.hpp"
 
 
@@ -16,20 +18,32 @@ std::vector<State> RandomPositions (const size_t& num_elements, size_t seed_offs
         std::mt19937 gen(seed_offset + i);
         std::uniform_int_distribution<int> dist(0, kNumRot-1);
 
-        State state = State(0, 0, 0, 0, kNumEdgePositions-1);
+        State state = kSolvedState;
         for (int j = 0; j < Settings::GetScramblingDepth(); j++) {
             uint8_t rotation = dist(gen);
-            std::cout << int(rotation) << "\n";
-            std::pair<bool, State> res = Cube::Rotate(state, rotation);
-            state = res.second;
+
+            uint64_t corner_heuristic = corner::GetHeuristic(state.corner_pos, state.corner_orient);
+            if (((corner_heuristic >> (8+2*rotation)) & 3) == 3) { // illegal rotation
+                continue;
+            }
+
+            corner::Rotate(state.corner_pos, state.corner_orient, rotation);
+            edge::Rotate(state.edge_pos, state.edge_sym, state.edge_orient, rotation);
         }
 
-        while (Cube::GetCurCornerHeuristic(state) < Settings::GetMinCornerHeuristic()) {
-            state = Cube::Rotate(state, dist(gen)).second;
+        while (uint8_t(corner::GetHeuristic(state.corner_pos, state.corner_orient)) < Settings::GetMinCornerHeuristic()) {
+            uint8_t rotation = dist(gen);
+
+            uint64_t corner_heuristic = corner::GetHeuristic(state.corner_pos, state.corner_orient);
+            if (((corner_heuristic >> (8+2*rotation)) & 3) == 3) { // illegal rotation
+                continue;
+            }
+
+            corner::Rotate(state.corner_pos, state.corner_orient, rotation);
+            edge::Rotate(state.edge_pos, state.edge_sym, state.edge_orient, rotation);
         }
 
         random_positions.push_back(state);
     }
     return random_positions;
 }
-*/
