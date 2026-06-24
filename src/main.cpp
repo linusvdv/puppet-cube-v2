@@ -16,6 +16,7 @@
 #include "edge_bridge.hpp"
 #include "info_bridge.hpp"
 #include "search_bridge.hpp"
+#include "tablebase_bridge.hpp"
 #endif
 
 
@@ -38,25 +39,29 @@ int main(int argc, char *argv[]) {
     // precomputation
     if (!std::filesystem::exists(GetFilePath(""))) {
         if (std::filesystem::create_directories(GetFilePath(""))) {
-            LOG_ALL("Create precomputation folder for binaries");
+            LOG_ALL("Create precomputation folder for precomputation");
         }
         else {
-            LOG_ERROR("Failed to create folder for binaries");
+            LOG_CRITICAL("Failed to create folder for precomputation");
         }
     }
     RotationInit();
     edge::Init();
     corner::Init();
+    tablebase::Init();
+    LOG_INFO("Loaded Precomputation");
 
     #ifdef USE_CUDA
-    LOG_EXTRA("Start Cube Uploading Precomputation to Device");
+    LOG_EXTRA("Start Edge Precomputation Uploading to Device");
     edge::UploadPrecomputationToDevice();
+    LOG_EXTRA("Start Corner Precomputation Uploading to Device");
     corner::UploadPrecomputationToDevice();
-    LOG_INFO("Cube Precomputation Uploaded to Device");
+    LOG_EXTRA("Start Tablebase Precomputation Uploading to Device");
+    tablebase::UploadPrecomputationToDevice();
+    LOG_INFO("Precomputation Uploaded to Device");
     LOG_MEMORY();
     #endif // USE_CUDA
 
-    tablebase::Init();
     return 0;
 
     /*

@@ -1,7 +1,6 @@
 #include <array>
 #include <cstdint>
 #include <random>
-#include <set>
 
 #include "corner.hpp"
 #include "cube.hpp"
@@ -9,10 +8,10 @@
 #include "logger.hpp"
 #include "rotation.hpp"
 #include "settings.hpp"
+#include "tablebase.hpp"
 #include "utils.hpp"
 
 namespace tablebase {
-constexpr int kBucketSize = 2;
 using Tablebase = std::vector<std::array<uint64_t, kBucketSize>>;
 
 // this will always have 2 hash functions
@@ -172,6 +171,15 @@ bool TablebaseContains(const Tablebase& tablebase, const State& state) {
         }
     }
     return false;
+}
+
+
+bool Contains(const State& state) {
+    return TablebaseContains(tablebase_depths.back(), state);
+}
+
+bool Contains(const State& state, int depth) {
+    return TablebaseContains(tablebase_depths[depth], state);
 }
 
 

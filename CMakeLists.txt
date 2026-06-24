@@ -95,6 +95,7 @@ if(USE_CUDA)
         src/edge.cu
         src/info.cu
         src/search.cu
+        src/tablebase.cu
     )
 
     target_link_libraries(PuppetCubeV2 PRIVATE Threads::Threads)
