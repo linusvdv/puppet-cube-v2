@@ -62,13 +62,14 @@ int main(int argc, char *argv[]) {
     LOG_MEMORY();
     #endif // USE_CUDA
 
-    return 0;
-
-    /*
-    TranspositionTable::Initialize(Settings::GetTTSize());
+    LOG_EXTRA("Start Transposition Table Initialization");
+    transposition_table::Init();
     LOG_INFO("Transposition Table Initialized");
     LOG_MEMORY();
 
+    return 0;
+
+    /*
     #ifdef USE_CUDA
     if (Settings::UseCuda()) {
         CudaConstMemInitialize();

@@ -268,7 +268,7 @@ Settings::Settings (int argc, char *argv[]) {
                 }
 
                 if (std::string(long_options[option_index].name) == "tt_size") {
-                    GetTFromOptarg(tt_size, 128, 1000000, "TT SIZE"); // NOLINT
+                    GetTFromOptarg(tt_size, 1, 1000000, "TT SIZE"); // NOLINT
                 }
 
                 if (std::string(long_options[option_index].name) == "tb_depth") {
