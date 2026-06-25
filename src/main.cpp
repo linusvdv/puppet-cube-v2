@@ -67,7 +67,6 @@ int main(int argc, char *argv[]) {
     LOG_INFO("Transposition Table Initialized");
     LOG_MEMORY();
 
-    /*
     #ifdef USE_CUDA
     if (Settings::UseCuda()) {
         CudaConstMemInitialize();
@@ -75,7 +74,6 @@ int main(int argc, char *argv[]) {
         LOG_MEMORY();
     }
     #endif // USE_CUDA
-    */
 
     SearchManager();
     LOG_INFO("Search Computed");

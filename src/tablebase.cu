@@ -18,7 +18,7 @@ void UploadPrecomputationToDevice() {
 
         // corner precomputation
         UploadToDeviceSymbol(tablebase_depths.back(), d_tablebase);
-        MemcpyToSymbol(tablebase_depths.back().size(), d_tablebase_size);
+        MemcpyToSymbol(tablebase_depths.back().size()/2, d_tablebase_size);
     }
 }
 }

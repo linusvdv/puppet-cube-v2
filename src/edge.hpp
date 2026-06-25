@@ -11,7 +11,11 @@ namespace edge {
 constexpr uint16_t kNumOrient = 1 << (kNumEdges-1);
 constexpr uint8_t kNumSym = Factorial(3) * (1<<3);
 
+constexpr uint32_t kPosShift = 24;
+constexpr uint32_t kPosMask = (1<<kPosShift)-1;
+
 constexpr int kNumStoredPerBucket = 16;
+constexpr uint64_t kSingleHeuristicValue = 15;
 
 
 void Init();

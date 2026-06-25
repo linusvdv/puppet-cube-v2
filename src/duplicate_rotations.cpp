@@ -1,78 +1,78 @@
-/*
-#include "cube.hpp"
-#include "logger.hpp"
+#include <vector>
+
+#include "rotation.hpp"
 #include "duplicate_rotations.hpp"
+
 
 std::array<uint64_t, kDuplicateRotationDataSize> DuplicateRotations::data = {0, 0, 0, 0, 0, 0};
 
 void DuplicateRotations::Initialize() {
-    std::vector<std::pair<Rotations, Rotations>> unnecessary_rotatations = {
+    std::vector<std::pair<std::string, std::string>> unnecessary_rotatations = {
         // R, M, L
-        {kR, kRc},
-        {kRc, kR},
-        {kM, kMc},
-        {kMc, kM},
-        {kL, kLc},
-        {kLc, kL},
+        {"R", "R'"},
+        {"R'", "R"},
+        {"M", "M'"},
+        {"M'", "M"},
+        {"L", "L'"},
+        {"L'", "L"},
             // same as slice moves
-        {kLc, kR}, {kR, kLc},
-        {kL, kRc}, {kRc, kL},
-        {kMc, kR}, {kR, kMc},
-        {kM, kRc}, {kRc, kM},
+        {"L'", "R"}, {"R", "L'"},
+        {"L", "R'"}, {"R'", "L"},
+        {"M'", "R"}, {"R", "M'"},
+        {"M", "R'"}, {"R'", "M"},
             // two opposite rotations which end up in the same cube
-        {kM, kM},    // kMc, kMc
-        {kM, kR},    // kR, kM
-        {kMc, kRc}, // kRc, kMc
-        {kM, kL},   // kL, kM
-        {kMc, kLc}, // kLc, kMc
-        {kL, kR},   // kR, kL
-        {kLc, kRc}, // kRc, kLc
+        {"M", "M"},    // "M'", "M'"
+        {"M", "R"},    // "R", "M"
+        {"M'", "R'"}, // "R'", "M'"
+        {"M", "L"},   // "L", "M"
+        {"M'", "L'"}, // "L'", "M'"
+        {"L", "R"},   // "R", "L"
+        {"L'", "R'"}, // "R'", "L'"
 
         // U, E, D
-        {kU, kUc},
-        {kUc, kU},
-        {kE, kEc},
-        {kEc, kE},
-        {kD, kDc},
-        {kDc, kD},
+        {"U", "U'"},
+        {"U'", "U"},
+        {"E", "E'"},
+        {"E'", "E"},
+        {"D", "D'"},
+        {"D'", "D"},
             // same as slice moves
-        {kDc, kU}, {kU, kDc},
-        {kD, kUc}, {kUc, kD},
-        {kEc, kU}, {kU, kEc},
-        {kE, kUc}, {kUc, kE},
+        {"D'", "U"}, {"U", "D'"},
+        {"D", "U'"}, {"U'", "D"},
+        {"E'", "U"}, {"U", "E'"},
+        {"E", "U'"}, {"U'", "E"},
             // two opposite rotations which end up in the same cube
-        {kE, kE},    // kEc, kEc
-        {kE, kU},    // kU, kE
-        {kEc, kUc}, // kUc, kEc
-        {kE, kD},   // kD, kE
-        {kEc, kDc}, // kDc, kEc
-        {kD, kU},   // kU, kD
-        {kDc, kUc}, // kUc, kDc
+        {"E", "E"},    // "E'", "E'"
+        {"E", "U"},    // "U", "E"
+        {"E'", "U'"}, // "U'", "E'"
+        {"E", "D"},   // "D", "E"
+        {"E'", "D'"}, // "D'", "E'"
+        {"D", "U"},   // "U", "D"
+        {"D'", "U'"}, // "U'", "D'"
 
         // B, S, F
-        {kB, kBc},
-        {kBc, kB},
-        {kS, kSc},
-        {kSc, kS},
-        {kF, kFc},
-        {kFc, kF},
+        {"B", "B'"},
+        {"B'", "B"},
+        {"S", "S'"},
+        {"S'", "S"},
+        {"F", "F'"},
+        {"F'", "F"},
             // same as slice moves
-        {kFc, kB}, {kB, kFc},
-        {kF, kBc}, {kBc, kF},
-        {kSc, kB}, {kB, kSc},
-        {kS, kBc}, {kBc, kS},
+        {"F'", "B"}, {"B", "F'"},
+        {"F", "B'"}, {"B'", "F"},
+        {"S'", "B"}, {"B", "S'"},
+        {"S", "B'"}, {"B'", "S"},
             // two opposite rotations which end up in the same cube
-        {kS, kS},    // kSc, kSc
-        {kS, kB},    // kB, kS
-        {kSc, kBc}, // kBc, kSc
-        {kS, kF},   // kF, kS
-        {kSc, kFc}, // kFc, kSc
-        {kF, kB},   // kB, kF
-        {kFc, kBc}, // kBc, kFc
+        {"S", "S"},    // "S'", "S'"
+        {"S", "B"},    // "B", "S"
+        {"S'", "B'"}, // "B'", "S'"
+        {"S", "F"},   // "F", "S"
+        {"S'", "F'"}, // "F'", "S'"
+        {"F", "B"},   // "B", "F"
+        {"F'", "B'"}, // "B'", "F'"
     };
     for (auto& [first, second] : unnecessary_rotatations) {
-        int index = (int(first) * kNumRot) + int(second);
+        int index = (name_to_rot_rep[first].index * kNumRot) + name_to_rot_rep[second].index;
         data[index/64] |= uint64_t(1) << (index%64);
     }
 }
-*/

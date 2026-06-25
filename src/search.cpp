@@ -170,7 +170,6 @@ void DFSNextFrontierSearch (const State& state, Frontier& next_frontier,
 
         // send the position to GPU search
         // this means that the state has to be again part of the new frontier
-        /*
         if (std::max(max_heuristic, uint8_t(Settings::GetTBDepth()+1)) + cur_depth + 1 >= depth - 3 &&
             depth - cur_depth - 1 - Settings::GetTBDepth() < 16 &&  // fits in the rotation registers
             cur_depth + 1 > 5 &&  // more than 5 moves need to be already made
@@ -191,7 +190,6 @@ void DFSNextFrontierSearch (const State& state, Frontier& next_frontier,
             frontier_insert = true;
             continue;
         }
-        */
 
         // insert into visited_search
         transposition_table::Insert(next_state, cur_depth+1);
@@ -265,7 +263,7 @@ void SearchManager () {
         num_leaf_threads = Settings::GetNumGPUUploadThreads();
     }
     #endif
-    // ThreadPool leaf_thread_pool(num_leaf_threads);
+    ThreadPool leaf_thread_pool(num_leaf_threads);
     ThreadPool search_thread_pool(Settings::GetNumThreads());
 
     // start timing
@@ -321,7 +319,6 @@ void SearchManager () {
             std::vector<uint64_t> num_positions_leaf_threads(num_leaf_threads, 0);
 
             std::atomic<bool> leaf_stoken{false};
-            /*
             #ifdef USE_CUDA
             if (Settings::UseCuda()) {
                 CudaConstMemChangeCurDepth(id_depth);
@@ -329,7 +326,6 @@ void SearchManager () {
                 leaf_thread_pool.AsyncRun([&](size_t thread_id){DeviceLeafManager(leaf_stoken, shared_leaf_states, shared_leaf_solution, num_positions_leaf_threads[thread_id], thread_id, id_depth, random_positions_idx);});
             }
             #endif
-            */
             // is always off if it is compiled without cuda
             if (!Settings::UseCuda()) {
                 LOG_CRITICAL("currently not supported");
@@ -354,7 +350,7 @@ void SearchManager () {
 
             // Stop LeafManager
             leaf_stoken = true;
-            // leaf_thread_pool.Wait();
+            leaf_thread_pool.Wait();
             for (int i = 0; i < num_leaf_threads; i++) {
                 num_positions_leaf += num_positions_leaf_threads[i];
             }
