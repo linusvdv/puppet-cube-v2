@@ -1,10 +1,11 @@
 #pragma once
+#include "rotation.hpp"
 
 
 struct RegRotations {
     int8_t idx = -1;
-    int8_t finish_idx = -1;
-    uint8_t finish_rot = 0;
+    int8_t finish_idx = 0;
+    uint8_t finish_rot = kNumRot;
     uint64_t d1 = 0;
     uint64_t d2 = 0;
 };
