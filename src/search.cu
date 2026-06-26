@@ -78,6 +78,12 @@ __global__ void DeviceLeafSearch (const uint8_t* d_starting_depths,
     // load all global memory to registers
     // all accesses are coaleased
 
+    // state
+    State state = d_states[index];
+    if (state.edge_pos == (uint32_t)-1) {
+        return;
+    }
+
     // general information
     uint16_t num_position_thread = 0;
 
@@ -85,9 +91,6 @@ __global__ void DeviceLeafSearch (const uint8_t* d_starting_depths,
 
     // rotations
     RegRotations reg_rotations = d_reg_rotations[index];
-
-    // state
-    State state = d_states[index];
 
     // get helpful rotations
     uint64_t full_corner_heuristic = corner::DGetHeuristic(state.corner_pos, state.corner_orient);
@@ -225,11 +228,13 @@ __global__ void GetNewStates(std::pair<State, uint8_t>* d_position_queue, const 
 
     // still has stuff to do
     RegRotations reg_rotations = d_reg_rotations[index];
-    uint8_t rotation = RotationsAt(reg_rotations);
-    if (reg_rotations.idx > reg_rotations.finish_idx ||
-        (reg_rotations.idx == reg_rotations.finish_idx && rotation < reg_rotations.finish_rot)) {
-        d_possible_splitmix_idx[index] = true;
-        return;
+    if (d_states[index].edge_pos != (uint32_t)-1) {
+        uint8_t rotation = RotationsAt(reg_rotations);
+        if (reg_rotations.idx > reg_rotations.finish_idx ||
+                (reg_rotations.idx == reg_rotations.finish_idx && rotation < reg_rotations.finish_rot)) {
+            d_possible_splitmix_idx[index] = true;
+            return;
+        }
     }
 
     // index calculation
@@ -281,6 +286,10 @@ __global__ void SplitMixStates (RegRotations* d_reg_rotations, State* d_state, u
     if (!d_possible_splitmix_idx[index]) {
         return;
     }
+    State state_start = d_state[index];
+    if (state_start.edge_pos == (uint32_t)-1) {
+        return;
+    }
 
     RegRotations reg_rotations = d_reg_rotations[index];
     // don't split if the current position is at the moment during rotations
@@ -288,7 +297,6 @@ __global__ void SplitMixStates (RegRotations* d_reg_rotations, State* d_state, u
         return;
     }
 
-    State state_start = d_state[index];
     uint8_t starting_depth = d_starting_depths[index];
 
     // get to the position where you should split
