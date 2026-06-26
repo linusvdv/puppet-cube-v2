@@ -1,6 +1,7 @@
 #include <filesystem>
 
 #include "corner.hpp"
+#include "duplicate_rotations.hpp"
 #include "edge.hpp"
 #include "info.hpp"
 #include "logger.hpp"
@@ -49,6 +50,7 @@ int main(int argc, char *argv[]) {
     edge::Init();
     corner::Init();
     tablebase::Init();
+    DuplicateRotations::Initialize();
     LOG_INFO("Loaded Precomputation");
 
     #ifdef USE_CUDA
