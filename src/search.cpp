@@ -266,13 +266,13 @@ void SearchManager () {
     ThreadPool leaf_thread_pool(num_leaf_threads);
     ThreadPool search_thread_pool(Settings::GetNumThreads());
 
-    // start timing
-    std::chrono::time_point start_time = std::chrono::high_resolution_clock::now();
-
     // random starting positions
     LOG_EXTRA("Start calculating random positions");
     std::vector<State> random_positions = RandomPositions(Settings::GetNumRuns(), Settings::GetRunOffset());
     LOG_ALL("Calculated random positions");
+
+    // start timing
+    std::chrono::time_point start_time = std::chrono::high_resolution_clock::now();
 
     // accumulated positions for information purposes
     uint64_t acc_total_num_positions = 0;
