@@ -98,10 +98,19 @@ if(USE_CUDA)
         src/tablebase.cu
     )
 
+    set(CUDA_KEEP_DIR "${CMAKE_BINARY_DIR}/comp")
+    file(MAKE_DIRECTORY ${CUDA_KEEP_DIR})
+
     target_link_libraries(PuppetCubeV2 PRIVATE Threads::Threads)
 
     target_compile_options(PuppetCubeV2 PRIVATE
-        $<$<COMPILE_LANGUAGE:CUDA>:-Wall -Wextra -g --expt-extended-lambda -diag-suppress 68>
+        $<$<COMPILE_LANGUAGE:CUDA>:-Wall -Wextra --expt-extended-lambda -diag-suppress 68 --keep --keep-dir=${CUDA_KEEP_DIR} -lineinfo>
+        $<$<CONFIG:Release>:$<$<COMPILE_LANGUAGE:CUDA>:-g>>
+        $<$<CONFIG:Debug>:$<$<COMPILE_LANGUAGE:CUDA>:-G>>
+    )
+
+    target_link_options(PuppetCubeV2 PRIVATE
+    $<DEVICE_LINK:-Xptxas=-v>
     )
 else()
     target_link_libraries(PuppetCubeV2 PRIVATE Threads::Threads)
@@ -121,27 +130,37 @@ endif()
 set(Debug_Options -O0 -fno-inline -fno-omit-frame-pointer -Wshadow -Wall -Wextra)
 set(Release_Options -O3 -Wshadow -Wall -Wextra)
 
-set(CUDA_KEEP_DIR "${CMAKE_BINARY_DIR}/comp")
-file(MAKE_DIRECTORY ${CUDA_KEEP_DIR})
-
 target_compile_options(PuppetCubeV2 PRIVATE
     $<$<COMPILE_LANGUAGE:CXX>:-Wall -Wextra -g>
-    $<$<COMPILE_LANGUAGE:CUDA>:-Xptxas -v --keep --keep-dir=${CUDA_KEEP_DIR} -lineinfo>
     $<$<CONFIG:Debug>:${Debug_Options}>
-    $<$<CONFIG:Debug>:$<$<COMPILE_LANGUAGE:CUDA>:-G>>
     $<$<CONFIG:Release>:${Release_Options}>
 )
 
 # ============
-# LTO (Release only, C++ only — not compatible with CUDA)
-# Link time optimization
+# LTO (Release only)
 # ============
+# Enables interprocedural/link-time optimization for CXX, and -- since this
+# is a whole-target property, not scoped per language -- for CUDA device code
+# too (nvcc's device LTO has been supported by CMake since 3.25). That's
+# intentional here: we want both. The IPO check below covers CUDA explicitly
+# so a build would warn instead of silently doing the wrong thing if device
+# LTO ever weren't supported by the toolchain in use.
+#
+# If you ever want CXX LTO WITHOUT CUDA device LTO, this property can't be
+# scoped to one language on a mixed target -- the CUDA sources would need to
+# move into a separate target that doesn't have this property set.
 if(CMAKE_BUILD_TYPE STREQUAL "Release")
     include(CheckIPOSupported)
-    check_ipo_supported(RESULT ipo_supported OUTPUT ipo_error LANGUAGES CXX)
+
+    set(ipo_languages CXX)
+    if(USE_CUDA)
+        list(APPEND ipo_languages CUDA)
+    endif()
+
+    check_ipo_supported(RESULT ipo_supported OUTPUT ipo_error LANGUAGES ${ipo_languages})
     if(ipo_supported)
         set_property(TARGET PuppetCubeV2 PROPERTY INTERPROCEDURAL_OPTIMIZATION TRUE)
-        message(STATUS "LTO enabled")
+        message(STATUS "LTO enabled (${ipo_languages})")
     else()
         message(WARNING "LTO not supported: ${ipo_error}")
     endif()

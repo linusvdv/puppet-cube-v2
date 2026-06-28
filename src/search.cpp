@@ -172,7 +172,7 @@ void DFSNextFrontierSearch (const State& state, Frontier& next_frontier,
         // this means that the state has to be again part of the new frontier
         if (std::max(max_heuristic, uint8_t(Settings::GetTBDepth()+1)) + cur_depth + 1 >= depth - 3 &&
             depth - cur_depth - 1 - Settings::GetTBDepth() < 16 &&  // fits in the rotation registers
-            cur_depth + 1 > 5 &&  // more than 5 moves need to be already made
+            cur_depth + 1 > 4 &&  // more than 5 moves need to be already made
             depth - cur_depth - 1 - Settings::GetTBDepth() < 10) { // this value can be tweeked to have more cpu calculation needed
 
             local_buffer->push_back({next_state, cur_depth + 1});

@@ -39,7 +39,7 @@ int Settings::num_parallel_batches;             // automatic detection
 int Settings::tt_size = 1000;   // 1 GB         // NOLINT
 
 // tablebase
-int Settings::tb_depth = 6;                     // NOLINT
+int Settings::tb_depth = 7;                     // NOLINT
 
 
 static struct option long_options[] = {
@@ -188,7 +188,7 @@ void Settings::SetDefault (std::vector<std::string>& arguments) {
     // TEST: to get better time
     #ifdef USE_CUDA
     // only the first device gets checked
-    num_gputhreads = (GetThreadsPerDevice(0) / kBlockDim / 4) * kBlockDim;
+    num_gputhreads = (GetThreadsPerDevice(0) / kBlockDim / 2) * kBlockDim;
     #else
     num_gputhreads = 0;
     #endif  // USE_CUDA
