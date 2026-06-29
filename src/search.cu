@@ -109,8 +109,7 @@ __global__ void DeviceLeafSearch (const uint8_t* d_starting_depths,
 
 
     // make a constant number of position during each kernal function call
-    // this could be way to high
-    constexpr int kNumPosBatchSize = 1000;
+    constexpr int kNumPosBatchSize = 200;
     for (int cur_pos_batch = 0; cur_pos_batch < kNumPosBatchSize; cur_pos_batch++) {
         // the goal is to search further in the dfs (from the leaf position) and stop if an improvement to the best_depth is not posible any more
         // for each loop cycle it will look at a new position or undo the move it has done during the dfs.
