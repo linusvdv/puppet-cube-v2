@@ -85,9 +85,6 @@ public:
     static int GetNumThreads() {
         return num_threads;
     }
-    static int GetNumGPUUploadThreads() {
-        return num_gpu_upload_threads;
-    }
     static int GetNumGPUThreads() {
         return num_gputhreads;
     }

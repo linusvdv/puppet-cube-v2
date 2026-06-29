@@ -200,7 +200,7 @@ __global__ void DeviceLeafSearch (const uint8_t* d_starting_depths,
         // not possible with the current tablebase
         if (tb_depth+1 + reg_rotations.idx + starting_depth >= cur_depth) {
             rotations |= (1ULL<<(2*kNumRot))-1;
-            RotationsSet(reg_rotations, 18);
+            RotationsSet(reg_rotations, (uint8_t)(kNumRot));
         }
     }
 
@@ -301,7 +301,6 @@ __global__ void SplitMixStates (RegRotations* d_reg_rotations, State* d_state, u
 
     // get to the position where you should split
     while (true) {
-        uint8_t temp_rotations = RotationsAt(reg_rotations);
         RotationsSet(reg_rotations, 0);
         reg_rotations.idx--;
         uint8_t cur_rotation = RotationsAt(reg_rotations)-1;
@@ -365,8 +364,12 @@ __global__ void SplitMixStates (RegRotations* d_reg_rotations, State* d_state, u
 
 
 // device memory only
-__global__ void MemInitialization(RegRotations* d_reg_rotations, State* d_state, uint8_t* d_starting_depths, DeviceSolution* d_device_solution, uint64_t* d_num_position_threads, int32_t* d_atomic_offset_idx, int32_t* d_num_reg_states, int32_t* d_free_splitmix_idx,
-                             bool* d_possible_splitmix_idx, int32_t* d_atomic_splitmix) {
+__global__ void MemInitialization(RegRotations* d_reg_rotations, State* d_state, uint8_t* d_starting_depths,
+        DeviceSolution* d_device_solution, uint64_t* d_num_position_threads, int32_t* d_atomic_offset_idx,
+        int32_t* d_num_reg_states, int32_t* d_free_splitmix_idx,
+        bool* d_possible_splitmix_idx, int32_t* d_atomic_splitmix,
+        int32_t* d_pos_queue_idx, int32_t* d_pos_queue_num_elements,
+        std::pair<State, uint8_t>* d_position_queue) {
     // get current leaf thread idx
     uint32_t index = threadIdx.x + (blockIdx.x * blockDim.x);
     if (index >= num_gpu_threads) {
@@ -378,6 +381,8 @@ __global__ void MemInitialization(RegRotations* d_reg_rotations, State* d_state,
         *d_atomic_offset_idx = 0;
         *d_num_reg_states = 0;
         *d_atomic_splitmix = 0;
+        *d_pos_queue_idx = 0;
+        *d_pos_queue_num_elements = 0;
     }
 
     d_reg_rotations[index] = kDefaultRegRotations;
@@ -386,6 +391,8 @@ __global__ void MemInitialization(RegRotations* d_reg_rotations, State* d_state,
     d_num_position_threads[index] = 0;
     d_free_splitmix_idx[index] = 0;
     d_possible_splitmix_idx[index] = false;
+    d_position_queue[index].first = kNonLegalState;
+    d_position_queue[index].second = -1;
 }
 
 
@@ -479,17 +486,117 @@ void UploadBatchesToDevice (SharedLeafStates& shared_leaf_states,
 }
 
 
-void DeviceLeafManager (std::atomic<bool>& stoken, SharedLeafStates& shared_leaf_states,
-                        SharedLeafSolution& shared_leaf_solution, uint64_t& num_gpu_positions, const int& thread_idx, uint8_t current_depth, int current_scramble) {
+void DeviceLeafManager (int gpu_idx, SharedSearch& shared_search, SharedLeafStates& shared_leaf_states, SharedLeafSolution& shared_leaf_solution,
+        cudaStream_t& cuda_stream,
+        size_t& grid_dim,
+        RegRotations* d_reg_rotations,
+        State* d_states,
+        uint8_t* d_starting_depths,
+        int32_t* d_atomic_offset_idx,
+        int32_t* d_free_splitmix_idx,
+        bool* d_possible_splitmix_idx,
+        int32_t* d_atomic_splitmix,
+        uint64_t* d_num_position_threads,
+        DeviceSolution& device_solution,
+        DeviceSolution* d_device_solution,
+        int32_t& num_reg_states,
+        int32_t* d_num_reg_states,
+        int32_t& pos_queue_idx,
+        int32_t* d_pos_queue_idx,
+        int32_t& pos_queue_num_elements,
+        int32_t* d_pos_queue_num_elements,
+        std::vector<std::pair<State, uint8_t>>& position_queue,
+        std::pair<State, uint8_t>* d_position_queue,
+        uint64_t* d_total_num_position_threads,
+        void* d_temp,
+        size_t& num_temp_bytes) {
+    while (true) {
+        shared_search.start_work->arrive_and_wait();
+        // stopping of the program
+        if (shared_search.finished.load()) {
+            break;
+        }
+
+        // get data from main thread
+        uint8_t solution_depth = shared_leaf_states.depth;
+        MemcpyToSymbolStream(solution_depth, cur_depth, cuda_stream);
+        int scramble_idx = shared_leaf_states.scramble_idx;
+        if (gpu_idx == 0) {
+            nvtxMark(("Cube " + std::to_string(scramble_idx) + " depth " + std::to_string(solution_depth)).c_str());
+        }
+
+        // resetting everything
+        MemInitialization<<<grid_dim, kBlockDim, 0, cuda_stream>>>(d_reg_rotations, d_states, d_starting_depths, d_device_solution, d_num_position_threads, d_atomic_offset_idx, d_num_reg_states, d_free_splitmix_idx, d_possible_splitmix_idx, d_atomic_splitmix, d_pos_queue_idx, d_pos_queue_num_elements, d_position_queue);
+        num_reg_states = 0;
+        pos_queue_idx = 0;
+        pos_queue_num_elements = 0;
+        device_solution = DeviceSolution();
+        std::fill(position_queue.begin(), position_queue.end(), std::make_pair(kNonLegalState, uint8_t(-1)));
+
+        // local buffer
+        LocalBuffer local_buffer = std::make_shared<std::vector<std::pair<State, uint8_t>>>();;
+        size_t local_buffer_idx = 0;
+
+        while (local_buffer_idx != local_buffer->size() || pos_queue_num_elements != 0 || !shared_leaf_states.finished_depth.load() || num_reg_states != 0) {
+            GetNewStates<<<grid_dim, kBlockDim, 0, cuda_stream>>>(d_position_queue, d_pos_queue_idx, d_pos_queue_num_elements, d_atomic_offset_idx, d_free_splitmix_idx, d_possible_splitmix_idx, d_starting_depths, d_states, d_reg_rotations);
+            PostGetNewStates<<<1, 1, 0, cuda_stream>>>(d_pos_queue_idx, d_pos_queue_num_elements, d_atomic_offset_idx, d_num_reg_states, d_atomic_splitmix);
+            SplitMixStates<<<grid_dim, kBlockDim, 0, cuda_stream>>>(d_reg_rotations, d_states, d_starting_depths, d_possible_splitmix_idx, d_free_splitmix_idx, d_num_reg_states, d_atomic_splitmix);
+            MemcpyFromDeviceStream(pos_queue_idx, d_pos_queue_idx, cuda_stream);
+            MemcpyFromDeviceStream(pos_queue_num_elements, d_pos_queue_num_elements, cuda_stream);
+            MemcpyFromDeviceStream(device_solution, d_device_solution, cuda_stream);
+            MemcpyFromDeviceStream(num_reg_states, d_num_reg_states, cuda_stream);
+            cudaStreamSynchronize(cuda_stream);
+            DeviceLeafSearch<<<grid_dim, kBlockDim, 0, cuda_stream>>>(d_starting_depths, d_states, d_reg_rotations, d_device_solution, d_num_position_threads);
+            UploadBatchesToDevice(shared_leaf_states, local_buffer, local_buffer_idx, position_queue, pos_queue_idx, pos_queue_num_elements, d_pos_queue_idx, d_pos_queue_num_elements, d_position_queue, cuda_stream);
+            if (shared_leaf_solution.finished.load(std::memory_order_acquire)) {
+                break;
+            }
+            if (bool(device_solution.flag)) {
+                break;
+            }
+        }
+        MemcpyFromDeviceStream(device_solution, d_device_solution, cuda_stream);
+        cudaStreamSynchronize(cuda_stream);
+        if (bool(device_solution.flag)) {
+            bool expected = false;
+            if (shared_leaf_solution.finished.compare_exchange_strong(expected, true, std::memory_order_acq_rel, std::memory_order_acquire)) {
+                State state = device_solution.state;
+                shared_leaf_solution.state = state;
+                RegRotations reg_rotations = device_solution.reg_rotations;
+                while (true) {
+                    transposition_table::Insert<true>(state, solution_depth-Settings::GetTBDepth()-1);
+                    reg_rotations.idx--;
+                    solution_depth--;
+                    if (reg_rotations.idx == -1) {
+                        break;
+                    }
+                    uint8_t rotation = GetRevRotation(RotationsAt(reg_rotations)-1);
+                    corner::Rotate(state.corner_pos, state.corner_orient, rotation);
+                    edge::Rotate(state.edge_pos, state.edge_sym, state.edge_orient, rotation);
+                }
+                shared_leaf_states.cv.notify_all();
+            };
+        }
+
+        // accumulate num_positions
+        uint64_t total_num_position_threads = 0;
+        cub::DeviceReduce::Sum(d_temp, num_temp_bytes, d_num_position_threads, d_total_num_position_threads, Settings::GetNumGPUThreads(), cuda_stream);
+        MemcpyFromDeviceStream(total_num_position_threads, d_total_num_position_threads, cuda_stream);
+        cudaStreamSynchronize(cuda_stream);
+        shared_search.leaf_cnt.fetch_add(total_num_position_threads);
+
+        // finished
+        shared_search.done_work->arrive_and_wait();
+    }
+}
+
+
+void DeviceLeafManagerInit (int gpu_idx, SharedSearch& shared_search,
+        SharedLeafStates& shared_leaf_states, SharedLeafSolution& shared_leaf_solution) {
     // set the device for this thread
-    int gpu_device_idx = thread_idx % Settings::GetDeviceCount();
-    cudaError_t err = cudaSetDevice(gpu_device_idx);
+    cudaError_t err = cudaSetDevice(gpu_idx);
     if (err != cudaSuccess) {
         LOG_CRITICAL(cudaGetErrorString(err));
-    }
-
-    if (thread_idx == 0) {
-        nvtxMark(("Cube " + std::to_string(current_scramble) + " depth " + std::to_string(current_depth)).c_str());
     }
 
     size_t grid_dim = ((Settings::GetNumGPUThreads()-1)/kBlockDim)+1;
@@ -523,77 +630,25 @@ void DeviceLeafManager (std::atomic<bool>& stoken, SharedLeafStates& shared_leaf
     DeviceSolution* d_device_solution;
     MallocOnDeviceStream(d_device_solution, 1, cuda_stream);
     HostRegister(device_solution);
-    int32_t num_reg_states = 0;
+    int32_t num_reg_states;
     int32_t* d_num_reg_states;
     MallocOnDeviceStream(d_num_reg_states, 1, cuda_stream);
     HostRegister(num_reg_states);
 
-    MemInitialization<<<grid_dim, kBlockDim, 0, cuda_stream>>>(d_reg_rotations, d_states, d_starting_depths, d_device_solution, d_num_position_threads, d_atomic_offset_idx, d_num_reg_states, d_free_splitmix_idx, d_possible_splitmix_idx, d_atomic_splitmix);
-
     // circular queue with Settings::GetNumGPUThreads elements
-    int32_t pos_queue_idx = 0;
+    int32_t pos_queue_idx;
     int32_t* d_pos_queue_idx;
-    int32_t pos_queue_num_elements = 0;
+    int32_t pos_queue_num_elements;
     int32_t* d_pos_queue_num_elements;
-    std::vector<std::pair<State, uint8_t>> position_queue(Settings::GetNumGPUThreads(), {State(), -1});
+    std::vector<std::pair<State, uint8_t>> position_queue(Settings::GetNumGPUThreads());
     std::pair<State, uint8_t>* d_position_queue;
     MallocOnDeviceStream(d_position_queue, Settings::GetNumGPUThreads(), cuda_stream);
     HostRegister(position_queue);
     HostRegister(pos_queue_idx);
     HostRegister(pos_queue_num_elements);
     MallocOnDeviceStream(d_pos_queue_idx, 1, cuda_stream);
-    MemcpyToDeviceStream(pos_queue_idx, d_pos_queue_idx, cuda_stream);
     MallocOnDeviceStream(d_pos_queue_num_elements, 1, cuda_stream);
-    MemcpyToDeviceStream(pos_queue_num_elements, d_pos_queue_num_elements, cuda_stream);
 
-
-    // local buffer
-    LocalBuffer local_buffer = std::make_shared<std::vector<std::pair<State, uint8_t>>>();;
-    size_t local_buffer_idx = 0;
-
-    while (local_buffer_idx != local_buffer->size() || pos_queue_num_elements != 0 || !stoken || num_reg_states != 0) {
-        GetNewStates<<<grid_dim, kBlockDim, 0, cuda_stream>>>(d_position_queue, d_pos_queue_idx, d_pos_queue_num_elements, d_atomic_offset_idx, d_free_splitmix_idx, d_possible_splitmix_idx, d_starting_depths, d_states, d_reg_rotations);
-        PostGetNewStates<<<1, 1, 0, cuda_stream>>>(d_pos_queue_idx, d_pos_queue_num_elements, d_atomic_offset_idx, d_num_reg_states, d_atomic_splitmix);
-        SplitMixStates<<<grid_dim, kBlockDim, 0, cuda_stream>>>(d_reg_rotations, d_states, d_starting_depths, d_possible_splitmix_idx, d_free_splitmix_idx, d_num_reg_states, d_atomic_splitmix);
-        MemcpyFromDeviceStream(pos_queue_idx, d_pos_queue_idx, cuda_stream);
-        MemcpyFromDeviceStream(pos_queue_num_elements, d_pos_queue_num_elements, cuda_stream);
-        MemcpyFromDeviceStream(device_solution, d_device_solution, cuda_stream);
-        MemcpyFromDeviceStream(num_reg_states, d_num_reg_states, cuda_stream);
-        cudaStreamSynchronize(cuda_stream);
-        DeviceLeafSearch<<<grid_dim, kBlockDim, 0, cuda_stream>>>(d_starting_depths, d_states, d_reg_rotations, d_device_solution, d_num_position_threads);
-        UploadBatchesToDevice(shared_leaf_states, local_buffer, local_buffer_idx, position_queue, pos_queue_idx, pos_queue_num_elements, d_pos_queue_idx, d_pos_queue_num_elements, d_position_queue, cuda_stream);
-        if (shared_leaf_solution.finished.load(std::memory_order_acquire)) {
-            break;
-        }
-        if (bool(device_solution.flag)) {
-            break;
-        }
-    }
-    MemcpyFromDeviceStream(device_solution, d_device_solution, cuda_stream);
-    cudaStreamSynchronize(cuda_stream);
-    if (bool(device_solution.flag)) {
-        bool expected = false;
-        if (shared_leaf_solution.finished.compare_exchange_strong(expected, true, std::memory_order_acq_rel, std::memory_order_acquire)) {
-            State state = device_solution.state;
-            shared_leaf_solution.state = state;
-            RegRotations reg_rotations = device_solution.reg_rotations;
-            while (true) {
-                transposition_table::Insert<true>(state, current_depth-Settings::GetTBDepth()-1);
-                reg_rotations.idx--;
-                current_depth--;
-                if (reg_rotations.idx == -1) {
-                    break;
-                }
-                uint8_t rotation = GetRevRotation(RotationsAt(reg_rotations)-1);
-                corner::Rotate(state.corner_pos, state.corner_orient, rotation);
-                edge::Rotate(state.edge_pos, state.edge_sym, state.edge_orient, rotation);
-            }
-            shared_leaf_states.cv.notify_all();
-        };
-    }
-
-    // accumulate num_positions
-    uint64_t total_num_position_threads = 0;
     uint64_t* d_total_num_position_threads;
     MallocOnDeviceStream(d_total_num_position_threads, 1, cuda_stream);
     void* d_temp = nullptr;
@@ -603,11 +658,13 @@ void DeviceLeafManager (std::atomic<bool>& stoken, SharedLeafStates& shared_leaf
     if (err != cudaSuccess) {
         LOG_CRITICAL(cudaGetErrorString(err));
     }
-    cub::DeviceReduce::Sum(d_temp, num_temp_bytes, d_num_position_threads, d_total_num_position_threads, Settings::GetNumGPUThreads(), cuda_stream);
-    MemcpyFromDeviceStream(total_num_position_threads, d_total_num_position_threads, cuda_stream);
+
+    DeviceLeafManager(gpu_idx, shared_search, shared_leaf_states, shared_leaf_solution, cuda_stream, grid_dim, d_reg_rotations, d_states,
+            d_starting_depths, d_atomic_offset_idx, d_free_splitmix_idx, d_possible_splitmix_idx, d_atomic_splitmix, d_num_position_threads,
+            device_solution, d_device_solution, num_reg_states, d_num_reg_states, pos_queue_idx, d_pos_queue_idx, pos_queue_num_elements,
+            d_pos_queue_num_elements, position_queue, d_position_queue, d_total_num_position_threads, d_temp, num_temp_bytes);
+
     FreeCudaPointerStream(d_temp, cuda_stream);
-    cudaStreamSynchronize(cuda_stream);
-    num_gpu_positions += total_num_position_threads;
 
     cudaHostUnregister(&device_solution);
     cudaHostUnregister(&num_reg_states);

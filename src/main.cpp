@@ -54,14 +54,16 @@ int main(int argc, char *argv[]) {
     LOG_INFO("Loaded Precomputation");
 
     #ifdef USE_CUDA
-    LOG_EXTRA("Start Edge Precomputation Uploading to Device");
-    edge::UploadPrecomputationToDevice();
-    LOG_EXTRA("Start Corner Precomputation Uploading to Device");
-    corner::UploadPrecomputationToDevice();
-    LOG_EXTRA("Start Tablebase Precomputation Uploading to Device");
-    tablebase::UploadPrecomputationToDevice();
-    LOG_INFO("Precomputation Uploaded to Device");
-    LOG_MEMORY();
+    if (Settings::UseCuda()) {
+        LOG_EXTRA("Start Edge Precomputation Uploading to Device");
+        edge::UploadPrecomputationToDevice();
+        LOG_EXTRA("Start Corner Precomputation Uploading to Device");
+        corner::UploadPrecomputationToDevice();
+        LOG_EXTRA("Start Tablebase Precomputation Uploading to Device");
+        tablebase::UploadPrecomputationToDevice();
+        LOG_INFO("Precomputation Uploaded to Device");
+        LOG_MEMORY();
+    }
     #endif // USE_CUDA
 
     LOG_EXTRA("Start Transposition Table Initialization");

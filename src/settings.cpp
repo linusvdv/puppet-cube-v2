@@ -32,7 +32,6 @@ int Settings::min_corner_heuristic = 0;
 
 // search
 int Settings::num_threads;                      // automatic detection
-int Settings::num_gpu_upload_threads;           // automatic detection
 int Settings::num_gputhreads;                   // automatic detection
 int Settings::num_positions_per_batch = 1000;   // NOLINT
 int Settings::num_parallel_batches;             // automatic detection
@@ -183,7 +182,6 @@ void Settings::SetDefault (std::vector<std::string>& arguments) {
     #endif  // USE_CUDA
 
     num_threads = std::thread::hardware_concurrency();
-    num_gpu_upload_threads = device_count;
 
     // TEST: to get better time
     #ifdef USE_CUDA
