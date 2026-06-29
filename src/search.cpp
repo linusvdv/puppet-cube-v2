@@ -288,7 +288,6 @@ void BaseSearchManager (
         // wait until queue is empty
         {
             std::unique_lock<std::mutex> lock(shared_leaf_states.mtx);
-            shared_leaf_states.finished_depth.store(true);
             shared_leaf_states.cv.wait(lock, [&] {
                 return shared_leaf_states.shared_ptrs.empty() || shared_leaf_solution.finished.load(std::memory_order_acquire);
             });
@@ -296,6 +295,7 @@ void BaseSearchManager (
         LOG_EXTRA("start with finishing search");
 
         // finished search
+        shared_leaf_states.finished_depth.store(true);
         shared_search.done_work->arrive_and_wait();
         shared_leaf_states.finished_depth.store(false);
 
