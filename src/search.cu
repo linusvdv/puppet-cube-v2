@@ -563,7 +563,7 @@ void DeviceLeafManager (int gpu_idx, SharedSearch& shared_search, SharedLeafStat
                 shared_leaf_solution.state = state;
                 RegRotations reg_rotations = device_solution.reg_rotations;
                 while (true) {
-                    transposition_table::Insert<true>(state, solution_depth-Settings::GetTBDepth()-1);
+                    transposition_table::Insert<true>(state, 2*(solution_depth-Settings::GetTBDepth()-1));
                     reg_rotations.idx--;
                     solution_depth--;
                     if (reg_rotations.idx == -1) {

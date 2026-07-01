@@ -70,7 +70,7 @@ void SolutionSearch(std::vector<Rotations>& search_rotations, int depth, State s
             State next_state = cur_state;
             corner::Rotate(next_state.corner_pos, next_state.corner_orient, rotation);
             edge::Rotate(next_state.edge_pos, next_state.edge_sym, next_state.edge_orient, rotation);
-            transposition_table::InTT in_tt = transposition_table::Contains(next_state, depth-1);
+            transposition_table::InTT in_tt = transposition_table::Contains(next_state, 2*(depth-1));
             if (in_tt == transposition_table::InTT::kFalse) {
                 continue;
             }
@@ -145,7 +145,7 @@ void DFSNextFrontierSearch (const State& state, Frontier& next_frontier,
 
         // already visited
         // if not insert this position
-        if (transposition_table::Contains(next_state, cur_depth+1) == transposition_table::InTT::kTrue) {
+        if (transposition_table::Contains(next_state, 2*(cur_depth+1)) == transposition_table::InTT::kTrue) {
             continue;
         }
 
@@ -176,6 +176,10 @@ void DFSNextFrontierSearch (const State& state, Frontier& next_frontier,
             depth - cur_depth - 1 - Settings::GetTBDepth() < 16 &&  // fits in the rotation registers
             cur_depth + 1 > 4 &&  // more than 5 moves need to be already made
             depth - cur_depth - 1 - Settings::GetTBDepth() < 10) { // this value can be tweeked to have more cpu calculation needed
+            if (transposition_table::Contains(next_state, (2*cur_depth)+3) == transposition_table::InTT::kTrue) {
+                continue;
+            }
+            transposition_table::Insert(next_state, (2*cur_depth)+3);
 
             local_buffer->push_back({next_state, cur_depth + 1});
 
@@ -194,7 +198,7 @@ void DFSNextFrontierSearch (const State& state, Frontier& next_frontier,
         }
 
         // insert into visited_search
-        transposition_table::Insert(next_state, cur_depth+1);
+        transposition_table::Insert(next_state, 2*(cur_depth+1));
 
 
         // Do further DFS
