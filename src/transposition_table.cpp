@@ -8,7 +8,7 @@
 
 namespace transposition_table {
 std::vector<std::atomic<uint64_t>> tt; // NOLINT
-
+std::vector<std::atomic<uint64_t>> tt_leaf; // NOLINT
 
 void Clear() {
     std::fill(
@@ -16,11 +16,21 @@ void Clear() {
         reinterpret_cast<uint64_t*>(tt.data()+tt.size()),
         kDefaultTTEntry
     );
+    std::fill(
+        reinterpret_cast<uint64_t*>(tt_leaf.data()),
+        reinterpret_cast<uint64_t*>(tt_leaf.data()+tt_leaf.size()),
+        kDefaultTTEntry
+    );
 }
 void Clear(size_t thread_idx, size_t num_threads) {
     std::fill(
         reinterpret_cast<uint64_t*>(tt.data() + (tt.size()*(thread_idx)/num_threads)),
         reinterpret_cast<uint64_t*>(tt.data() + (tt.size()*(thread_idx+1)/num_threads)),
+        kDefaultTTEntry
+    );
+    std::fill(
+        reinterpret_cast<uint64_t*>(tt_leaf.data() + (tt_leaf.size()*(thread_idx)/num_threads)),
+        reinterpret_cast<uint64_t*>(tt_leaf.data() + (tt_leaf.size()*(thread_idx+1)/num_threads)),
         kDefaultTTEntry
     );
 }
@@ -37,6 +47,7 @@ void Init() {
     // the number of elements has to have 8 zeros at the end
     num_elements &= ~uint64_t((1ULL<<8) - 1);
     std::vector<std::atomic<uint64_t>>(num_elements).swap(tt);
+    std::vector<std::atomic<uint64_t>>(num_elements).swap(tt_leaf);
     Clear();
 }
 

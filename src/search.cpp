@@ -28,6 +28,7 @@
 using Frontier = std::vector<std::vector<std::vector<std::pair<State, uint8_t>>>>;
 constexpr int kNumHeuristicLayers = 60;
 
+std::map<State, uint8_t> upload_to_leaf_map;
 
 
 void SolutionTB(std::vector<Rotations>& tb_rotations, int tb_layer, State state) {
@@ -176,10 +177,9 @@ void DFSNextFrontierSearch (const State& state, Frontier& next_frontier,
             depth - cur_depth - 1 - Settings::GetTBDepth() < 16 &&  // fits in the rotation registers
             cur_depth + 1 > 4 &&  // more than 5 moves need to be already made
             depth - cur_depth - 1 - Settings::GetTBDepth() < 10) { // this value can be tweeked to have more cpu calculation needed
-            if (transposition_table::Contains(next_state, (2*cur_depth)+3) == transposition_table::InTT::kTrue) {
+            if (transposition_table::InsertLeaf(next_state, depth - cur_depth)) {
                 continue;
             }
-            transposition_table::Insert(next_state, (2*cur_depth)+3);
 
             local_buffer->push_back({next_state, cur_depth + 1});
 
@@ -276,7 +276,7 @@ void BaseSearchManager (
     cur_frontier[0][0].push_back({state, 0});
 
     shared_leaf_states.scramble_idx = scramble_idx;
-    for (; true; solution_depth++) {
+    for (; solution_depth < 254; solution_depth++) {
         shared_leaf_states.depth = solution_depth;
         shared_search.start_work->arrive_and_wait();
         LOG_EXTRA("Start with depth", solution_depth);
@@ -380,6 +380,7 @@ void SearchManager () {
         // Transposition Table
         search_thread_pool.Run([](size_t thread_id){transposition_table::Clear(thread_id, Settings::GetNumThreads());});
         transposition_table::Insert(random_positions[idx], 0);
+        upload_to_leaf_map.clear();
 
         // Search
         uint8_t solution_depth = 0;
