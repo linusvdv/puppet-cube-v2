@@ -58,7 +58,8 @@ list of options
     -m --min_corner_heuristic  all starting position have at least this corner heuristic  [0]            (0, 27)
 
     -t --threads               number of threads used in the program                      [MAX_THREADS]  (1, MAX_THREADS)
-    --tt_size                  size of the transposition table in MB                      [1000]         (128, 1000000)
+    --tt_size                  size of the transposition table in MB                      [1000]         (1, 1000000)
+    --tt_device_size           size of the device transposition table in MB               [128]          (1, 1000000)
 
-    --tb_depth                 depth of the tablebase (9 uses 40 GB RAM)                  [6]            (0, 9)
+    --tb_depth                 depth of the tablebase (9 uses 24 GB RAM)                  [6]            (0, 9)
 ```

@@ -26,6 +26,7 @@
 #include "search_bridge.hpp"
 #include "tablebase.cuh"
 #include "transposition_table.hpp"
+#include "transposition_table.cuh"
 
 
 constexpr RegRotations kDefaultRegRotations = RegRotations();
@@ -62,6 +63,10 @@ __global__ void DeviceLeafSearch (const uint8_t* d_starting_depths,
                                   RegRotations* d_reg_rotations,
                                   DeviceSolution* d_device_solution,
                                   uint64_t* d_num_position_threads) {
+    if (bool(d_device_solution->flag)) { // already solution
+        return;
+    }
+
     // get current leaf thread idx
     uint32_t index = threadIdx.x + (blockIdx.x * blockDim.x);
     if (index >= num_gpu_threads) {
@@ -107,6 +112,10 @@ __global__ void DeviceLeafSearch (const uint8_t* d_starting_depths,
     uint8_t rotation = RotationsAt(reg_rotations);
     rotations |= (1ULL<<(2*rotation))-1;
 
+    if (reg_rotations.idx == 0 && cuda::std::countr_one(rotations) == 0 && transposition_table::DInsert(state, cur_depth - (reg_rotations.idx + starting_depth))) {
+        rotations |= (1ULL<<(2*kNumRot))-1;
+        RotationsSet(reg_rotations, (uint8_t)(kNumRot));
+    }
 
     // make a constant number of position during each kernal function call
     constexpr int kNumPosBatchSize = 200;
@@ -200,6 +209,14 @@ __global__ void DeviceLeafSearch (const uint8_t* d_starting_depths,
         if (tb_depth+1 + reg_rotations.idx + starting_depth >= cur_depth) {
             rotations |= (1ULL<<(2*kNumRot))-1;
             RotationsSet(reg_rotations, (uint8_t)(kNumRot));
+            continue;
+        }
+
+        // already in tt
+        if (transposition_table::DInsert(state, cur_depth - (reg_rotations.idx + starting_depth))) {
+            rotations |= (1ULL<<(2*kNumRot))-1;
+            RotationsSet(reg_rotations, (uint8_t)(kNumRot));
+            continue;
         }
     }
 
@@ -362,6 +379,28 @@ __global__ void SplitMixStates (RegRotations* d_reg_rotations, State* d_state, u
 }
 
 
+__global__ void TTEraseUnfinished(State* d_states, RegRotations* d_reg_rotations) {
+    uint32_t index = threadIdx.x + (blockIdx.x * blockDim.x);
+    if (index >= num_gpu_threads) {
+        return;
+    }
+    State state = d_states[index];
+    if (state.edge_pos == (uint32_t)-1) {
+        return;
+    }
+    transposition_table::DErase(state);
+    RegRotations reg_rotations = d_reg_rotations[index];
+    while (reg_rotations.idx > 0) {
+        reg_rotations.idx--;
+        uint8_t rotation = RotationsAt(reg_rotations)-1;
+        DRevRotation(rotation);
+        corner::DRotate(state.corner_pos, state.corner_orient, rotation);
+        edge::DRotate(state.edge_pos, state.edge_sym, state.edge_orient, rotation);
+        transposition_table::DErase(state);
+    }
+}
+
+
 // device memory only
 __global__ void MemInitialization(RegRotations* d_reg_rotations, State* d_state, uint8_t* d_starting_depths,
         DeviceSolution* d_device_solution, uint64_t* d_num_position_threads, int32_t* d_atomic_offset_idx,
@@ -509,6 +548,7 @@ void DeviceLeafManager (int gpu_idx, SharedSearch& shared_search, SharedLeafStat
         uint64_t* d_total_num_position_threads,
         void* d_temp,
         size_t& num_temp_bytes) {
+    int last_scramble_idx = -1;
     while (true) {
         shared_search.start_work->arrive_and_wait();
         // stopping of the program
@@ -522,6 +562,12 @@ void DeviceLeafManager (int gpu_idx, SharedSearch& shared_search, SharedLeafStat
         int scramble_idx = shared_leaf_states.scramble_idx;
         if (gpu_idx == 0) {
             nvtxMark(("Cube " + std::to_string(scramble_idx) + " depth " + std::to_string(solution_depth)).c_str());
+        }
+
+        if (last_scramble_idx != scramble_idx) {
+            last_scramble_idx = scramble_idx;
+            // reset tt
+            // transposition_table::ClearD(cuda_stream);
         }
 
         // resetting everything
@@ -557,6 +603,7 @@ void DeviceLeafManager (int gpu_idx, SharedSearch& shared_search, SharedLeafStat
         MemcpyFromDeviceStream(device_solution, d_device_solution, cuda_stream);
         cudaStreamSynchronize(cuda_stream);
         if (bool(device_solution.flag)) {
+            TTEraseUnfinished<<<grid_dim, kBlockDim, 0, cuda_stream>>>(d_states, d_reg_rotations);
             bool expected = false;
             if (shared_leaf_solution.finished.compare_exchange_strong(expected, true, std::memory_order_acq_rel, std::memory_order_acquire)) {
                 State state = device_solution.state;
@@ -603,6 +650,10 @@ void DeviceLeafManagerInit (int gpu_idx, SharedSearch& shared_search,
     // create stream
     cudaStream_t cuda_stream;
     cudaStreamCreate(&cuda_stream);
+
+    // Transposition Table device
+    transposition_table::InitDevice(cuda_stream);
+    transposition_table::ClearD(cuda_stream);
 
     // device memory only
     RegRotations* d_reg_rotations;
@@ -662,6 +713,9 @@ void DeviceLeafManagerInit (int gpu_idx, SharedSearch& shared_search,
             d_starting_depths, d_atomic_offset_idx, d_free_splitmix_idx, d_possible_splitmix_idx, d_atomic_splitmix, d_num_position_threads,
             device_solution, d_device_solution, num_reg_states, d_num_reg_states, pos_queue_idx, d_pos_queue_idx, pos_queue_num_elements,
             d_pos_queue_num_elements, position_queue, d_position_queue, d_total_num_position_threads, d_temp, num_temp_bytes);
+
+
+    transposition_table::FreeDevice(cuda_stream);
 
     FreeCudaPointerStream(d_temp, cuda_stream);
 

@@ -36,6 +36,7 @@ private:
     static int num_parallel_batches;
     // size of the transposition table in MB
     static int tt_size;
+    static int tt_device_size;
 
     // tablebase
     static int tb_depth;
@@ -96,6 +97,9 @@ public:
     }
     static int GetTTSize() {
         return tt_size;
+    }
+    static int GetTTDeviceSize() {
+        return tt_device_size;
     }
 
     // tablebase

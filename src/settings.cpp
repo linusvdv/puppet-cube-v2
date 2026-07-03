@@ -35,7 +35,8 @@ int Settings::num_threads;                      // automatic detection
 int Settings::num_gputhreads;                   // automatic detection
 int Settings::num_positions_per_batch = 1000;   // NOLINT
 int Settings::num_parallel_batches;             // automatic detection
-int Settings::tt_size = 1000;   // 1 GB         // NOLINT
+int Settings::tt_size = 1024;   // 1 GB         // NOLINT
+int Settings::tt_device_size = 128;             // NOLINT
 
 // tablebase
 int Settings::tb_depth = 7;                     // NOLINT
@@ -60,6 +61,7 @@ static struct option long_options[] = {
     // search
     {"threads", required_argument, NULL, 't'},
     {"tt_size", required_argument, NULL, 0},
+    {"tt_device_size", required_argument, NULL, 0},
 
     // tablebase
     {"tb_depth", required_argument, NULL, 0},
@@ -90,9 +92,10 @@ list of options
     -m --min_corner_heuristic  all starting position have at least this corner heuristic  [0]            (0, 27)
 
     -t --threads               number of threads used in the program                      [MAX_THREADS]  (1, MAX_THREADS)
-    --tt_size                  size of the transposition table in MB                      [1000]         (128, 1000000)
+    --tt_size                  size of the transposition table in MB                      [1000]         (1, 1000000)
+    --tt_device_size           size of the device transposition table in MB               [128]          (1, 1000000)
 
-    --tb_depth                 depth of the tablebase (9 uses 40 GB RAM)                  [6]            (0, 9)
+    --tb_depth                 depth of the tablebase (9 uses 24 GB RAM)                  [6]            (0, 9)
 )";
 
 
@@ -267,6 +270,10 @@ Settings::Settings (int argc, char *argv[]) {
 
                 if (std::string(long_options[option_index].name) == "tt_size") {
                     GetTFromOptarg(tt_size, 1, 1000000, "TT SIZE"); // NOLINT
+                }
+
+                if (std::string(long_options[option_index].name) == "tt_device_size") {
+                    GetTFromOptarg(tt_device_size, 1, 1000000, "TT DEVICE SIZE"); // NOLINT
                 }
 
                 if (std::string(long_options[option_index].name) == "tb_depth") {
