@@ -1,15 +1,26 @@
-# puppet-cube-v2
+# Puppet Cube V2
 
 [PuppetCubeV2.webm](https://github.com/user-attachments/assets/a0779cad-28bf-48d4-9e59-f1440ea8e9c0)
 
 <!--toc:start-->
-- [puppet-cube-v2](#puppet-cube-v2)
-  - [Abstract](#abstract)
+- [Puppet Cube V2](#puppet-cube-v2)
+  - [About this project](#about-this-project)
+  - [Abstract of the matura thesis](#abstract-of-the-matura-thesis)
   - [Compilation](#compilation)
   - [Help](#help)
 <!--toc:end-->
 
-## Abstract
+## About this project
+
+This project started as a matura thesis, a graded project at the end of my Gymnasium (high school). The Puppet Cube V2 is a shapeshifting variant of the Rubik's Cube. The program consists of two main parts: 3D rendering of the cube and solution finding with the help of a search. It quickly finds short solutions to randomly scrambled cubes and improves them with additional search time. Given enough time and memory, this implementation can even prove a solution optimal, i.e. shortest possible. The state of the project from the matura thesis can be found at release [tag v1.0](https://github.com/linusvdv/puppet-cube-v2/tree/v1.0).
+
+The following year was spent redesigning the project from the ground up, and the result can be found at [tag v2.0](https://github.com/linusvdv/puppet-cube-v2/tree/v2.0). Further breakthroughs in the heuristic algorithms were found, and GPU acceleration was added, which required writing a new search from scratch. This new implementation proves optimality directly, in a few seconds, and in under a second even for the hardest cubes on strong hardware. Up to this point, no AI was used in this project.
+
+From v2.0 onwards, AI is being used for three main purposes: tidying up the search so the code can run on the CPU alone, re-adding a 3D rendering of the cube, and verifying correctness, improving runtime efficiency, and optionally reducing memory usage (selectable at compile time) by using the old edge heuristic.
+
+Future plans include solving arbitrary user-defined positions (after checking that the cube is in a legal, solvable state), adding a neural network for image recognition to detect the user's position, and possibly a web interface.
+
+## Abstract of the matura thesis
 
 In this thesis, the Puppet Cube V2, a shapeshifting variant of the classic Rubik’s Cube, is investigated in two parts, namely its 3D rendering and its solution finding with the help of a search. The interactive visualization of this cube incorporates features such as lighting and transparency. The primary focus of this study was the search. The Puppet Cube V2, represented as a graph, is used to investigate five different graph algorithms. The resulting program is able to find short solutions to randomly scrambled cubes quickly and improves the found solution with additional search time. A comprehensive description of the final implementation is provided, which is able to prove an optimal solution, although there exist $5 \cdot 10^{18}$ positions of the Puppet Cube V2. The algorithm runs in parallel to enhance computational efficiency. Additionally, the thesis presents key properties of the Puppet Cube V2 and the employed algorithm. Notably, a lower bound for God’s Number is established, which shows that there exist positions where 30 moves are required to solve the cube. Furthermore, the research highlights improvements in the average depth when searching for longer. Finally, a comparison to a state-of-the-art Rubik’s Cube solver further proves the effectiveness of the proposed approach.
 
