@@ -1,60 +1,86 @@
-#include <random>
-#include <string>
-#include <thread>
-#include <parallel_hashmap/phmap.h>
-#include <nadeau.h>
+#include <filesystem>
 
-#include "actions.h"
-#include "cube.h"
-#include "error_handler.h"
-#include "settings.h"
-#include "rotation.h"
-#include "search_manager.h"
+#include "corner.hpp"
+#include "duplicate_rotations.hpp"
+#include "edge.hpp"
+#include "info.hpp"
+#include "logger.hpp"
+#include "rotation.hpp"
+#include "search.hpp"
+#include "settings.hpp"
+#include "tablebase.hpp"
+#include "transposition_table.hpp"
+#include "utils.hpp"
 
-#ifdef GUI
-#include "window_manager.h"
+#ifdef USE_CUDA
+#include "corner_bridge.hpp"
+#include "edge_bridge.hpp"
+#include "info_bridge.hpp"
+#include "search_bridge.hpp"
+#include "tablebase_bridge.hpp"
 #endif
 
 
-int main (int argc, char *argv[]) {
-    // create an error handler
-    ErrorHandler error_handler(ErrorHandler::Level::kMemory);
+int main(int argc, char *argv[]) {
+    LOG_INFO("Puppet Cube V2 by Linus VandeVondele");
 
-    // settings
-    // it is not thread safe only a copy is sent to the window manager
-    Setting settings(error_handler, argc, argv);
+    // settings initialization
+    Settings(argc, argv);
+    LOG_MEMORY();
 
-    // actions for communication with window manager
-    Actions actions;
-    std::thread window_manager;
-
-    // check if user wants a graphical interface
-    if (settings.gui) {
-        #ifdef GUI
-        // create a graphical interface running on another thread
-        window_manager = std::thread(WindowManager, error_handler, settings, std::ref(actions));
-        #else
-        error_handler.Handle(ErrorHandler::Level::kError, "main.cpp", "disable cmake -DGUI=OFF or run with --gui=false");
-        #endif
+    if (Settings::GetHardwareInfo()) {
+        GetHostInfo();
     }
-
-    // random number initialisation
-    std::random_device device;
-    std::mt19937 rng(device());
-    // get reproducible random numbers
-    rng.seed(0);
-
-    // load legal moves from file
-    InitializePositionData(error_handler, settings);
-    InitializeEdgeData(error_handler, settings);
-
-    error_handler.Handle(ErrorHandler::Level::kMemory, "main.cpp", "currently using " + std::to_string(getCurrentRSS()/1000000) + " MB"); // NOLINT
-    // start the search manager
-    SearchManager(error_handler, settings, actions, rng);
-
-    // wait until the window manager has finished
-    if (settings.gui) {
-        window_manager.join();
+    #ifdef USE_CUDA
+    if (Settings::GetHardwareInfo() && Settings::UseCuda()) {
+        GetDeviceInfo();
     }
+    #endif // USE_CUDA
+
+    // precomputation
+    if (!std::filesystem::exists(GetFilePath(""))) {
+        if (std::filesystem::create_directories(GetFilePath(""))) {
+            LOG_ALL("Create precomputation folder for precomputation");
+        }
+        else {
+            LOG_CRITICAL("Failed to create folder for precomputation");
+        }
+    }
+    RotationInit();
+    edge::Init();
+    corner::Init();
+    tablebase::Init();
+    DuplicateRotations::Initialize();
+    LOG_INFO("Loaded Precomputation");
+
+    #ifdef USE_CUDA
+    if (Settings::UseCuda()) {
+        LOG_EXTRA("Start Edge Precomputation Uploading to Device");
+        edge::UploadPrecomputationToDevice();
+        LOG_EXTRA("Start Corner Precomputation Uploading to Device");
+        corner::UploadPrecomputationToDevice();
+        LOG_EXTRA("Start Tablebase Precomputation Uploading to Device");
+        tablebase::UploadPrecomputationToDevice();
+        LOG_INFO("Precomputation Uploaded to Device");
+        LOG_MEMORY();
+    }
+    #endif // USE_CUDA
+
+    LOG_EXTRA("Start Transposition Table Initialization");
+    transposition_table::Init();
+    LOG_INFO("Transposition Table Initialized");
+    LOG_MEMORY();
+
+    #ifdef USE_CUDA
+    if (Settings::UseCuda()) {
+        CudaConstMemInitialize();
+        LOG_INFO("Cuda Constant Memory Initialized");
+        LOG_MEMORY();
+    }
+    #endif // USE_CUDA
+
+    SearchManager();
+    LOG_INFO("Search Computed");
+    LOG_MEMORY();
     return 0;
 }

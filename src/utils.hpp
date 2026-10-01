@@ -1,0 +1,215 @@
+#pragma once
+#include <array>
+#include <atomic>
+#include <cstddef>
+#include <string>
+#include <vector>
+
+#include "logger.hpp"
+#include "settings.hpp"
+
+
+using Vec3i = std::array<int, 3>;
+using Mat3i = std::array<std::array<int, 3>, 3>;
+
+
+constexpr uint64_t Factorial(int n) {
+    return n <= 1 ? 1 : n * Factorial(n-1);
+}
+
+template <typename T>
+constexpr T Power(T base, unsigned int exp) {
+    T result = 1;
+    while (exp > 0) {
+        if (exp & 1) {
+            if (base != 0 && result > std::numeric_limits<T>::max() / base) {
+                throw std::overflow_error("power: overflow");
+            }
+            result *= base;
+        }
+        if (exp > 1) { // avoid overflow on final squaring when we won't use it
+            if (base != 0 && base > std::numeric_limits<T>::max() / base) {
+                throw std::overflow_error("power: overflow");
+            }
+        }
+        base *= base;
+        exp >>= 1;
+    }
+    return result;
+}
+
+
+template <typename T>
+inline void AtomicMin(std::atomic<T>& lhs, T rhs) {
+    static_assert(std::is_integral_v<T>, "AtomicMin requires integral type");
+
+    T old = lhs.load(std::memory_order_relaxed);
+
+    while (old > rhs &&
+           !lhs.compare_exchange_weak(
+               old, rhs,
+               std::memory_order_relaxed,
+               std::memory_order_relaxed))
+    {}
+}
+
+
+template<typename T, std::size_t N>
+std::array<std::array<T, N>, N> MatMul(const std::array<std::array<T, N>, N>& lhs,
+                                         const std::array<std::array<T, N>, N>& rhs) {
+    std::array<std::array<T, N>, N> res = {};
+    for (std::size_t i = 0; i < N; i++) {
+        for (std::size_t j = 0; j < N; j++) {
+            for (std::size_t k = 0; k < N; k++) {
+                res[i][j] += lhs[i][k] * rhs[k][j];
+            }
+        }
+    }
+    return res;
+}
+
+
+template<typename T, std::size_t N>
+std::array<std::array<T, N>, N> MatTrans(const std::array<std::array<T, N>, N>& mat) {
+    std::array<std::array<T, N>, N> res = {};
+    for (std::size_t i = 0; i < N; i++) {
+        for (std::size_t j = 0; j < N; j++) {
+            res[i][j] = mat[j][i];
+        }
+    }
+    return res;
+}
+
+
+template<typename T, std::size_t N>
+std::array<T, N> MatVecMul(const std::array<std::array<T, N>, N>& mat,
+                             const std::array<T, N>& vec) {
+    std::array<T, N> res = {};
+    for (std::size_t i = 0; i < N; i++) {
+        for (std::size_t j = 0; j < N; j++) {
+            res[i] += mat[i][j] * vec[j];
+        }
+    }
+    return res;
+}
+
+
+// place where the precomputation is stored
+inline std::string GetFilePath (std::string file_name) {
+    // path/to/puppet-cube-v2/precomputation/file_name
+    return Settings::GetRootPath() + "precomputation/" + file_name;
+}
+
+
+// if there is no file storing the precomputation run the precomputation
+template<typename T, typename Generator>
+void LoadOrGenerate(const std::string& step_tag, Generator&& generate_func,
+                    const std::string file_name, std::vector<T>& target, size_t expected_size) {
+    const std::string path = GetFilePath(file_name);
+    if (std::FILE* read_file = std::fopen(path.c_str(), "rb")) {
+        // read content of file
+        target.resize(expected_size);
+        if (std::fread(target.data(), sizeof(T), expected_size, read_file) == expected_size) {
+            LOG_ALL(step_tag, "read from file");
+            LOG_MEMORY();
+        }
+        else {
+            LOG_CRITICAL(step_tag, "was not able to read file", path);
+        }
+        std::fclose(read_file);
+    }
+    // opening of the file failed
+    else {
+        // do the precomputation
+        LOG_ALL(step_tag, "precompute ...");
+        generate_func();
+        LOG_MEMORY();
+
+        if (target.size() != expected_size) {
+            LOG_CRITICAL(step_tag, "Wrong precomputation size:", target.size(), "/", expected_size);
+        }
+
+        // save to file
+        if (std::FILE* write_file = std::fopen(path.c_str(), "wb")) {
+            if (std::fwrite(target.data(), sizeof(T), expected_size, write_file) != expected_size) {
+                LOG_ERROR(step_tag, "failed to write full file");
+            }
+            std::fclose(write_file);
+        }
+        else {
+            LOG_ERROR(step_tag, "not able to save precomputation to file");
+        }
+    }
+}
+
+
+// Load pass
+inline bool TryLoadAll(const std::string& /*unused*/) {
+    return true;
+}
+
+template<typename T, typename... Rest>
+bool TryLoadAll(const std::string& tag,
+                const std::string& file_name, std::vector<T>& target, size_t expected_size,
+                Rest&&... rest) {
+    const std::string path = GetFilePath(file_name);
+
+    if (std::FILE* read_file = std::fopen(path.c_str(), "rb")) {
+        target.resize(expected_size);
+        bool read_correctly = std::fread(target.data(), sizeof(T), expected_size, read_file) == expected_size;
+        std::fclose(read_file);
+        if (!read_correctly) {
+            LOG_CRITICAL(tag, "failed to read", path); return false;
+        }
+    } else {
+        LOG_ALL(tag, file_name, "not found");
+        return false;
+    }
+
+    return TryLoadAll(tag, std::forward<Rest>(rest)...);
+}
+
+
+// Save pass
+inline void SaveAll(const std::string& /*unused*/) {}
+
+template<typename T, typename... Rest>
+void SaveAll(const std::string& tag,
+             const std::string& file_name, std::vector<T>& target, size_t expected_size,
+             Rest&&... rest) {
+    if (target.size() != expected_size) {
+        LOG_CRITICAL(tag, "wrong precomputation size for", file_name,
+                     ":", target.size(), "/", expected_size);
+    }
+
+    const std::string path = GetFilePath(file_name);
+    if (std::FILE* write_file = std::fopen(path.c_str(), "wb")) {
+        if (std::fwrite(target.data(), sizeof(T), expected_size, write_file) != expected_size) {
+            LOG_ERROR(tag, "failed to write full file for", file_name);
+        }
+        std::fclose(write_file);
+    } else {
+        LOG_ERROR(tag, "not able to save precomputation to file for", file_name);
+    }
+
+    SaveAll(tag, std::forward<Rest>(rest)...);
+}
+
+
+// LoadMultipleOrGenerate("step_tag", generate_func, "file_name", target, target_size, "file_name_2", target_2, target_size_2, ...)
+template<typename Generator, typename... Triples>
+void LoadMultipleOrGenerate(const std::string& step_tag,
+                             Generator&& generate_func,
+                             Triples&&... triples) {
+    if (TryLoadAll(step_tag, std::forward<Triples>(triples)...)) {
+        LOG_ALL(step_tag, "read from file");
+        LOG_MEMORY();
+        return;
+    }
+
+    LOG_ALL(step_tag, "precompute ...");
+    generate_func();
+    LOG_MEMORY();
+
+    SaveAll(step_tag, std::forward<Triples>(triples)...);
+}

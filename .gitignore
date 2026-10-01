@@ -32,10 +32,20 @@
 *.app
 
 build
+build*
+.cache
 run
 Makefile
 
 # ignore all files in position_data not ending in .cpp
-position_data
-!position_data/*.cpp
 out*
+perf.data
+perf.data.old
+performance_test/*
+performance*/*
+*.bin
+
+.venv
+__pycache__
+analyser/*.txt
+analyser/*.xy

@@ -1,135 +1,304 @@
 #include <cstddef>
-#include <iomanip>
-#include <ios>
-#include <ranges>
-#include <sstream>
 #include <string>
-#include <vector>
 #include <thread>
+#include <type_traits>
+#include <vector>
+#include <getopt.h>
+
+#include "settings.hpp"
+#include "logger.hpp"
+
+#ifdef USE_CUDA
+#include "info_bridge.hpp"
+#endif  // USE_CUDA
 
 
-#include "error_handler.h"
-#include "settings.h"
+// default values for the settings
+// general informations
+std::string Settings::root_path;                // automatic detection
+#ifdef USE_CUDA
+bool Settings::use_cuda = true;
+#else
+bool Settings::use_cuda = false;
+#endif
+int Settings::device_count;                     // automatic detection
+bool Settings::hardware_info = false;
+
+// search starting position
+size_t Settings::num_runs = 10;                 // NOLINT
+size_t Settings::run_offset = 0;
+int Settings::scrambling_depth = 100;           // NOLINT
+int Settings::min_corner_heuristic = 0;
+
+// search
+int Settings::num_threads;                      // automatic detection
+int Settings::num_gputhreads;                   // automatic detection
+int Settings::num_positions_per_batch = 1000;   // NOLINT
+int Settings::num_parallel_batches;             // automatic detection
+int Settings::tt_size = 1000;   // 1 GB         // NOLINT
+
+// tablebase
+int Settings::tb_depth = 7;                     // NOLINT
 
 
-Setting::Setting(ErrorHandler& error_handler, int argc, char *argv[]) {
-    // use all posible threads
-    num_threads = std::thread::hardware_concurrency();
+static struct option long_options[] = {
+    {"help", no_argument, NULL, 'h'},
 
-    #ifdef GUI
-    gui = true;
-    #endif // GUI
+    // general informations
+    {"root_path", required_argument, NULL, 0},
+    {"use_cuda", required_argument, NULL, 0},
+    {"device_count", required_argument, NULL, 'd'},
+    {"info", no_argument, NULL, 'i'},
+    {"log_level", required_argument, NULL, 'l'},
 
-    std::vector<std::string> arguments(argv, argv+argc);
+    // search starting postion
+    {"num_runs", required_argument, NULL, 'r'},
+    {"run_offset", required_argument, NULL, 0},
+    {"scrambling_depth", required_argument, NULL, 's'},
+    {"min_corner_heuristic", required_argument, NULL, 'm'},
 
+    // search
+    {"threads", required_argument, NULL, 't'},
+    {"tt_size", required_argument, NULL, 0},
+
+    // tablebase
+    {"tb_depth", required_argument, NULL, 0},
+
+    {NULL, 0, NULL, 0}
+};
+
+
+std::string help_msg = R"(
+usage: ./build/bin/PuppetCubeV2 [options]
+    --option=value
+    --option value
+    -ovalue
+    -o value
+
+list of options
+    -h --help                  show this message
+
+    --root_path                path to root folder puppet-cube-v2                         [./PathToPuppetCubeV2/../../]
+    --use_cuda                 run cuda                                                   [USE_CUDA]     (true|1|false|0)
+    -d --device_count          number of gpu                                              [NUM_GPUS]     (1, NUM_GPUS)
+    -i --info                  show additional hardware info
+    -l --log_level             logger/error level                                         [memory]       (critical|error|warning|info|all|extra|memory)
+
+    -r --num_runs              number of runs                                             [10]           (0, 1e18)
+    --run_offset               start at a specific run number                             [0]            (0, 1e18)
+    -s --scrambling_depth      how many moves to scramble                                 [100]          (0, 1000000)
+    -m --min_corner_heuristic  all starting position have at least this corner heuristic  [0]            (0, 27)
+
+    -t --threads               number of threads used in the program                      [MAX_THREADS]  (1, MAX_THREADS)
+    --tt_size                  size of the transposition table in MB                      [1000]         (128, 1000000)
+
+    --tb_depth                 depth of the tablebase (9 uses 40 GB RAM)                  [6]            (0, 9)
+)";
+
+
+bool GetBoolFromOptarg (bool& num, const std::string& option) {
+    try {
+        if (optarg == NULL) {
+            LOG_WARNING(option, "No argument passed to the option");
+            return false;
+        }
+        if (std::string(optarg) == "true" || std::string(optarg) == "1") {
+            num = true;
+            return true;
+        }
+        if (std::string(optarg) == "false" || std::string(optarg) == "0") {
+            num = false;
+            return true;
+        }
+        LOG_WARNING(option, "invalid_argument", optarg);
+        return false;
+    }
+    catch (const std::invalid_argument& e) {
+        LOG_ERROR(option, "invalid argument", e.what());
+        return false;
+    }
+}
+
+
+template<typename T>
+bool GetTFromOptarg (T& num, T low, T upper, const std::string& option) {
+    try {
+        if (optarg == NULL) {
+            LOG_WARNING(option, "No argument passed to the option");
+            return false;
+        }
+        T new_num;
+        if constexpr (std::is_same_v<T, int>) {
+            new_num = std::stoi(optarg);
+        }
+        else if constexpr (std::is_same_v<T, size_t>) {
+            new_num = std::stoull(optarg);
+        }
+        else if constexpr (std::is_same_v<T, float>) {
+            new_num = std::stof(optarg);
+        }
+        else {
+            static_assert(std::false_type::value, "unsupported type");
+        }
+        if (new_num > upper) {
+            LOG_WARNING(option, "Value out of expected range got", new_num, "max", upper);
+            return false;
+        }
+        if (new_num < low) {
+            LOG_WARNING(option, "Value out of expected range got", new_num, "min", low);
+            return false;
+        }
+        num = new_num;
+        return true;
+    }
+    catch (const std::invalid_argument& e) {
+        LOG_ERROR(option, "invalid argument", e.what());
+        return false;
+    }
+    catch (const std::out_of_range& e) {
+        LOG_ERROR(option, "out of range", e.what());
+        return false;
+    }
+}
+
+void Settings::SetDefault (std::vector<std::string>& arguments) {
     // get root path
     std::string temp_root_path = arguments[0];
     std::size_t executable_place = temp_root_path.find_last_of("/\\");
-    temp_root_path = temp_root_path.substr(0, executable_place);
+    if (executable_place != std::string::npos) {
+        temp_root_path = temp_root_path.substr(0, executable_place);
+    }
+    else {
+        temp_root_path = ".";
+    }
     temp_root_path.append("/../../");
-    rootPath = temp_root_path;
+    root_path.append(temp_root_path);
 
-    for (std::string argument : arguments | std::views::drop(1)) {
-        if (argument.find("--help") == 0) {
-            std::stringstream help_description;
-            const int align = 24;
-            help_description << "help:" << std::endl << std::left;
-            help_description << std::setw(Setting::kIndent) << "" << std::setw(align) << "--help" << "shows this message" << std::endl;
-            help_description << std::setw(Setting::kIndent) << "" << std::setw(align) << "--gui" << "graphical user interface [true/false]" << std::endl;
-            help_description << std::setw(Setting::kIndent) << "" << std::setw(align) << "--rootPath" << "path to puppet-cube-v2/" << std::endl;
-            help_description << std::setw(Setting::kIndent) << "" << std::setw(align) << "--errorLevel" << "amount of output [criticalError/error/info/all/extra/memory]" << std::endl;
-            help_description << std::setw(Setting::kIndent) << "" << std::setw(align) << "--threads" << "number of threads [int >= 1]" << std::endl;
-            help_description << std::setw(Setting::kIndent) << "" << std::setw(align) << "--runs" << "number of runs/start positions/scrambles [int >= 0]" << std::endl;
-            help_description << std::setw(Setting::kIndent) << "" << std::setw(align) << "--positions" << "number of positions searched [int64_t >= 0]" << std::endl;
-            help_description << std::setw(Setting::kIndent) << "" << std::setw(align) << "--tablebase_depth" << "depth of tablebase [int >= 0] be aware 9 is already ca. 40GB RAM" << std::endl;
-            help_description << std::setw(Setting::kIndent) << "" << std::setw(align) << "--scramble_depth" << "scramble depth [int >= 0]" << std::endl;
-            help_description << std::setw(Setting::kIndent) << "" << std::setw(align) << "--start_offset" << "start offset to start from a different position [int >= 0]" << std::endl;
-            help_description << std::setw(Setting::kIndent) << "" << std::setw(align) << "--min_depth" << "stops if it found a solution less or equal to min_depth [int >= 0]" << std::endl;
-            help_description << std::setw(Setting::kIndent) << "" << std::setw(align) << "--min_coner_heuristic" << "scrambles until it finds a cube with this corner heuristic or higher [27 >= int >= 0]" << std::endl;
-            help_description << std::endl;
-            help_description << std::setw(Setting::kIndent) << "" << "Example: ./build/bin/PuppetCubeV2 --gui=false --rootPath=./ --errorLevel=extra --threads=1 --runs=10 --positions=1000000 --tablebase_depth=7 --scramble_depth=10" << std::endl;
-            error_handler.Handle(ErrorHandler::Level::kInfo, "setting.cpp", help_description.str());
-        }
+    // device_count
+    #ifdef USE_CUDA
+    device_count = GetCUDADeviceCount();
+    #else
+    device_count = 0;
+    #endif  // USE_CUDA
 
-        else if (argument.find("--gui=") == 0) {
-            argument = argument.erase(0, std::string("--gui=").size());
-            if (argument == "true") {
-                gui = true;
-            }
-            else if (argument == "false") {
-                gui = false;
-            }
-            else {
-                error_handler.Handle(ErrorHandler::Level::kWarning, "settings.cpp", "gui argument not found. Should be true/false");
-            }
-        }
+    num_threads = std::thread::hardware_concurrency();
 
-        else if (argument.find("--rootPath=") == 0) {
-            rootPath = argument.erase(0, std::string("--rootPath=").size());
-        }
+    // TEST: to get better time
+    #ifdef USE_CUDA
+    // only the first device gets checked
+    num_gputhreads = (GetThreadsPerDevice(0) / kBlockDim / 2) * kBlockDim;
+    #else
+    num_gputhreads = 0;
+    #endif  // USE_CUDA
 
-        else if (argument.find("--errorLevel=") == 0) {
-            std::string error_level = argument.erase(0, std::string("--errorLevel=").size());
-            if (error_level == "criticalError") {
-                error_handler.SetErrorLevel(ErrorHandler::Level::kCriticalError);
-            }
-            else if (error_level == "error") {
-                error_handler.SetErrorLevel(ErrorHandler::Level::kError);
-            }
-            else if (error_level == "warning") {
-                error_handler.SetErrorLevel(ErrorHandler::Level::kWarning);
-            }
-            else if (error_level == "info") {
-                error_handler.SetErrorLevel(ErrorHandler::Level::kInfo);
-            }
-            else if (error_level == "all") {
-                error_handler.SetErrorLevel(ErrorHandler::Level::kAll);
-            }
-            else if (error_level == "extra") {
-                error_handler.SetErrorLevel(ErrorHandler::Level::kExtra);
-            }
-            else if (error_level == "memory") {
-                error_handler.SetErrorLevel(ErrorHandler::Level::kMemory);
-            }
-            else {
-                error_handler.Handle(ErrorHandler::Level::kWarning, "settings.cpp", "error level type " + error_level + " not found");
-            }
-        }
+    num_parallel_batches = num_threads * 2;
+}
 
-        else if (argument.find("--threads=") == 0) {
-            num_threads = std::stoi(argument.erase(0, std::string("--threads=").size()));
-        }
 
-        else if (argument.find("--runs=") == 0) {
-            num_runs = std::stoi(argument.erase(0, std::string("--runs=").size()));
-        }
+Settings::Settings (int argc, char *argv[]) {
+    std::vector<std::string> arguments(argv, argv+argc);
+    SetDefault(arguments);
 
-        else if (argument.find("--positions=") == 0) {
-            max_num_positions = std::stoll(argument.erase(0, std::string("--positions=").size()));
-        }
+    const char* short_options = "hd:il:r:s:m:t:";
+    opterr = 0; // supress error messages from getopt_long
+    int option_index;
+    signed char cop;
 
-        else if (argument.find("--tablebase_depth=") == 0) {
-            tablebase_depth = std::stoi(argument.erase(0, std::string("--tablebase_depth=").size()));
-        }
+    while ((cop = getopt_long(argc, argv, short_options, long_options, &option_index)) != -1) {
+        switch (cop) {
+            case 'h':
+                LOG_ALL(help_msg);
+                exit(0);
 
-        else if (argument.find("--scramble_depth=") == 0) {
-            scramble_depth = std::stoi(argument.erase(0, std::string("--scramble_depth=").size()));
-        }
+            case 'd':
+                GetTFromOptarg(device_count, 1, device_count, "DEVICE COUNT");
+                break;
+            case 'i':
+                hardware_info = true;
+                break;
+            case 'l': {
+                std::string log_level = std::string(optarg);
+                if (log_level == "critical") {
+                    Logger::SetLoggerLevel(LoggerLevel::kCriticalError);
+                }
+                else if (log_level == "error") {
+                    Logger::SetLoggerLevel(LoggerLevel::kError);
+                }
+                else if (log_level == "warning") {
+                    Logger::SetLoggerLevel(LoggerLevel::kWarning);
+                }
+                else if (log_level == "info") {
+                    Logger::SetLoggerLevel(LoggerLevel::kInfo);
+                }
+                else if (log_level == "all") {
+                    Logger::SetLoggerLevel(LoggerLevel::kAll);
+                }
+                else if (log_level == "extra") {
+                    Logger::SetLoggerLevel(LoggerLevel::kExtra);
+                }
+                else if (log_level == "memory") {
+                    Logger::SetLoggerLevel(LoggerLevel::kMemory);
+                }
+                else {
+                    LOG_WARNING("Not recognized log level:", log_level);
+                }
+                break;
+                }
+            case 'r':
+                GetTFromOptarg(num_runs, size_t(0), size_t(1e18), "NUM RUNS");  // NOLINT
+                break;
+            case 's':
+                GetTFromOptarg(scrambling_depth, 0, 1000000, "SCRAMBLING DEPTH"); // NOLINT
+                break;
+            case 'm':
+                GetTFromOptarg(min_corner_heuristic, 0, 27, "MIN CORNER HEURISTIC");
+                break;
+            case 't':
+                GetTFromOptarg(num_threads, 1, num_threads, "THREADS");
+                break;
+            case 0:
+                if (std::string(long_options[option_index].name) == "root_path") {
+                    root_path = std::string(optarg);
+                }
 
-        else if (argument.find("--start_offset=") == 0) {
-            start_offset = std::stoi(argument.erase(0, std::string("--start_offset=").size()));
-        }
+                if (std::string(long_options[option_index].name) == "use_cuda") {
+                    GetBoolFromOptarg(use_cuda, "USE CUDA");
+                }
 
-        else if (argument.find("--min_depth=") == 0) {
-            min_depth = std::stoi(argument.erase(0, std::string("--min_depth=").size()));
-        }
+                if (std::string(long_options[option_index].name) == "tt_size") {
+                    GetTFromOptarg(tt_size, 1, 1000000, "TT SIZE"); // NOLINT
+                }
 
-        else if (argument.find("--min_coner_heuristic=") == 0) {
-            min_coner_heuristic = std::stoi(argument.erase(0, std::string("--min_coner_heuristic=").size()));
-        }
+                if (std::string(long_options[option_index].name) == "tb_depth") {
+                    GetTFromOptarg(tb_depth, 0, 9, "TB DEPTH"); // NOLINT
+                }
 
-        else {
-            error_handler.Handle(ErrorHandler::Level::kInfo, "settings.cpp", "could not find a setting for: " + argument);
+                if (std::string(long_options[option_index].name) == "run_offset") {
+                    GetTFromOptarg(run_offset, size_t(0), size_t(1e18), "RUN OFFSET"); // NOLINT
+                }
+                break;
+            case '?':
+                LOG_WARNING("Unrecognized option:", argv[optind-1]);
+                break;
+            case ':':
+                LOG_WARNING("Missing argument for an option.");
+                break;
+            default:
+                LOG_WARNING("not expected argument");
+                break;
         }
+    }
+
+    #ifndef USE_CUDA
+    if (use_cuda) {
+        use_cuda = false;
+        LOG_WARNING("Cannot enable USE CUDA - compile with CUDA");
+    }
+    #endif  // USE_CUDA
+
+    if (use_cuda && device_count <= 0) {
+        use_cuda = false;
+        LOG_ERROR("No GPU found!");
+        LOG_WARNING("Disabled CUDA search");
     }
 }
