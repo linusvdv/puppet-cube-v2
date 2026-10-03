@@ -17,7 +17,7 @@ __device__ inline bool DContains(const State& state) {
         if (save_value == value1) { // already in tablebase
             return true;
         }
-        if (save_value == (idx1 ^ kNeurtralElementXOR)) { // empty
+        if (save_value == (idx1 ^ kNeutralElementXOR)) { // empty
             return false;
         }
     }
@@ -29,7 +29,7 @@ __device__ inline bool DContains(const State& state) {
         if (save_value == value2) { // already in tablebase
             return true;
         }
-        if (save_value == (idx2 ^ kNeurtralElementXOR)) { // empty
+        if (save_value == (idx2 ^ kNeutralElementXOR)) { // empty
             return false;
         }
     }

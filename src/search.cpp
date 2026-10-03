@@ -399,7 +399,7 @@ void SearchManager () {
         acc_depth += solution_depth;
         acc_total_num_positions += total_num_positions;
 
-        // guarantie that the starting position is in TT
+        // guarantee that the starting position is in TT
         transposition_table::Insert<true>(random_positions[idx], 0);
 
         // reconstruct the solution

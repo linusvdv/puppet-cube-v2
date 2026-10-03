@@ -88,12 +88,12 @@ void InitTablebaseNeutralElement(uint64_t num_elements, Tablebase& tablebase) {
     tablebase.assign(size*2, {});
     for (uint64_t i = 0; i < size; i++) {
         for (int j = 0; j < kBucketSize; j++) {
-            tablebase[i][j] = i ^ kNeurtralElementXOR;
+            tablebase[i][j] = i ^ kNeutralElementXOR;
         }
     }
     for (uint64_t i = 0; i < size; i++) {
         for (int j = 0; j < kBucketSize; j++) {
-            tablebase[i+size][j] = i ^ kNeurtralElementXOR;
+            tablebase[i+size][j] = i ^ kNeutralElementXOR;
         }
     }
 }
@@ -111,7 +111,7 @@ bool TablebaseInsert(Tablebase& tablebase, State state, std::mt19937& gen) {
             if (tablebase[idx1][j] == value1) { // already in tablebase
                 return false;
             }
-            if (tablebase[idx1][j] == (idx1 ^ kNeurtralElementXOR)) { // inserted tablebase
+            if (tablebase[idx1][j] == (idx1 ^ kNeutralElementXOR)) { // inserted tablebase
                 tablebase[idx1][j] = value1;
                 return true;
             }
@@ -123,13 +123,13 @@ bool TablebaseInsert(Tablebase& tablebase, State state, std::mt19937& gen) {
             if (tablebase[idx2+size][j] == value2) { // already in tablebase
                 return false;
             }
-            if (tablebase[idx2+size][j] == (idx2 ^ kNeurtralElementXOR)) { // inserted tablebase
+            if (tablebase[idx2+size][j] == (idx2 ^ kNeutralElementXOR)) { // inserted tablebase
                 tablebase[idx2+size][j] = value2;
                 return true;
             }
         }
         // No space to insert element move a random one out of the 2*kBucketSize
-        // repreat the process with the new randomly selected element O(log(size)) average
+        // repeat the process with the new randomly selected element O(log(size)) average
         if (dist_hash(gen) == 0) {
             std::swap(value1, tablebase[idx1][dist_bucket_idx(gen)]);
             InverseStateHash1(size, idx1, value1, state);
@@ -154,7 +154,7 @@ bool TablebaseContains(const Tablebase& tablebase, const State& state) {
         if (save_value == value1) { // already in tablebase
             return true;
         }
-        if (save_value == (idx1 ^ kNeurtralElementXOR)) { // empty
+        if (save_value == (idx1 ^ kNeutralElementXOR)) { // empty
             return false;
         }
     }
@@ -166,7 +166,7 @@ bool TablebaseContains(const Tablebase& tablebase, const State& state) {
         if (save_value == value2) { // already in tablebase
             return true;
         }
-        if (save_value == (idx2 ^ kNeurtralElementXOR)) { // empty
+        if (save_value == (idx2 ^ kNeutralElementXOR)) { // empty
             return false;
         }
     }
@@ -191,13 +191,13 @@ void GenerateDepth(const Tablebase& tb_prev_depth, const Tablebase& tb_cur_depth
         for (int bucket = 0; bucket < kBucketSize; bucket++) {
             State state;
             if (idx < cur_size) {
-                if (tb_cur_depth[idx][bucket] == (idx ^ kNeurtralElementXOR)) {
+                if (tb_cur_depth[idx][bucket] == (idx ^ kNeutralElementXOR)) {
                     continue;
                 }
                 InverseStateHash1(cur_size, idx, tb_cur_depth[idx][bucket], state);
             }
             else {
-                if (tb_cur_depth[idx][bucket] == ((idx-cur_size) ^ kNeurtralElementXOR)) {
+                if (tb_cur_depth[idx][bucket] == ((idx-cur_size) ^ kNeutralElementXOR)) {
                     continue;
                 }
                 InverseStateHash2(cur_size, idx-cur_size, tb_cur_depth[idx][bucket], state);

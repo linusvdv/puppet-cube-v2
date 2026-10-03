@@ -190,7 +190,7 @@ void RotationInit() {
     for (RotRep rotation : kRotations) {
         idx_to_rot_rep[rotation.index] = rotation;
     }
-    // index to rotation representation
+    // matrix to rotation representation
     for (RotRep rotation : kRotations) {
         mat_to_rot_rep[{rotation.matrix, rotation.activate}] = rotation;
     }

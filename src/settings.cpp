@@ -51,7 +51,7 @@ static struct option long_options[] = {
     {"info", no_argument, NULL, 'i'},
     {"log_level", required_argument, NULL, 'l'},
 
-    // search starting postion
+    // search starting position
     {"num_runs", required_argument, NULL, 'r'},
     {"run_offset", required_argument, NULL, 0},
     {"scrambling_depth", required_argument, NULL, 's'},
@@ -80,14 +80,14 @@ list of options
 
     --root_path                path to root folder puppet-cube-v2                         [./PathToPuppetCubeV2/../../]
     --use_cuda                 run cuda                                                   [USE_CUDA]     (true|1|false|0)
-    -d --device_count          number of gpu                                              [NUM_GPUS]     (1, NUM_GPUS)
+    -d --device_count          number of gpus                                            [NUM_GPUS]     (1, NUM_GPUS)
     -i --info                  show additional hardware info
     -l --log_level             logger/error level                                         [memory]       (critical|error|warning|info|all|extra|memory)
 
     -r --num_runs              number of runs                                             [10]           (0, 1e18)
     --run_offset               start at a specific run number                             [0]            (0, 1e18)
     -s --scrambling_depth      how many moves to scramble                                 [100]          (0, 1000000)
-    -m --min_corner_heuristic  all starting position have at least this corner heuristic  [0]            (0, 27)
+    -m --min_corner_heuristic  all starting positions have at least this corner heuristic [0]           (0, 27)
 
     -t --threads               number of threads used in the program                      [MAX_THREADS]  (1, MAX_THREADS)
     --tt_size                  size of the transposition table in MB                      [1000]         (128, 1000000)
@@ -200,7 +200,7 @@ Settings::Settings (int argc, char *argv[]) {
     SetDefault(arguments);
 
     const char* short_options = "hd:il:r:s:m:t:";
-    opterr = 0; // supress error messages from getopt_long
+    opterr = 0; // suppress error messages from getopt_long
     int option_index;
     signed char cop;
 

@@ -76,7 +76,7 @@ __global__ void DeviceLeafSearch (const uint8_t* d_starting_depths,
     }
 
     // load all global memory to registers
-    // all accesses are coaleased
+    // all accesses are coalesced
 
     // state
     State state = d_states[index];
@@ -108,13 +108,13 @@ __global__ void DeviceLeafSearch (const uint8_t* d_starting_depths,
     rotations |= (1ULL<<(2*rotation))-1;
 
 
-    // make a constant number of position during each kernal function call
+    // make a constant number of positions during each kernel function call
     constexpr int kNumPosBatchSize = 200;
     for (int cur_pos_batch = 0; cur_pos_batch < kNumPosBatchSize; cur_pos_batch++) {
-        // the goal is to search further in the dfs (from the leaf position) and stop if an improvement to the best_depth is not posible any more
+        // the goal is to search further in the dfs (from the leaf position) and stop if an improvement to the best_depth is not possible any more
         // for each loop cycle it will look at a new position or undo the move it has done during the dfs.
-        // the search is structured in a way that the current moment of the search can be saved to global memory and the kernal stops.
-        // at the next kernal start the search will continue from the previous search
+        // the search is structured in a way that the current moment of the search can be saved to global memory and the kernel stops.
+        // at the next kernel start the search will continue from the previous search
         // this cube is now during a search phase with the starting position of leaf_thread_idx
         // the state is the current position of the search after all rotations from the leaf starting position
 
@@ -319,7 +319,7 @@ __global__ void SplitMixStates (RegRotations* d_reg_rotations, State* d_state, u
         }
     }
 
-    // usefull rotations
+    // useful rotations
     uint64_t full_corner_heuristic = corner::DGetHeuristic(state_start.corner_pos, state_start.corner_orient);
     uint8_t corner_heuristic = full_corner_heuristic;
     constexpr uint64_t kRotationsMask = 0x555555555ULL;
@@ -631,7 +631,7 @@ void DeviceLeafManagerInit (int gpu_idx, SharedSearch& shared_search,
     uint64_t* d_num_position_threads;
     MallocOnDeviceStream(d_num_position_threads, Settings::GetNumGPUThreads(), cuda_stream);
 
-    // copied after every kernal
+    // copied after every kernel
     DeviceSolution device_solution;
     DeviceSolution* d_device_solution;
     MallocOnDeviceStream(d_device_solution, 1, cuda_stream);

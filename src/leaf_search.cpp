@@ -21,7 +21,9 @@
 namespace {
 
 
+// solution check cadence of the dfs (same as the number of positions per gpu kernel call)
 constexpr int kNumPosBatchSize = 200;
+// sleep time between queue polls when there is no work
 constexpr auto kLeafPollInterval = std::chrono::microseconds(100);
 
 
@@ -30,9 +32,12 @@ void CpuLeafDFS (State state, uint8_t starting_depth, uint8_t cur_depth,
                  uint64_t& num_positions) {
     const uint8_t tb_depth = Settings::GetTBDepth();
 
+    // rotations
+    // slots[i] is the next rotation to try at dfs level i (for i < idx it is the rotation done at level i + 1)
     uint8_t slots[16] = {};
     int8_t idx = 0;
 
+    // get helpful rotations
     uint64_t full_corner_heuristic = corner::GetHeuristic(state.corner_pos, state.corner_orient);
     uint8_t corner_heuristic = full_corner_heuristic;
     constexpr uint64_t kRotationsMask = 0x555555555ULL;
@@ -47,8 +52,13 @@ void CpuLeafDFS (State state, uint8_t starting_depth, uint8_t cur_depth,
     uint8_t rotation = slots[idx];
     rotations |= (1ULL<<(2*rotation))-1;
 
+    // the goal is to search further in the dfs (from the leaf position) and stop if an improvement to the best_depth is not possible any more
+    // for each loop cycle it will look at a new position or undo the move it has done during the dfs
+    // in contrast to the gpu search the dfs runs to completion (no work splitting and no resumability)
+    // the state is the current position of the search after all rotations from the leaf starting position
     int cur_pos_batch = 0;
     while (true) {
+        // check with the same cadence as a gpu kernel run if a solution was already found
         if (++cur_pos_batch >= kNumPosBatchSize) {
             cur_pos_batch = 0;
             if (shared_leaf_solution.finished.load(std::memory_order_acquire)) {
@@ -60,11 +70,13 @@ void CpuLeafDFS (State state, uint8_t starting_depth, uint8_t cur_depth,
         slots[idx] = rotation+1;
         rotations |= 3ULL << (2*rotation);
 
+        // the whole dfs is finished
         if (idx == 0 && rotation >= kNumRot) {
             break;
         }
 
         bool rev = false;
+        // no rotation left at this level -> undo the rotation done one level below
         if (rotation >= kNumRot) {
             slots[idx] = 0;
             idx--;
@@ -79,12 +91,15 @@ void CpuLeafDFS (State state, uint8_t starting_depth, uint8_t cur_depth,
             }
         }
 
+        // only edge rotation
         uint32_t prev_edge_pos = state.edge_pos;
         uint16_t prev_edge_orient = state.edge_orient;
         uint8_t prev_edge_sym = state.edge_sym;
         edge::Rotate(state.edge_pos, state.edge_sym, state.edge_orient, rotation);
+        // next corner heuristic
         uint8_t max_heuristic = corner_heuristic + ((full_corner_heuristic >> (8 + 2*rotation)) & 3) - 1;
         if (!rev && max_heuristic < 14) {
+            // edge heuristic
             max_heuristic = std::max(max_heuristic, edge::GetHeuristic(state.edge_pos, state.edge_orient));
             if (max_heuristic + idx + 1 + starting_depth >= cur_depth) {
                 state.edge_pos = prev_edge_pos;
@@ -102,6 +117,7 @@ void CpuLeafDFS (State state, uint8_t starting_depth, uint8_t cur_depth,
             num_positions++;
         }
 
+        // get helpful rotations
         full_corner_heuristic = corner::GetHeuristic(state.corner_pos, state.corner_orient);
         corner_heuristic = full_corner_heuristic;
         rotations = (full_corner_heuristic >> 8) & (full_corner_heuristic >> 9) & kRotationsMask;
@@ -119,7 +135,9 @@ void CpuLeafDFS (State state, uint8_t starting_depth, uint8_t cur_depth,
             continue;
         }
 
+        // in tablebase -> found a solution
         if (max_heuristic <= tb_depth && tablebase::Contains(state)) {
+            // first solution wins
             bool winner = false;
             {
                 std::lock_guard<std::mutex> lock(shared_leaf_states.mtx);
@@ -130,6 +148,7 @@ void CpuLeafDFS (State state, uint8_t starting_depth, uint8_t cur_depth,
                     winner = true;
                 }
             }
+            // walk the path backwards and insert every position into the tt for the reconstruction
             if (winner) {
                 while (true) {
                     transposition_table::Insert<true>(state, 2*(cur_depth-Settings::GetTBDepth()-1));
@@ -146,6 +165,7 @@ void CpuLeafDFS (State state, uint8_t starting_depth, uint8_t cur_depth,
             break;
         }
 
+        // not possible with the current tablebase
         if (tb_depth+1 + idx + starting_depth >= cur_depth) {
             rotations |= (1ULL<<(2*kNumRot))-1;
             slots[idx] = kNumRot;
@@ -160,13 +180,18 @@ void CpuLeafDFS (State state, uint8_t starting_depth, uint8_t cur_depth,
 void CpuLeafManager (SharedSearch& shared_search, SharedLeafStates& shared_leaf_states, SharedLeafSolution& shared_leaf_solution) {
     while (true) {
         shared_search.start_work->arrive_and_wait();
+        // stopping of the program
         if (shared_search.finished.load()) {
             break;
         }
 
+        // get data from main thread
         uint8_t solution_depth = shared_leaf_states.depth;
 
+        // resetting everything of the last depth iteration
         uint64_t local_leaf_cnt = 0;
+        // the batches are pushed without a cv notification (the gpu leaf managers poll as well)
+        // thus the workers poll the queue instead of waiting on the cv
         while (true) {
             if (shared_leaf_solution.finished.load(std::memory_order_acquire)) {
                 break;
@@ -175,6 +200,7 @@ void CpuLeafManager (SharedSearch& shared_search, SharedLeafStates& shared_leaf_
             LocalBuffer local_buffer;
             {
                 std::lock_guard<std::mutex> lock(shared_leaf_states.mtx);
+                // get from shared
                 if (!shared_leaf_states.shared_ptrs.empty()) {
                     local_buffer = std::move(shared_leaf_states.shared_ptrs.front());
                     shared_leaf_states.shared_ptrs.pop();
@@ -192,6 +218,7 @@ void CpuLeafManager (SharedSearch& shared_search, SharedLeafStates& shared_leaf_
                 continue;
             }
 
+            // no batches left and the depth is finished
             if (shared_leaf_states.finished_depth.load()) {
                 break;
             }
@@ -199,7 +226,9 @@ void CpuLeafManager (SharedSearch& shared_search, SharedLeafStates& shared_leaf_
             std::this_thread::sleep_for(kLeafPollInterval);
         }
 
+        // accumulate num_positions
         shared_search.leaf_cnt.fetch_add(local_leaf_cnt);
+        // finished
         shared_search.done_work->arrive_and_wait();
     }
 }

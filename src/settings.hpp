@@ -28,7 +28,7 @@ private:
     static int num_threads;
     // cpu parallel threads for handling gpus
     static int num_gpu_upload_threads;
-    // gpu threads per kernal launch
+    // gpu threads per kernel launch
     static int num_gputhreads;
     // batch size for each transfer
     static int num_positions_per_batch;

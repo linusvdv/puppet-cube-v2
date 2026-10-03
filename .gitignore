@@ -49,3 +49,5 @@ performance*/*
 __pycache__
 analyser/*.txt
 analyser/*.xy
+
+AGENTS.md

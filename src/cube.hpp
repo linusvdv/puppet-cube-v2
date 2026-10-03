@@ -13,7 +13,7 @@ struct State {
 
 
 // David Stafford Mix13
-// standart implementation of a SplitMix64 found in the paper: https://dl.acm.org/doi/epdf/10.1145/2714064.2660195
+// standard implementation of a SplitMix64 found in the paper: https://dl.acm.org/doi/epdf/10.1145/2714064.2660195
 // This version of hashing is reverable (so no loss of data)
 inline void SplitMix64(uint64_t& num) {
     num ^= num >> 30;               // NOLINT
@@ -25,10 +25,10 @@ inline void SplitMix64(uint64_t& num) {
 
 
 // neutral element for each index is: index ^ 63
-constexpr uint64_t kNeurtralElementXOR = 63;
+constexpr uint64_t kNeutralElementXOR = 63;
 
 
-// hashing State such that it is recostructable
+// hashing State such that it is reconstructable
 inline void GetStateHash1(const uint64_t tb_size, uint64_t& idx, uint64_t& value, const State& state) {
     value = state.edge_pos;
     value |= uint64_t(state.corner_pos) << 24;      // NOLINT
@@ -45,7 +45,7 @@ inline void GetStateHash1(const uint64_t tb_size, uint64_t& idx, uint64_t& value
     value ^= state.edge_sym;
 }
 
-// hashing State such that it is recostructable
+// hashing State such that it is reconstructable
 inline void GetStateHash2(const uint64_t tb_size, uint64_t& idx, uint64_t& value, const State& state) {
     value = state.edge_pos;
     value |= uint64_t(state.corner_pos) << 24;      // NOLINT

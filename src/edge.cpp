@@ -25,7 +25,7 @@ constexpr int kMyAtomicBitsetSizePerEl = 64;
 constexpr uint32_t kNumHeuristicBuckets = 81609107;
 
 using Heuristic = std::vector<std::array<uint64_t, kNumOrient/kNumStoredPerBucket>>;
-using NextVistited = std::vector<std::array<std::atomic<uint64_t>, kNumOrient/kMyAtomicBitsetSizePerEl>>;
+using NextVisited = std::vector<std::array<std::atomic<uint64_t>, kNumOrient/kMyAtomicBitsetSizePerEl>>;
 
 constexpr std::array<uint32_t, kNumEdges+1> kFactorials = []{
     std::array<uint32_t, kNumEdges+1> arr{};
@@ -315,7 +315,7 @@ void InitPositionChangeSymmetryChange(const std::array<std::array<uint8_t, kNumE
 }
 
 
-// this is computed multiple times but as it so fast this is fine
+// this is computed multiple times but as it is so fast this is fine
 void InitDefaultToSymOrient(std::array<std::array<uint16_t, kNumOrient>, kNumSym>& default_to_sym_orient,
                             const std::array<Vec3i, kNumEdges>& idx_to_xyz_pos,
                             const std::array<Mat3i, kNumSym>& idx_to_mat_sym,
@@ -418,12 +418,12 @@ inline uint8_t GetPreHeuristic(const Heuristic& heuristic, uint32_t pos, uint16_
 }
 
 
-inline void SetAtomicNextVisited(NextVistited& next_visited, uint32_t pos, uint16_t orient) {
+inline void SetAtomicNextVisited(NextVisited& next_visited, uint32_t pos, uint16_t orient) {
     next_visited[pos][orient/kMyAtomicBitsetSizePerEl].fetch_or(uint64_t(1)<<(orient%kMyAtomicBitsetSizePerEl), std::memory_order_relaxed);
 }
 
 
-void HeuristicMultithread(const Heuristic& heuristic, NextVistited& next_visited,
+void HeuristicMultithread(const Heuristic& heuristic, NextVisited& next_visited,
                           const std::vector<uint64_t>& sym_pos_same_sym,
                           const std::array<std::array<uint16_t, kNumOrient>, kNumSym>& default_to_sym_orient,
                           uint32_t pos_left, uint32_t pos_right, uint8_t next_depth) {
@@ -457,7 +457,7 @@ void HeuristicMultithread(const Heuristic& heuristic, NextVistited& next_visited
 }
 
 
-void UpdateHeuristicMultithread(Heuristic& heuristic, NextVistited& next_visited,
+void UpdateHeuristicMultithread(Heuristic& heuristic, NextVisited& next_visited,
                                 uint32_t pos_left, uint32_t pos_right, uint64_t& local_cnt, uint8_t depth) {
     uint64_t local_num_pos = 0;
     for (uint32_t pos = pos_left; pos < pos_right && pos < kNumPos; pos++) {
@@ -516,7 +516,7 @@ void InitHeuristic(const std::array<Vec3i, kNumEdges>& idx_to_xyz_pos,
     Heuristic heuristic(kNumPos);
     std::fill(heuristic[0].data(), heuristic[0].data() + (kNumHeuristic / kNumStoredPerBucket), ~uint64_t(0));
     LOG_MEMORY();
-    NextVistited next_visited(kNumPos);
+    NextVisited next_visited(kNumPos);
     LOG_MEMORY();
 
     heuristic[0][0] ^= kSingleHeuristicValue;
@@ -558,7 +558,7 @@ void InitHeuristic(const std::array<Vec3i, kNumEdges>& idx_to_xyz_pos,
         heuristic_level++;
     }
     LOG_ALL("Finished Generation");
-    NextVistited().swap(next_visited);
+    NextVisited().swap(next_visited);
     LOG_MEMORY();
 
     heuristic_bucket.assign(kNumPos, {});
@@ -611,7 +611,7 @@ void Init() {
             idx_piece_sym[sym][i] = xyz_to_idx_pos[MatVecMul(idx_to_mat_sym[sym], idx_to_xyz_pos[i])];
         }
     }
-    // symmetry muliply symmetry
+    // symmetry multiply symmetry
     std::array<std::array<uint8_t, kNumSym>, kNumSym> sym_mul_sym;
     for (int i = 0; i < kNumSym; i++) {
         for (int j = 0; j < kNumSym; j++) {

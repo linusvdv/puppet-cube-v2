@@ -141,7 +141,7 @@ void InitPositionChange(const std::array<std::array<uint8_t, kNumCorners>, kNumR
 }
 
 
-void InitOrinetationChange(const std::array<std::array<uint8_t, kNumCorners>, kNumRot>& idx_piece_rot) {
+void InitOrientationChange(const std::array<std::array<uint8_t, kNumCorners>, kNumRot>& idx_piece_rot) {
     orientation_change.assign(kNumOrient, {});
 
     // piece orientation
@@ -189,25 +189,25 @@ void InitOrinetationChange(const std::array<std::array<uint8_t, kNumCorners>, kN
 }
 
 
-bool IsLegal (const std::array<Vec3i, kNumCorners>& idx_to_xyz_pos, const std::array<Vec3i, kNumCorners>& protrution) {
-    std::array<std::array<std::array<std::array<int, 3>, 3>, 3>, 2> protrution_cnt{};
+bool IsLegal (const std::array<Vec3i, kNumCorners>& idx_to_xyz_pos, const std::array<Vec3i, kNumCorners>& protrusion) {
+    std::array<std::array<std::array<std::array<int, 3>, 3>, 3>, 2> protrusion_cnt{};
     for (int i = 0; i < kNumCorners; i++) {
         Vec3i xyz_pos = idx_to_xyz_pos[i];
         for (int j = 0; j < 3; j++) {
-            if (protrution[i][j] == 0) {
+            if (protrusion[i][j] == 0) {
                 continue;
             }
             std::array<int, 2> dir1 = {xyz_pos[(j+1)%3]+1, 1};
             std::array<int, 2> dir2 = {xyz_pos[(j+2)%3]+1, 1};
-            for (int cnt1 = 0; cnt1 <= int(protrution[i][(j+1)%3]==0); cnt1++) {
-                for (int cnt2 = 0; cnt2 <= int(protrution[i][(j+2)%3]==0); cnt2++) {
-                    protrution_cnt[int(protrution[i][j]>0)][j][dir1[cnt1]][dir2[cnt2]]++;
+            for (int cnt1 = 0; cnt1 <= int(protrusion[i][(j+1)%3]==0); cnt1++) {
+                for (int cnt2 = 0; cnt2 <= int(protrusion[i][(j+2)%3]==0); cnt2++) {
+                    protrusion_cnt[int(protrusion[i][j]>0)][j][dir1[cnt1]][dir2[cnt2]]++;
                 }
             }
         }
     }
-    return std::count_if(protrution_cnt.front().front().front().begin(),
-                         protrution_cnt.back().back().back().end(),
+    return std::count_if(protrusion_cnt.front().front().front().begin(),
+                         protrusion_cnt.back().back().back().end(),
                          [](int elm){return elm > 1;}) == 0;
 }
 
@@ -215,7 +215,7 @@ bool IsLegal (const std::array<Vec3i, kNumCorners>& idx_to_xyz_pos, const std::a
 struct HeuristicData {
     uint16_t pos;
     uint16_t orient;
-    std::array<Vec3i, kNumCorners> protrution;
+    std::array<Vec3i, kNumCorners> protrusion;
     uint8_t depth;
 };
 
@@ -224,19 +224,19 @@ void InitHeuristic(const std::array<Vec3i, kNumCorners>& idx_to_xyz_pos,
                    const std::array<std::array<uint8_t, kNumCorners>, kNumRot>& idx_piece_rot) {
     heuristic.assign(kNumPos, {});
 
-    // initial starting protrution
-    std::array<Vec3i, kNumCorners> protrution;
+    // initial starting protrusion
+    std::array<Vec3i, kNumCorners> protrusion;
     int cnt = 0;
     for (int i = 0; i >= -1; i--) {
         for (int j = 0; j >= -1; j--) {
             for (int k = 0; k >= -1; k--) {
-                protrution[cnt++] = {i, j, k};
+                protrusion[cnt++] = {i, j, k};
             }
         }
     }
     std::vector<uint8_t> visited(uint32_t(kNumPos) * kNumOrient, uint8_t(-2));
     std::queue<HeuristicData> next;
-    next.push({0, 0, protrution, 0});
+    next.push({0, 0, protrusion, 0});
     visited[0] = 0;
     uint32_t legal_cnt = 0;
     uint32_t cur_legal_cnt = 0;
@@ -280,12 +280,12 @@ void InitHeuristic(const std::array<Vec3i, kNumCorners>& idx_to_xyz_pos,
 
             for (int i = 0; i < kNumCorners; i++) {
                 if (idx_piece_rot[rot][i] == i) {
-                    next_heuristic_data.protrution[i] = heuristic_data.protrution[i];
+                    next_heuristic_data.protrusion[i] = heuristic_data.protrusion[i];
                     continue;
                 }
-                next_heuristic_data.protrution[idx_piece_rot[rot][i]] = MatVecMul(idx_to_rot_rep[rot].matrix, heuristic_data.protrution[i]);
+                next_heuristic_data.protrusion[idx_piece_rot[rot][i]] = MatVecMul(idx_to_rot_rep[rot].matrix, heuristic_data.protrusion[i]);
             }
-            if (!IsLegal(idx_to_xyz_pos, next_heuristic_data.protrution)) {
+            if (!IsLegal(idx_to_xyz_pos, next_heuristic_data.protrusion)) {
                 visited[idx] = uint8_t(-1);
                 cur_heuristic |= uint64_t(3) << (rot*2+8);
                 continue;
@@ -321,7 +321,7 @@ void Init() {
 
     LoadOrGenerate("[5/7] Corner Position Change", [&](){InitPositionChange(idx_piece_rot);},
                    "corner_position_change.bin", position_change, kNumPos);
-    LoadOrGenerate("[6/7] Corner Orientation Change", [&](){InitOrinetationChange(idx_piece_rot);},
+    LoadOrGenerate("[6/7] Corner Orientation Change", [&](){InitOrientationChange(idx_piece_rot);},
                    "corner_orientation_change.bin", orientation_change, kNumOrient);
     LoadOrGenerate("[7/7] Corner Heuristic", [&](){InitHeuristic(idx_to_xyz_pos, idx_piece_rot);},
                    "corner_heuristic.bin", heuristic, kNumPos);

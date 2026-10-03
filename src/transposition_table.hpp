@@ -34,7 +34,7 @@ void Clear(size_t thread_idx, size_t num_threads);
 InTT Contains(const State& state, const uint8_t& depth);
 
 
-// returns true if the state is alread in the TT with the current or lower depth
+// returns true if the state is already in the TT with the current or lower depth
 template<bool overwrite_existing_entries=false>
 inline bool Insert(const State& state, const uint8_t& depth) {
     uint64_t idx;
@@ -43,9 +43,9 @@ inline bool Insert(const State& state, const uint8_t& depth) {
     std::atomic_ref<uint64_t> slot(tt[idx]);
     uint64_t tt_value = slot.load(std::memory_order_relaxed);
 
-    // it is expected that this part does not guarantie that the minimum depth is in the tt
+    // it is expected that this part does not guarantee that the minimum depth is in the tt
     // if a higher depth is stored the position has to be reevaluated
-    // the correctness of the algorithm is still guarantied
+    // the correctness of the algorithm is still guaranteed
     if (tt_value == kDefaultTTEntry) { // no entry in TT
         slot.store(value, std::memory_order_relaxed);
         return false;
@@ -64,7 +64,7 @@ inline bool Insert(const State& state, const uint8_t& depth) {
 }
 
 
-// returns true if the state is alread in the TT with the current or higher depth
+// returns true if the state is already in the TT with the current or higher depth
 inline bool InsertLeaf(const State& state, const uint8_t& depth) {
     uint64_t idx;
     uint64_t value;
@@ -72,9 +72,9 @@ inline bool InsertLeaf(const State& state, const uint8_t& depth) {
     std::atomic_ref<uint64_t> slot(tt_leaf[idx]);
     uint64_t tt_value = slot.load(std::memory_order_relaxed);
 
-    // it is expected that this part does not guarantie that the minimum depth is in the tt
+    // it is expected that this part does not guarantee that the minimum depth is in the tt
     // if a higher depth is stored the position has to be reevaluated
-    // the correctness of the algorithm is still guarantied
+    // the correctness of the algorithm is still guaranteed
     if (tt_value == kDefaultTTEntry) { // no entry in TT
         slot.store(value, std::memory_order_relaxed);
         return false;

@@ -7,7 +7,7 @@
 std::array<uint64_t, kDuplicateRotationDataSize> DuplicateRotations::data = {0, 0, 0, 0, 0, 0};
 
 void DuplicateRotations::Initialize() {
-    std::vector<std::pair<std::string, std::string>> unnecessary_rotatations = {
+    std::vector<std::pair<std::string, std::string>> unnecessary_rotations = {
         // R, M, L
         {"R", "R'"},
         {"R'", "R"},
@@ -71,7 +71,7 @@ void DuplicateRotations::Initialize() {
         {"F", "B"},   // "B", "F"
         {"F'", "B'"}, // "B'", "F'"
     };
-    for (auto& [first, second] : unnecessary_rotatations) {
+    for (auto& [first, second] : unnecessary_rotations) {
         int index = (name_to_rot_rep[first].index * kNumRot) + name_to_rot_rep[second].index;
         data[index/64] |= uint64_t(1) << (index%64);
     }

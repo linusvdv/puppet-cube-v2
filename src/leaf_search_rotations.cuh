@@ -49,7 +49,7 @@ __host__ __device__ inline void RotationsSet(RegRotations& reg_rotations, const 
 }
 
 
-// it is guarantied that a rotation add does not overflow into the next idx (this code does not account for it!)
+// it is guaranteed that a rotation add does not overflow into the next idx (this code does not account for it!)
 __host__ __device__ inline void RotationsAdd(RegRotations& reg_rotations, const uint8_t& value) {
     if (reg_rotations.idx < 8) {
         reg_rotations.d1 += uint64_t(value) << (8 * reg_rotations.idx);
