@@ -78,6 +78,7 @@ add_executable(PuppetCubeV2
     src/random_position.cpp
     src/thread_pool.cpp
     src/search.cpp
+    src/leaf_search.cpp
     src/special_cubes.cpp
     src/info.cpp
     src/duplicate_rotations.cpp
@@ -94,7 +95,7 @@ if(USE_CUDA)
         src/corner.cu
         src/edge.cu
         src/info.cu
-        src/search.cu
+        src/leaf_search.cu
         src/tablebase.cu
     )
 

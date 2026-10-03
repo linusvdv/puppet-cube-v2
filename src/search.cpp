@@ -21,7 +21,7 @@
 
 
 #ifdef USE_CUDA
-#include "search_bridge.hpp"
+#include "leaf_search_bridge.hpp"
 #endif  // USE_CUDA
 
 
@@ -366,7 +366,9 @@ void SearchManager () {
     if (!Settings::UseCuda()) {
         shared_search.start_work.emplace(Settings::GetNumThreads()+1);
         shared_search.done_work.emplace(Settings::GetNumThreads()+1);
-        LOG_CRITICAL("NOT YET SUPPORTED!");
+        for (int i = 0; i < Settings::GetNumThreads(); i++) {
+            leaf_search_threads.emplace_back(CpuLeafManager, std::ref(shared_search), std::ref(shared_leaf_states), std::ref(shared_leaf_solution));
+        }
     }
 
     // start base search on CPU

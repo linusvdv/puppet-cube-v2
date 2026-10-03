@@ -11,6 +11,7 @@ public:
     static std::array<uint64_t, kDuplicateRotationDataSize> GetData() {
         return data;
     }
+    static bool IsDuplicate(const uint8_t& last, const uint8_t& current);
 
 private:
     static std::array<uint64_t, kDuplicateRotationDataSize> data;

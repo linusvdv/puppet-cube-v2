@@ -76,3 +76,12 @@ void DuplicateRotations::Initialize() {
         data[index/64] |= uint64_t(1) << (index%64);
     }
 }
+
+
+bool DuplicateRotations::IsDuplicate (const uint8_t& last, const uint8_t& current) {
+    if (last == uint8_t(-1)) {
+        return false;
+    }
+    int index = (int(last)*kNumRot)+int(current);
+    return ((data[index/64]>>(index%64)) & uint64_t(1)) != uint64_t(0);
+}

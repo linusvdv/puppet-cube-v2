@@ -21,9 +21,9 @@
 #include "edge.hpp"
 #include "logger.hpp"
 #include "rotation.hpp"
-#include "search_rotations.cuh"
+#include "leaf_search_rotations.cuh"
 #include "settings.hpp"
-#include "search_bridge.hpp"
+#include "leaf_search_bridge.hpp"
 #include "tablebase.cuh"
 #include "transposition_table.hpp"
 

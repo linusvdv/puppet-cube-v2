@@ -16,7 +16,7 @@
 #include "corner_bridge.hpp"
 #include "edge_bridge.hpp"
 #include "info_bridge.hpp"
-#include "search_bridge.hpp"
+#include "leaf_search_bridge.hpp"
 #include "tablebase_bridge.hpp"
 #endif
 

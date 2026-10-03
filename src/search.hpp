@@ -37,7 +37,7 @@ struct SharedSearch {
 using LocalBuffer = std::shared_ptr<std::vector<std::pair<State, uint8_t>>>;
 
 
-bool LeafSearch (const State& state, uint8_t depth, uint8_t& best_depth, std::pair<State, uint8_t>& best_endstate, uint64_t& leaft_search_positions, std::atomic<uint8_t>& atomic_best_depth, const int& thread_idx);
+void CpuLeafManager (SharedSearch& shared_search, SharedLeafStates& shared_leaf_states, SharedLeafSolution& shared_leaf_solution);
 
 
 void SearchManager();
