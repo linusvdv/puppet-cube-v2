@@ -557,10 +557,18 @@ void DeviceLeafManager (int gpu_idx, SharedSearch& shared_search, SharedLeafStat
         MemcpyFromDeviceStream(device_solution, d_device_solution, cuda_stream);
         cudaStreamSynchronize(cuda_stream);
         if (bool(device_solution.flag)) {
-            bool expected = false;
-            if (shared_leaf_solution.finished.compare_exchange_strong(expected, true, std::memory_order_acq_rel, std::memory_order_acquire)) {
+            bool winner = false;
+            {
+                std::lock_guard<std::mutex> lock(shared_leaf_states.mtx);
+                if (!shared_leaf_solution.finished.load(std::memory_order_relaxed)) {
+                    shared_leaf_solution.state = device_solution.state;
+                    shared_leaf_solution.finished.store(true, std::memory_order_release);
+                    shared_leaf_states.cv.notify_all();
+                    winner = true;
+                }
+            }
+            if (winner) {
                 State state = device_solution.state;
-                shared_leaf_solution.state = state;
                 RegRotations reg_rotations = device_solution.reg_rotations;
                 while (true) {
                     transposition_table::Insert<true>(state, 2*(solution_depth-Settings::GetTBDepth()-1));
@@ -573,8 +581,7 @@ void DeviceLeafManager (int gpu_idx, SharedSearch& shared_search, SharedLeafStat
                     corner::Rotate(state.corner_pos, state.corner_orient, rotation);
                     edge::Rotate(state.edge_pos, state.edge_sym, state.edge_orient, rotation);
                 }
-                shared_leaf_states.cv.notify_all();
-            };
+            }
         }
 
         // accumulate num_positions

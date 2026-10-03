@@ -155,10 +155,13 @@ void DFSNextFrontierSearch (const State& state, Frontier& next_frontier,
 
         // in tablebase
         if (max_heuristic <= Settings::GetTBDepth() && tablebase::Contains(next_state)) {
-            bool expected = false;
-            if (shared_leaf_solution.finished.compare_exchange_strong(expected, true, std::memory_order_acq_rel, std::memory_order_acquire)) {
-                shared_leaf_states.cv.notify_all();
-                shared_leaf_solution.state = next_state;
+            {
+                std::lock_guard<std::mutex> lock(shared_leaf_states.mtx);
+                if (!shared_leaf_solution.finished.load(std::memory_order_relaxed)) {
+                    shared_leaf_solution.state = next_state;
+                    shared_leaf_solution.finished.store(true, std::memory_order_release);
+                    shared_leaf_states.cv.notify_all();
+                }
             }
             LOG_EXTRA("found solution of length ", Settings::GetTBDepth()+cur_depth+1);
             return;
@@ -317,7 +320,10 @@ void BaseSearchManager (
     shared_search.leaf_cnt.store(0);
     shared_leaf_solution.finished.store(false);
     // delete all remaining elements of the queue
-    std::queue<std::shared_ptr<std::vector<std::pair<State, uint8_t>>>>().swap(shared_leaf_states.shared_ptrs);
+    {
+        std::lock_guard<std::mutex> lock(shared_leaf_states.mtx);
+        std::queue<std::shared_ptr<std::vector<std::pair<State, uint8_t>>>>().swap(shared_leaf_states.shared_ptrs);
+    }
 
     total_num_positions = num_positions_leaf + num_positions_search;
 }
