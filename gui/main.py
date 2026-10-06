@@ -203,6 +203,14 @@ class PuppetScene:
         light glued to the camera, Gouraud interpolated). This is replicated
         with unlit vertex colors - pyrender gamma encodes the fragment
         output, so the colors are linearized (** 2.2) first.
+
+        Deviation from the original: the old pipeline clamped over bright
+        vertices per channel at the framebuffer, which makes colors that
+        differ only in a saturating channel identical on faces viewed
+        straight on (yellow (1,1,0) and orange (1,0.5,0) both end up as
+        (1,1,0.5)). Over saturated vertices are scaled down by their max
+        channel instead, which preserves the channel ratios - for vertices
+        below 1.0 nothing changes.
         """
         if not self.lighting:
             return
@@ -213,7 +221,10 @@ class PuppetScene:
                 rotation = extra_rotation @ rotation
             posed = normals @ rotation.T
             diffusion = np.abs(posed @ view) - 0.5
-            colors = np.clip(base_color + diffusion[:, None], 0.0, 1.0) ** 2.2
+            lit = base_color + diffusion[:, None]
+            lit_max = lit.max(axis=1, keepdims=True)
+            lit /= np.maximum(lit_max, 1.0)
+            colors = np.clip(lit, 0.0, 1.0) ** 2.2
             colors = np.concatenate([colors, np.full((len(colors), 1), 1.0)], axis=1)
             colors = colors.astype(np.float32)
             if not np.array_equal(primitive.color_0, colors):
