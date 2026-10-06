@@ -52,10 +52,11 @@ The gui replays the scrambles and solutions of the search on a 3D model of
 the cube (the visual model of the matura thesis, rendered with
 [pyrender](https://github.com/mmatl/pyrender)). The solver runs in the
 background through a python binding of the c++ search and reports every
-scramble/solution to the gui.
+scramble/solution to the gui. Built with cuda it uses the gpu accelerated
+search (run with `--use_cuda=false` for the cpu search).
 
-It needs the precomputation tables (~10 GB on disk, ~17 GB RAM at the
-first time generating the tablebase depth) and is built cpu only.
+It needs the precomputation tables (~8 GB on disk and ~10 GB RAM at the
+default tablebase depth, ~8 GB of gpu memory when using the cuda search).
 
 ### Setup
 
@@ -63,10 +64,13 @@ Create the python environment and build the `puppetpy` binding:
 
 ```bash
 source gui/setup_venv.sh
-cmake -B build_py -DUSE_CUDA=OFF -DBUILD_PYTHON=ON \
+cmake -B build_py -DBUILD_PYTHON=ON \
   -DCMAKE_PREFIX_PATH=$(python3 -c "import pybind11; print(pybind11.get_cmake_dir())")
-cmake --build build_py -j
+cmake --build build -j
 ```
+
+Without the cuda toolkit use `-DUSE_CUDA=OFF` (the binding then only runs
+the cpu search).
 
 `gui/setup_venv.sh` creates `.venv/` (pyrender, trimesh, PyOpenGL, imageio,
 pybind11, numpy<2) and has to be sourced so the activation persists.

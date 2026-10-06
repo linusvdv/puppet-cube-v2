@@ -169,22 +169,23 @@ endif()
 
 
 # ===========================================
-# Python binding of the solver (CPU only)
+# Python binding of the solver
 # ===========================================
 # - ON
 # - OFF
-# requires USE_CUDA=OFF (the binding does not include the CUDA sources)
+# includes the cuda search when USE_CUDA=ON (run with --use_cuda=false to
+# fall back to the cpu search)
 
 option(BUILD_PYTHON "Build the python binding puppetpy" OFF)
 
 if(BUILD_PYTHON)
-    if(USE_CUDA)
-        message(FATAL_ERROR "BUILD_PYTHON requires USE_CUDA=OFF")
-    endif()
-
     find_package(pybind11 CONFIG REQUIRED)
 
-    pybind11_add_module(puppetpy
+    # NO_EXTRAS: pybind11_add_module enables lto by default - the host flto
+    # leaks into the cuda device link step (nvcc -dlink -Xcompiler=-flto)
+    # and leaves cmake_device_link.o with an undefined fatbinData symbol in
+    # a c++ linked shared module
+    pybind11_add_module(puppetpy NO_EXTRAS
         src/puppet_py.cpp
         src/logger.cpp
         src/settings.cpp
@@ -202,14 +203,21 @@ if(BUILD_PYTHON)
         src/corner.cpp
     )
 
+    if(USE_CUDA)
+        target_sources(puppetpy PRIVATE
+            src/corner.cu
+            src/edge.cu
+            src/info.cu
+            src/leaf_search.cu
+            src/tablebase.cu
+        )
+    endif()
+
     target_link_libraries(puppetpy PRIVATE Threads::Threads)
 
     target_compile_options(puppetpy PRIVATE
         $<$<COMPILE_LANGUAGE:CXX>:-Wall -Wextra -g>
+        $<$<COMPILE_LANGUAGE:CUDA>:-Wall -Wextra --expt-extended-lambda -diag-suppress 68 -lineinfo>
         $<$<CONFIG:Release>:-O3>
     )
-
-    if(CMAKE_BUILD_TYPE STREQUAL "Release")
-        set_property(TARGET puppetpy PROPERTY INTERPROCEDURAL_OPTIMIZATION TRUE)
-    endif()
 endif()

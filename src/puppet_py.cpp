@@ -19,6 +19,14 @@
 #include "transposition_table.hpp"
 #include "utils.hpp"
 
+#ifdef USE_CUDA
+#include "corner_bridge.hpp"
+#include "edge_bridge.hpp"
+#include "info_bridge.hpp"
+#include "leaf_search_bridge.hpp"
+#include "tablebase_bridge.hpp"
+#endif
+
 
 namespace py = pybind11;
 
@@ -70,10 +78,31 @@ void Initialize (const std::vector<std::string>& arguments) {
     DuplicateRotations::Initialize();
     LOG_INFO("Loaded Precomputation");
 
+    #ifdef USE_CUDA
+    if (Settings::UseCuda()) {
+        LOG_EXTRA("Start Edge Precomputation Uploading to Device");
+        edge::UploadPrecomputationToDevice();
+        LOG_EXTRA("Start Corner Precomputation Uploading to Device");
+        corner::UploadPrecomputationToDevice();
+        LOG_EXTRA("Start Tablebase Precomputation Uploading to Device");
+        tablebase::UploadPrecomputationToDevice();
+        LOG_INFO("Precomputation Uploaded to Device");
+        LOG_MEMORY();
+    }
+    #endif // USE_CUDA
+
     LOG_EXTRA("Start Transposition Table Initialization");
     transposition_table::Init();
     LOG_INFO("Transposition Table Initialized");
     LOG_MEMORY();
+
+    #ifdef USE_CUDA
+    if (Settings::UseCuda()) {
+        CudaConstMemInitialize();
+        LOG_INFO("Cuda Constant Memory Initialized");
+        LOG_MEMORY();
+    }
+    #endif // USE_CUDA
 
     initialized = true;
 }

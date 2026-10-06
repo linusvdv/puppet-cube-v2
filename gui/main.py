@@ -44,7 +44,7 @@ def parse_args():
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--mode", choices=["gui", "offscreen"], default=None,
                         help="gui (default with display) or offscreen (PNG output)")
-    parser.add_argument("--module_path", default=os.path.join(REPO_ROOT, "build_py"),
+    parser.add_argument("--module_path", default=os.path.join(REPO_ROOT, "build"),
                         help="directory of the puppetpy module")
     parser.add_argument("--out", default=os.path.expanduser("~/tmp/puppet-gui"),
                         help="output directory of the offscreen mode")
