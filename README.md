@@ -6,8 +6,9 @@
 - [Puppet Cube V2](#puppet-cube-v2)
   - [About this project](#about-this-project)
   - [Abstract of the matura thesis](#abstract-of-the-matura-thesis)
-  - [Compilation](#compilation)
   - [Graphical user interface](#graphical-user-interface)
+  - [Compilation](#compilation)
+  - [Run](#run)
   - [Help](#help)
 <!--toc:end-->
 
@@ -25,17 +26,30 @@ Future plans include solving arbitrary user-defined positions (after checking th
 
 In this thesis, the Puppet Cube V2, a shapeshifting variant of the classic Rubik’s Cube, is investigated in two parts, namely its 3D rendering and its solution finding with the help of a search. The interactive visualization of this cube incorporates features such as lighting and transparency. The primary focus of this study was the search. The Puppet Cube V2, represented as a graph, is used to investigate five different graph algorithms. The resulting program is able to find short solutions to randomly scrambled cubes quickly and improves the found solution with additional search time. A comprehensive description of the final implementation is provided, which is able to prove an optimal solution, although there exist $5 \cdot 10^{18}$ positions of the Puppet Cube V2. The algorithm runs in parallel to enhance computational efficiency. Additionally, the thesis presents key properties of the Puppet Cube V2 and the employed algorithm. Notably, a lower bound for God’s Number is established, which shows that there exist positions where 30 moves are required to solve the cube. Furthermore, the research highlights improvements in the average depth when searching for longer. Finally, a comparison to a state-of-the-art Rubik’s Cube solver further proves the effectiveness of the proposed approach.
 
+## Graphical user interface
+
+The gui replays the scrambles and solutions of the search on a 3D model of the cube (the visual model of the matura thesis, rendered with [pyrender](https://github.com/mmatl/pyrender)). The solver runs in the background through a python binding of the c++ search and reports every scramble/solution to the gui. Built with cuda it uses the gpu accelerated search (run with `--use_cuda=false` for the cpu search).
+
+It needs the precomputation tables (~8 GB on disk and ~10 GB RAM at the default tablebase depth, ~8 GB of gpu memory when using the cuda search).
+
+Controls: mouse - orbit camera, space - pause/resume, esc - quit. The window opens immediately with a solved cube while the tables are loaded in the background; the log output of the search is printed to the terminal. Closing the window exits the program (the search can not be aborted mid-run).
+
 ## Compilation
 
+The python binding `puppetpy` for the gui is built by default (`-DBUILD_PYTHON=ON`) and needs pybind11 - set up the python environment before configuring (pybind11 is located automatically, no `CMAKE_PREFIX_PATH` needed):
+
 ```bash
+source gui/setup_venv.sh
 cmake -B build
 cmake --build build -j
 ```
 
-Extra arguments:
+`gui/setup_venv.sh` creates `.venv/` (pyrender, trimesh, PyOpenGL, imageio, pybind11, numpy<2) and has to be sourced so the activation persists.
+
+Disable the gui option:
 
 ```bash
-cmake -B build -DCMAKE_CUDA_COMPILER=/usr/local/cuda-12.8/bin/nvcc -DCMAKE_BUILD_TYPE=Debug -DCUDA_ARCH=90
+cmake -B build -DBUILD_PYTHON=OFF
 cmake --build build -j
 ```
 
@@ -46,53 +60,30 @@ cmake -B build -DUSE_CUDA=OFF
 cmake --build build -j
 ```
 
-## Graphical user interface
-
-The gui replays the scrambles and solutions of the search on a 3D model of
-the cube (the visual model of the matura thesis, rendered with
-[pyrender](https://github.com/mmatl/pyrender)). The solver runs in the
-background through a python binding of the c++ search and reports every
-scramble/solution to the gui. Built with cuda it uses the gpu accelerated
-search (run with `--use_cuda=false` for the cpu search).
-
-It needs the precomputation tables (~8 GB on disk and ~10 GB RAM at the
-default tablebase depth, ~8 GB of gpu memory when using the cuda search).
-
-### Setup
-
-Create the python environment and build the `puppetpy` binding:
+Extra arguments:
 
 ```bash
-source gui/setup_venv.sh
-cmake -B build_py -DBUILD_PYTHON=ON \
-  -DCMAKE_PREFIX_PATH=$(python3 -c "import pybind11; print(pybind11.get_cmake_dir())")
+cmake -B build -DCMAKE_CUDA_COMPILER=/usr/local/cuda-12.8/bin/nvcc -DCMAKE_BUILD_TYPE=Debug -DCUDA_ARCH=90
 cmake --build build -j
 ```
 
-Without the cuda toolkit use `-DUSE_CUDA=OFF` (the binding then only runs
-the cpu search).
+## Run
 
-`gui/setup_venv.sh` creates `.venv/` (pyrender, trimesh, PyOpenGL, imageio,
-pybind11, numpy<2) and has to be sourced so the activation persists.
-
-### Run
+Solver:
 
 ```bash
-python3 gui/main.py                 # interactive viewer
-python3 gui/main.py --lighting      # matura thesis lighting and black outline
+./build/bin/PuppetCubeV2
+```
+
+Gui:
+
+```bash
+python3 gui/main.py                 # interactive viewer with the matura thesis lighting
+python3 gui/main.py --no-lighting   # flat colors without the black outline
 python3 gui/main.py -r 5 -t 8       # solver options are passed through
 ```
 
-Controls: mouse - orbit camera, space - pause/resume, esc - quit. The
-window opens immediately with a solved cube while the tables are loaded in
-the background; the log output of the search is printed to the terminal.
-Closing the window exits the program (the search can not be aborted
-mid-run).
-
-Without a display the gui runs in offscreen mode and renders the start,
-scrambled, per-solution-move and end frames as pngs to `~/tmp/puppet-gui`
-(change with `--out`, additionally needs the apt packages `libegl1` and
-`libgles2`):
+Without a display:
 
 ```bash
 python3 gui/main.py --mode offscreen -r 2
@@ -117,12 +108,12 @@ list of options
     -l --log_level             logger/error level                                         [memory]       (critical|error|warning|info|all|extra|memory)
 
     -r --num_runs              number of runs                                             [10]           (0, 1e18)
-    --run_offset               start at a specific run number                             [0]            (0, 1e18)
+    --run_offset               start at a specific run number                             [0]           (0, 1e18)
     -s --scrambling_depth      how many moves to scramble                                 [100]          (0, 1000000)
-    -m --min_corner_heuristic  all starting position have at least this corner heuristic  [0]            (0, 27)
+    -m --min_corner_heuristic  all starting position have at least this corner heuristic  [0]           (0, 27)
 
     -t --threads               number of threads used in the program                      [MAX_THREADS]  (1, MAX_THREADS)
     --tt_size                  size of the transposition table in MB                      [1000]         (128, 1000000)
 
-    --tb_depth                 depth of the tablebase (9 uses 40 GB RAM)                  [6]            (0, 9)
+    --tb_depth                 depth of the tablebase (9 uses 40 GB RAM)                  [6]           (0, 9)
 ```

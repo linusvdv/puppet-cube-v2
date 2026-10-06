@@ -171,15 +171,43 @@ endif()
 # ===========================================
 # Python binding of the solver
 # ===========================================
-# - ON
+# - ON (default)
 # - OFF
 # includes the cuda search when USE_CUDA=ON (run with --use_cuda=false to
 # fall back to the cpu search)
+# needs pybind11 (pip install pybind11 / source gui/setup_venv.sh), found
+# automatically via the Python interpreter - no -DCMAKE_PREFIX_PATH needed
 
-option(BUILD_PYTHON "Build the python binding puppetpy" OFF)
+option(BUILD_PYTHON "Build the python binding puppetpy" ON)
 
 if(BUILD_PYTHON)
-    find_package(pybind11 CONFIG REQUIRED)
+    # find python via the modern FindPython module and hand it to pybind11
+    # (PYBIND11_FINDPYTHON): avoids the deprecated FindPythonLibs path and
+    # its CMP0148 warning, and picks the active virtualenv if there is one
+    find_package(Python3 REQUIRED COMPONENTS Interpreter Development.Module)
+    set(PYBIND11_FINDPYTHON ON)
+
+    # pip installs are not in cmake's default search paths - ask the
+    # interpreter for pybind11's cmake dir and search it first, falling
+    # back to any system-wide installation
+    execute_process(
+        COMMAND ${Python3_EXECUTABLE} -c "import pybind11; print(pybind11.get_cmake_dir())"
+        RESULT_VARIABLE pybind11_import_result
+        OUTPUT_VARIABLE pybind11_cmake_dir
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+        ERROR_QUIET)
+    if(pybind11_import_result EQUAL 0)
+        list(INSERT CMAKE_PREFIX_PATH 0 "${pybind11_cmake_dir}")
+    endif()
+
+    find_package(pybind11 CONFIG QUIET)
+    if(NOT pybind11_FOUND)
+        message(FATAL_ERROR
+            "pybind11 was not found - install it into the environment of "
+            "${Python3_EXECUTABLE} (pip install pybind11 / source gui/setup_venv.sh) "
+            "or pass -DCMAKE_PREFIX_PATH=<pybind11 cmake dir>")
+    endif()
+    message(STATUS "Found pybind11 ${pybind11_VERSION}: ${pybind11_DIR}")
 
     # NO_EXTRAS: pybind11_add_module enables lto by default - the host flto
     # leaks into the cuda device link step (nvcc -dlink -Xcompiler=-flto)

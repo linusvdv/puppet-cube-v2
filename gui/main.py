@@ -26,6 +26,7 @@ Modes:
 """
 
 import argparse
+import glob
 import os
 import queue
 import sys
@@ -39,13 +40,23 @@ GUI_DIR = os.path.dirname(os.path.abspath(__file__))
 REPO_ROOT = os.path.join(GUI_DIR, "..")
 
 
+def find_module_dir():
+    """Searches the default build directories for the puppetpy module."""
+    for name in ("build", "build_cont"):
+        directory = os.path.join(REPO_ROOT, name)
+        if glob.glob(os.path.join(directory, "puppetpy*.so")):
+            return directory
+    raise SystemExit("puppetpy module not found - build it with cmake -B build "
+                     "(BUILD_PYTHON is on by default) or pass --module_path")
+
+
 def parse_args():
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--mode", choices=["gui", "offscreen"], default=None,
                         help="gui (default with display) or offscreen (PNG output)")
-    parser.add_argument("--module_path", default=os.path.join(REPO_ROOT, "build"),
-                        help="directory of the puppetpy module")
+    parser.add_argument("--module_path", default=None,
+                        help="directory of the puppetpy module (default: search build, build_cont)")
     parser.add_argument("--out", default=os.path.expanduser("~/tmp/puppet-gui"),
                         help="output directory of the offscreen mode")
     parser.add_argument("--width", type=int, default=900)
@@ -58,12 +69,14 @@ def parse_args():
                         help="seconds between moves")
     parser.add_argument("--run_pause", type=float, default=1.0,
                         help="seconds showing the solved cube between runs")
-    parser.add_argument("--lighting", action="store_true",
-                        help="directional lighting instead of flat ambient colors")
+    parser.add_argument("--lighting", action=argparse.BooleanOptionalAction, default=True,
+                        help="matura thesis lighting and black outline (default)")
     args, solver_args = parser.parse_known_args()
 
     if args.mode is None:
         args.mode = "gui" if os.environ.get("DISPLAY") else "offscreen"
+    if args.module_path is None:
+        args.module_path = find_module_dir()
     args.solver_args = solver_args
     return args
 
