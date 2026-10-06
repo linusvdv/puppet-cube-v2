@@ -166,3 +166,50 @@ if(CMAKE_BUILD_TYPE STREQUAL "Release")
         message(WARNING "LTO not supported: ${ipo_error}")
     endif()
 endif()
+
+
+# ===========================================
+# Python binding of the solver (CPU only)
+# ===========================================
+# - ON
+# - OFF
+# requires USE_CUDA=OFF (the binding does not include the CUDA sources)
+
+option(BUILD_PYTHON "Build the python binding puppetpy" OFF)
+
+if(BUILD_PYTHON)
+    if(USE_CUDA)
+        message(FATAL_ERROR "BUILD_PYTHON requires USE_CUDA=OFF")
+    endif()
+
+    find_package(pybind11 CONFIG REQUIRED)
+
+    pybind11_add_module(puppetpy
+        src/puppet_py.cpp
+        src/logger.cpp
+        src/settings.cpp
+        src/tablebase.cpp
+        src/random_position.cpp
+        src/thread_pool.cpp
+        src/search.cpp
+        src/leaf_search.cpp
+        src/special_cubes.cpp
+        src/info.cpp
+        src/duplicate_rotations.cpp
+        src/transposition_table.cpp
+        src/rotation.cpp
+        src/edge.cpp
+        src/corner.cpp
+    )
+
+    target_link_libraries(puppetpy PRIVATE Threads::Threads)
+
+    target_compile_options(puppetpy PRIVATE
+        $<$<COMPILE_LANGUAGE:CXX>:-Wall -Wextra -g>
+        $<$<CONFIG:Release>:-O3>
+    )
+
+    if(CMAKE_BUILD_TYPE STREQUAL "Release")
+        set_property(TARGET puppetpy PROPERTY INTERPROCEDURAL_OPTIMIZATION TRUE)
+    endif()
+endif()

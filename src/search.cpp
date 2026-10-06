@@ -329,14 +329,15 @@ void BaseSearchManager (
 }
 
 
-void SearchManager () {
+void SearchManager (const SearchEventCallback& event_callback) {
     if (Settings::GetNumRuns() <= 0) {
         return;
     }
 
     // random starting positions
     LOG_EXTRA("Start calculating random positions");
-    std::vector<State> random_positions = RandomPositions(Settings::GetNumRuns(), Settings::GetRunOffset());
+    std::vector<std::vector<uint8_t>> scrambles;
+    std::vector<State> random_positions = RandomPositions(Settings::GetNumRuns(), Settings::GetRunOffset(), scrambles);
     LOG_ALL("Calculated random positions");
 
     // start timing
@@ -374,6 +375,12 @@ void SearchManager () {
     // start base search on CPU
     ThreadPool search_thread_pool(Settings::GetNumThreads());
     for (size_t idx = 0; idx < random_positions.size(); idx++) {
+        // notify the gui about the scramble of this run
+        if (event_callback) {
+            SearchEvent event = {SearchEventKind::kScramble, idx, 0, std::move(scrambles[idx])};
+            event_callback(event);
+        }
+
         // already in TB
         if (GetTBLayer(random_positions[idx]) >= 0) {
             std::vector<Rotations> tb_rotations(GetTBLayer(random_positions[idx]));
@@ -382,6 +389,11 @@ void SearchManager () {
             LOG_EXTRA("Position already in tablebase");
             LOG_EXTRA("solution moves:", tb_rotations);
             LOG_ALL(SkipSpace("["), SkipSpace(idx+1), SkipSpace("/"), SkipSpace(Settings::GetNumRuns()), "] Depth:", GetTBLayer(random_positions[idx]), "num_positions: 0");
+            if (event_callback) {
+                SearchEvent event = {SearchEventKind::kSolution, idx, uint8_t(tb_rotations.size()),
+                                     std::vector<uint8_t>(tb_rotations.begin(), tb_rotations.end())};
+                event_callback(event);
+            }
             continue;
         }
 
@@ -411,6 +423,13 @@ void SearchManager () {
 
         LOG_ALL(SkipSpace("["), SkipSpace(idx+1), SkipSpace("/"), SkipSpace(Settings::GetNumRuns()), "] Depth:", solution_depth, "num_positions:", total_num_positions);
         LOG_MEMORY();
+
+        // notify the gui about the solution of this run
+        if (event_callback) {
+            SearchEvent event = {SearchEventKind::kSolution, idx, solution_depth,
+                                 std::vector<uint8_t>(solution_rotations.begin(), solution_rotations.end())};
+            event_callback(event);
+        }
 
         if (Logger::GetLoggerLevel() >= LoggerLevel::kExtra) { // test if the solution works
             State test_state = random_positions[idx];

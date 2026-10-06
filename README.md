@@ -7,6 +7,7 @@
   - [About this project](#about-this-project)
   - [Abstract of the matura thesis](#abstract-of-the-matura-thesis)
   - [Compilation](#compilation)
+  - [Graphical user interface](#graphical-user-interface)
   - [Help](#help)
 <!--toc:end-->
 
@@ -43,6 +44,54 @@ Without cuda:
 ```bash
 cmake -B build -DUSE_CUDA=OFF
 cmake --build build -j
+```
+
+## Graphical user interface
+
+The gui replays the scrambles and solutions of the search on a 3D model of
+the cube (the visual model of the matura thesis, rendered with
+[pyrender](https://github.com/mmatl/pyrender)). The solver runs in the
+background through a python binding of the c++ search and reports every
+scramble/solution to the gui.
+
+It needs the precomputation tables (~10 GB on disk, ~17 GB RAM at the
+first time generating the tablebase depth) and is built cpu only.
+
+### Setup
+
+Create the python environment and build the `puppetpy` binding:
+
+```bash
+source gui/setup_venv.sh
+cmake -B build_py -DUSE_CUDA=OFF -DBUILD_PYTHON=ON \
+  -DCMAKE_PREFIX_PATH=$(python3 -c "import pybind11; print(pybind11.get_cmake_dir())")
+cmake --build build_py -j
+```
+
+`gui/setup_venv.sh` creates `.venv/` (pyrender, trimesh, PyOpenGL, imageio,
+pybind11, numpy<2) and has to be sourced so the activation persists.
+
+### Run
+
+```bash
+python3 gui/main.py                 # interactive viewer
+python3 gui/main.py --lighting      # matura thesis lighting and black outline
+python3 gui/main.py -r 5 -t 8       # solver options are passed through
+```
+
+Controls: mouse - orbit camera, space - pause/resume, esc - quit. The
+window opens immediately with a solved cube while the tables are loaded in
+the background; the log output of the search is printed to the terminal.
+Closing the window exits the program (the search can not be aborted
+mid-run).
+
+Without a display the gui runs in offscreen mode and renders the start,
+scrambled, per-solution-move and end frames as pngs to `~/tmp/puppet-gui`
+(change with `--out`, additionally needs the apt packages `libegl1` and
+`libgles2`):
+
+```bash
+python3 gui/main.py --mode offscreen -r 2
 ```
 
 ## Help

@@ -12,12 +12,14 @@
 #include "settings.hpp"
 
 
-void MultithreadRandomPosition(std::vector<State>& random_positions, int seed_start, int seed_end, int seed_offset) {
+void MultithreadRandomPosition(std::vector<State>& random_positions, std::vector<std::vector<uint8_t>>& scrambles,
+                               int seed_start, int seed_end, int seed_offset) {
     for (int i = seed_start; i < seed_end; i++) {
         std::mt19937 gen(i + seed_offset);
         std::uniform_int_distribution<int> dist(0, kNumRot-1);
 
         State local_state = kSolvedState;
+        std::vector<uint8_t>& scramble = scrambles[i];
         for (int j = 0; j < Settings::GetScramblingDepth(); j++) {
             uint8_t rotation = dist(gen);
 
@@ -26,6 +28,7 @@ void MultithreadRandomPosition(std::vector<State>& random_positions, int seed_st
                 continue;
             }
 
+            scramble.push_back(rotation);
             corner::Rotate(local_state.corner_pos, local_state.corner_orient, rotation);
             edge::Rotate(local_state.edge_pos, local_state.edge_sym, local_state.edge_orient, rotation);
         }
@@ -38,6 +41,7 @@ void MultithreadRandomPosition(std::vector<State>& random_positions, int seed_st
                 continue;
             }
 
+            scramble.push_back(rotation);
             corner::Rotate(local_state.corner_pos, local_state.corner_orient, rotation);
             edge::Rotate(local_state.edge_pos, local_state.edge_sym, local_state.edge_orient, rotation);
         }
@@ -47,8 +51,9 @@ void MultithreadRandomPosition(std::vector<State>& random_positions, int seed_st
 }
 
 
-std::vector<State> RandomPositions (const int& num_elements, int seed_offset) {
+std::vector<State> RandomPositions (const int& num_elements, int seed_offset, std::vector<std::vector<uint8_t>>& scrambles) {
     std::vector<State> random_positions(num_elements);
+    scrambles.assign(num_elements, {});
 
     {
         std::vector<std::jthread> threads;
@@ -56,6 +61,7 @@ std::vector<State> RandomPositions (const int& num_elements, int seed_offset) {
         for (int thread = 0; thread < Settings::GetNumThreads(); thread++) {
             threads.emplace_back(MultithreadRandomPosition,
                                  std::ref(random_positions),
+                                 std::ref(scrambles),
                                  ((num_elements/Settings::GetNumThreads())+1)*thread,
                                  std::min(((num_elements/Settings::GetNumThreads())+1)*(thread+1), num_elements),
                                  seed_offset);
