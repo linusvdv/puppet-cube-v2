@@ -20,12 +20,14 @@ constexpr uint32_t kNumLehmerPos = Factorial(12);
 constexpr uint32_t kNumPos = 9985968;
 constexpr uint16_t kNumSymChange = 921; // this is unfortunatly more than 256 (which would fit in uint8_t and could therefore be packed in a uint32_t with the position)
 
+#ifndef REDUCE_MEMORY
 constexpr uint64_t kNumHeuristic = uint64_t(kNumPos)*kNumOrient;
 constexpr int kMyAtomicBitsetSizePerEl = 64;
 constexpr uint32_t kNumHeuristicBuckets = 81609107;
 
 using Heuristic = std::vector<std::array<uint64_t, kNumOrient/kNumStoredPerBucket>>;
 using NextVisited = std::vector<std::array<std::atomic<uint64_t>, kNumOrient/kMyAtomicBitsetSizePerEl>>;
+#endif
 
 constexpr std::array<uint32_t, kNumEdges+1> kFactorials = []{
     std::array<uint32_t, kNumEdges+1> arr{};
@@ -43,8 +45,15 @@ std::vector<std::array<uint16_t, kNumSym>> symmetry_change;
 std::vector<std::array<std::array<uint16_t, kNumRot>, kNumSym>> orientation_change;
 
 // heuristic
+#ifdef REDUCE_MEMORY
+// the maximum of both is used as the heuristic
+// (admissible like the full one, but weaker)
+std::vector<uint8_t> position_heuristic; // [pos] exact distance of the relaxed problem where the orientation is ignored
+std::vector<uint8_t> orientation_heuristic; // [orient] exact distance of the relaxed problem where the position is ignored (all symmetry frame changes allowed)
+#else
 std::vector<std::array<uint32_t, kNumOrient/kNumStoredPerBucket>> heuristic_bucket;
 std::vector<uint64_t> heuristic_value;
+#endif
 
 
 // most important one!
@@ -66,7 +75,11 @@ void Rotate(uint32_t& pos, uint8_t& sym, uint16_t& orient, uint8_t rot) {
 
 
 uint8_t GetHeuristic(uint32_t pos, uint16_t orient) {
+#ifdef REDUCE_MEMORY
+    return std::max(position_heuristic[pos], orientation_heuristic[orient]);
+#else
     return heuristic_value[heuristic_bucket[pos][orient/kNumStoredPerBucket]] >> ((orient%kNumStoredPerBucket) * 4) & kSingleHeuristicValue;
+#endif
 }
 
 
@@ -413,6 +426,7 @@ void InitOrientationChange(const std::array<Vec3i, kNumEdges>& idx_to_xyz_pos,
 }
 
 
+#ifndef REDUCE_MEMORY
 inline uint8_t GetPreHeuristic(const Heuristic& heuristic, uint32_t pos, uint16_t orient) {
     return heuristic[pos][orient/kNumStoredPerBucket] >> ((orient%kNumStoredPerBucket) * 4) & kSingleHeuristicValue;
 }
@@ -584,6 +598,68 @@ void InitHeuristic(const std::array<Vec3i, kNumEdges>& idx_to_xyz_pos,
         LOG_CRITICAL("Heuristic bucket cnt incorrect", bucket_cnt, kNumHeuristicBuckets);
     }
 }
+#else
+void InitReducedHeuristic() {
+    // the maximum of both heuristics stays admissible (each one is a lower
+    // bound of the full edge heuristic) and consistent; the values have to
+    // stay <= 14 like the ones of the full heuristic (the leaf searches rely
+    // on this)
+
+    // position only: the position class transition is independent of the
+    // orientation and the current symmetry
+    position_heuristic.assign(kNumPos, kSingleHeuristicValue);
+    std::vector<uint32_t> frontier = {0};
+    position_heuristic[0] = 0;
+    int depth = 1;
+    while (!frontier.empty()) {
+        std::vector<uint32_t> next_frontier;
+        for (uint32_t pos : frontier) {
+            for (uint8_t rot = 0; rot < kNumRot; rot++) {
+                uint32_t next_pos = position_change[pos][rot] & kPosMask;
+                if (position_heuristic[next_pos] != kSingleHeuristicValue) {
+                    continue;
+                }
+                position_heuristic[next_pos] = uint8_t(depth); // NOLINT
+                next_frontier.push_back(next_pos);
+            }
+        }
+        frontier = std::move(next_frontier);
+        depth++;
+    }
+    LOG_ALL("Edge position heuristic finished at depth", depth-1);
+    if (depth-1 > 14) {
+        LOG_CRITICAL("Edge position heuristic exceeds the maximum edge distance 14");
+    }
+
+    // orientation only: the relative symmetry frame change of a move depends
+    // on the position -> allow all frame changes for a relaxation
+    orientation_heuristic.assign(kNumOrient, kSingleHeuristicValue);
+    frontier = {0};
+    orientation_heuristic[0] = 0;
+    depth = 1;
+    while (!frontier.empty()) {
+        std::vector<uint32_t> next_frontier;
+        for (uint32_t orient : frontier) {
+            for (uint8_t rel_sym = 0; rel_sym < kNumSym; rel_sym++) {
+                for (uint8_t rot = 0; rot < kNumRot; rot++) {
+                    uint16_t next_orient = orientation_change[orient][rel_sym][rot];
+                    if (orientation_heuristic[next_orient] != kSingleHeuristicValue) {
+                        continue;
+                    }
+                    orientation_heuristic[next_orient] = uint8_t(depth); // NOLINT
+                    next_frontier.push_back(next_orient);
+                }
+            }
+        }
+        frontier = std::move(next_frontier);
+        depth++;
+    }
+    LOG_ALL("Edge orientation heuristic finished at depth", depth-1);
+    if (depth-1 > 14) {
+        LOG_CRITICAL("Edge orientation heuristic exceeds the maximum edge distance 14");
+    }
+}
+#endif
 
 
 void Init() {
@@ -631,8 +707,14 @@ void Init() {
                            "edge_symmetry_change.bin", symmetry_change, kNumSymChange);
     LoadOrGenerate("[3/7] Edge Orientation Change", [&](){InitOrientationChange(idx_to_xyz_pos, idx_to_mat_sym, idx_piece_rot, idx_piece_sym);},
                    "edge_orientation_change.bin", orientation_change, kNumOrient);
+#ifdef REDUCE_MEMORY
+    LoadMultipleOrGenerate("[4/7] Edge Heuristic (reduced)", [&](){InitReducedHeuristic();},
+                           "edge_heuristic_position.bin", position_heuristic, kNumPos,
+                           "edge_heuristic_orientation.bin", orientation_heuristic, kNumOrient);
+#else
     LoadMultipleOrGenerate("[4/7] Edge Heuristic", [&](){InitHeuristic(idx_to_xyz_pos, idx_to_mat_sym, idx_piece_sym, sym_mul_sym, sym_trans);},
                            "edge_heuristic_bucket.bin", heuristic_bucket, kNumPos,
                            "edge_heuristic_value.bin", heuristic_value, kNumHeuristicBuckets);
+#endif
 }
 }

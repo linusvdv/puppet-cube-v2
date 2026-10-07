@@ -18,7 +18,7 @@ This project started as a matura thesis, a graded project at the end of my Gymna
 
 The following year was spent redesigning the project from the ground up, and the result can be found at [tag v2.0](https://github.com/linusvdv/puppet-cube-v2/tree/v2.0). Further breakthroughs in the heuristic algorithms were found, and GPU acceleration was added, which required writing a new search from scratch. This new implementation proves optimality directly, in a few seconds, and in under a second even for the hardest cubes on strong hardware. Up to this point, no AI was used in this project.
 
-From v2.0 onwards, AI is being used for three main purposes: tidying up the search so the code can run on the CPU alone, re-adding a 3D rendering of the cube, and verifying correctness, improving runtime efficiency, and optionally reducing memory usage (selectable at compile time) by using the old edge heuristic.
+From v2.0 onwards, AI is being used for three main purposes: tidying up the search so the code can run on the CPU alone, re-adding a 3D rendering of the cube, and verifying correctness, improving runtime efficiency, and optionally reducing memory usage (selectable at compile time) by using two smaller edge heuristic.
 
 Future plans include solving arbitrary user-defined positions (after checking that the cube is in a legal, solvable state), adding a neural network for image recognition to detect the user's position, and possibly a web interface.
 

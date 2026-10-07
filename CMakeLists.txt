@@ -68,6 +68,24 @@ if(USE_CUDA)
     set(CMAKE_CUDA_STANDARD_REQUIRED ON)
 endif()
 
+
+# =====================================================
+# Important option to reduce the memory usage!
+# Uses the maximum of a position only and an
+# orientation only edge heuristic instead of the full
+# edge heuristic (slower, but ~5.3 GB less RAM and
+# VRAM)
+# =====================================================
+# - ON
+# - OFF
+
+option(REDUCE_MEMORY "Reduced memory edge heuristic (slower)" OFF)
+
+if(REDUCE_MEMORY)
+    add_compile_definitions(REDUCE_MEMORY)
+endif()
+
+
 include_directories(include/)
 
 add_executable(PuppetCubeV2
