@@ -22,6 +22,31 @@ CAMERA_EYE = np.array([3.0, 2.4, 3.6])
 CAMERA_TARGET = np.array([0.0, 0.0, 0.0])
 
 
+def install_uniform_location_cache():
+    """Memoizes pyrender's glGetUniformLocation lookups (module level).
+
+    pyrender re-resolves every uniform location on every set_uniform call -
+    with 52 primitives x ~6 uniforms per frame that is ~300 lookups per
+    frame, ~20% of the render time. Locations are stable for a program's
+    lifetime, so they are cached per (program id, name). The cache is
+    cleared on every call: it is installed when a gl context is set up, and
+    program ids can be reused by new programs after a context loss.
+    """
+    import pyrender.shader_program as shader_program
+    original = shader_program.glGetUniformLocation
+    cache = {}
+
+    def cached_lookup(program, name):
+        key = (program, name)
+        location = cache.get(key)
+        if location is None:
+            location = original(program, name)
+            cache[key] = location
+        return location
+
+    shader_program.glGetUniformLocation = cached_lookup
+
+
 def look_at(eye, target, up=(0.0, 1.0, 0.0)):
     """Camera to world pose looking from eye to target."""
     eye = np.asarray(eye, dtype=float)
@@ -45,56 +70,49 @@ class PuppetScene:
     def __init__(self, cube, lighting=False):
         self.cube = cube
         self.lighting = lighting
-        # (primitive, piece_idx, base color, canonical normals) of the lit pieces
+        # (primitive, piece_idx, base color per vertex, canonical normals) of
+        # the lit pieces
         self.lit_primitives = []
         self.pending_reupload = set()
+        self._lighting_signature = None
         self.scene = pyrender.Scene(ambient_light=[1.0, 1.0, 1.0],
                                     bg_color=[0.12, 0.12, 0.15, 1.0])
-        materials = {}
-        white_material = None
-        outline_material = None
+        # the piece meshes have an inconsistent triangle winding (the matura
+        # renderer drew without back face culling)
+        white_material = pyrender.MetallicRoughnessMaterial(
+            baseColorFactor=[1.0, 1.0, 1.0, 1.0],
+            roughnessFactor=1.0, metallicFactor=0.0, doubleSided=True)
+        outline_material = pyrender.MetallicRoughnessMaterial(
+            baseColorFactor=[0.0, 0.0, 0.0, 1.0],
+            roughnessFactor=1.0, metallicFactor=0.0, doubleSided=True)
         self.nodes = []
         for piece_idx, piece in enumerate(get_piece_geometry()):
-            primitives = []
+            # one triangle primitive per piece with per vertex colors: the
+            # color groups of a piece share the material (the colors ride in
+            # color_0) and geometry.py splits the vertices by (position,
+            # color), so no vertex is shared between groups. One draw call
+            # per piece instead of one per color group - pyrender's per
+            # primitive overhead dominates the frame time otherwise.
+            indices = np.concatenate([faces for faces, _ in piece["groups"]])
+            vertex_colors = np.zeros((len(piece["vertices"]), 4), dtype=np.float32)
             for faces, color in piece["groups"]:
-                if lighting:
-                    # matura lighting model: color + (abs(dot(normal, view)) - 0.5)
-                    # per vertex - rendered as unlit vertex colors (see
-                    # update_lighting), so the material is white
-                    if white_material is None:
-                        white_material = pyrender.MetallicRoughnessMaterial(
-                            baseColorFactor=[1.0, 1.0, 1.0, 1.0],
-                            roughnessFactor=1.0, metallicFactor=0.0, doubleSided=True)
-                    primitive = pyrender.Primitive(
-                        positions=piece["vertices"].astype(np.float32),
-                        normals=piece["normals"].astype(np.float32),
-                        indices=faces.astype(np.uint32), material=white_material)
-                    primitive.color_0 = np.tile(
-                        np.array([color[0], color[1], color[2], 1.0], dtype=np.float32),
-                        (len(piece["vertices"]), 1))
-                    self.lit_primitives.append(
-                        (primitive, piece_idx, np.array(color, dtype=np.float64),
-                         piece["normals"]))
-                else:
-                    key = tuple(color)
-                    if key not in materials:
-                        # the piece meshes have an inconsistent triangle winding
-                        # (the matura renderer drew without back face culling)
-                        materials[key] = pyrender.MetallicRoughnessMaterial(
-                            baseColorFactor=[color[0], color[1], color[2], 1.0],
-                            roughnessFactor=1.0, metallicFactor=0.0, doubleSided=True)
-                    primitive = pyrender.Primitive(
-                        positions=piece["vertices"].astype(np.float32),
-                        normals=piece["normals"].astype(np.float32),
-                        indices=faces.astype(np.uint32), material=materials[key])
-                primitives.append(primitive)
+                vertex_colors[faces.reshape(-1)] = [color[0], color[1], color[2], 1.0]
+            primitive = pyrender.Primitive(
+                positions=piece["vertices"].astype(np.float32),
+                normals=piece["normals"].astype(np.float32),
+                indices=indices.astype(np.uint32), material=white_material)
+            primitive.color_0 = vertex_colors
+            if lighting:
+                # matura lighting model: color + (abs(dot(normal, view)) - 0.5)
+                # per vertex - rendered as unlit vertex colors (see
+                # update_lighting)
+                self.lit_primitives.append(
+                    (primitive, piece_idx, vertex_colors[:, :3].astype(np.float64),
+                     piece["normals"]))
+            primitives = [primitive]
 
             # black outline (the matura renderer drew the lines over the triangles)
             if len(piece["lines"]):
-                if outline_material is None:
-                    outline_material = pyrender.MetallicRoughnessMaterial(
-                        baseColorFactor=[0.0, 0.0, 0.0, 1.0],
-                        roughnessFactor=1.0, metallicFactor=0.0, doubleSided=True)
                 outline = piece["lines"].reshape(-1, 3) * (1.0 + self.OUTLINE_OFFSET)
                 outline_normals = np.tile(np.array([[0.0, 0.0, 1.0]], dtype=np.float32),
                                           (len(outline), 1))
@@ -128,17 +146,29 @@ class PuppetScene:
         (1,1,0.5)). Over saturated vertices are scaled down by their max
         channel instead, which preserves the channel ratios - for vertices
         below 1.0 nothing changes.
+
+        Skipped when nothing changed since the last call (camera pose,
+        piece rotations) - the colors are compared anyway, this avoids the
+        ~2 ms recompute during playback with a static camera.
         """
         if not self.lighting:
             return
-        view = -np.asarray(camera_pose, dtype=np.float64)[:3, 2]
-        for primitive, piece_idx, base_color, normals in self.lit_primitives:
+        camera_pose = np.asarray(camera_pose, dtype=np.float64)
+        signature = (camera_pose.tobytes(),
+                     None if extra_rotation is None
+                     else np.asarray(extra_rotation, dtype=np.float64).tobytes(),
+                     b"".join(r.tobytes() for r in self.cube.rotations))
+        if signature == self._lighting_signature:
+            return
+        self._lighting_signature = signature
+        view = -camera_pose[:3, 2]
+        for primitive, piece_idx, base_colors, normals in self.lit_primitives:
             rotation = self.cube.rotations[piece_idx]
             if extra_rotation is not None:
                 rotation = extra_rotation @ rotation
             posed = normals @ rotation.T
             diffusion = np.abs(posed @ view) - 0.5
-            lit = base_color + diffusion[:, None]
+            lit = base_colors + diffusion[:, None]
             lit_max = lit.max(axis=1, keepdims=True)
             lit /= np.maximum(lit_max, 1.0)
             colors = np.clip(lit, 0.0, 1.0) ** 2.2

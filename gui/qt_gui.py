@@ -28,11 +28,12 @@ import time
 import traceback
 
 import numpy as np
-from OpenGL.GL import (GL_COLOR_BUFFER_BIT, GL_DRAW_FRAMEBUFFER,
-                       GL_DRAW_FRAMEBUFFER_BINDING, GL_FRAMEBUFFER,
+from OpenGL.GL import (GL_COLOR_BUFFER_BIT, GL_DEPTH_TEST, GL_DRAW_FRAMEBUFFER,
+                       GL_DRAW_FRAMEBUFFER_BINDING, GL_FRAMEBUFFER, GL_LESS,
                        GL_NEAREST, GL_NO_ERROR, GL_READ_FRAMEBUFFER,
-                       glBlitFramebuffer, glBindFramebuffer, glGetError,
-                       glGetIntegerv)
+                       glBlitFramebuffer, glBindFramebuffer, glDepthFunc,
+                       glDepthMask, glDepthRange, glEnable, glGetError,
+                       glGetIntegerv, glViewport)
 
 from PySide6.QtCore import QObject, Qt, QTimer, Signal
 from PySide6.QtGui import QKeySequence, QShortcut, QSurfaceFormat
@@ -49,7 +50,8 @@ from pyrender.trackball import Trackball
 from cube_model import VisualCube
 from main import run_solver
 from playback import PlaybackController
-from scene import CAMERA_TARGET, CAMERA_EYE, PuppetScene, look_at
+from scene import (CAMERA_TARGET, CAMERA_EYE, PuppetScene, install_uniform_location_cache,
+                   look_at)
 from timeline import ROW_SCRAMBLE, MoveTimeline
 
 # gui log levels (like the c++ logger: higher setting = more output);
@@ -84,8 +86,11 @@ class CubeView(QOpenGLWidget):
     pyglet window, framebuffer 0 is NOT the widget content - QOpenGLWidget
     renders into a dedicated fbo that qt binds at paintGL entry (see
     QOpenGLWidget::defaultFramebufferObject). pyrender's forward pass binds
-    framebuffer 0, so the scene is rendered with RenderFlags.OFFSCREEN into
-    pyrender's internal framebuffer and blitted over the widget fbo.
+    framebuffer 0 - the viewport setup is patched per renderer instance to
+    draw directly into the widget fbo instead (no intermediate buffers, no
+    readback). The fallback path (unexpected pyrender version) renders with
+    RenderFlags.OFFSCREEN into pyrender's internal framebuffer and blits it
+    over.
     """
 
     def __init__(self, gui_scene, parent=None):
@@ -93,6 +98,8 @@ class CubeView(QOpenGLWidget):
         self.gui_scene = gui_scene
         self.renderer = None
         self.paint_failures = 0
+        self.direct_render = False
+        self._widget_fbo = 0
         # orbit camera (mouse), wheel zooms
         self.trackball = Trackball(look_at(CAMERA_EYE, CAMERA_TARGET),
                                    (640, 480), 5.2, CAMERA_TARGET)
@@ -104,7 +111,47 @@ class CubeView(QOpenGLWidget):
         # reparenting / screen changes destroy the context - free the gl
         # objects while the old context is still current
         self.context().aboutToBeDestroyed.connect(self._context_lost)
+        self._install_direct_render()
         self._log_gl_state()
+
+    def _install_direct_render(self):
+        """Patches the renderer's viewport setup to draw into the widget
+        framebuffer.
+
+        pyrender's _configure_forward_pass_viewport binds framebuffer 0 for
+        on-screen rendering - with QOpenGLWidget that is not the widget
+        content. Rendering with RenderFlags.OFFSCREEN instead (the
+        workaround) allocates pyrender's own double framebuffer set (single
+        + 4x msaa color and depth, ~290 MiB at 4k) and reads the whole frame
+        back to the cpu on every frame (a pipeline stall that grows with
+        the window size). The patch only redirects the framebuffer binding;
+        the private method it replaces is pinned to pyrender 0.1.45.
+        """
+        if pyrender.__version__ != "0.1.45":
+            log("warning", f"pyrender {pyrender.__version__} != 0.1.45 - using "
+                "the slow offscreen+blit render path")
+            return
+        # also memoize the uniform location lookups (~20% of render time;
+        # clears the cache - program ids can repeat after a context loss)
+        install_uniform_location_cache()
+        renderer = self.renderer
+        view = self
+
+        def configure_forward_pass_viewport(flags):
+            if flags & RenderFlags.OFFSCREEN:
+                renderer._configure_main_framebuffer()  # noqa: SLF001
+                glBindFramebuffer(GL_DRAW_FRAMEBUFFER, renderer._main_fb_ms)  # noqa: SLF001
+            else:
+                glBindFramebuffer(GL_DRAW_FRAMEBUFFER, view._widget_fbo)
+            glViewport(0, 0, renderer.viewport_width, renderer.viewport_height)
+            glEnable(GL_DEPTH_TEST)
+            glDepthMask(True)
+            glDepthFunc(GL_LESS)
+            glDepthRange(0.0, 1.0)
+
+        renderer._configure_forward_pass_viewport = configure_forward_pass_viewport  # noqa: SLF001
+        self.direct_render = True
+        log("info", "rendering directly into the widget framebuffer")
 
     def _log_gl_state(self):
         """Logs what qt actually gave us (context version/profile/type and
@@ -165,9 +212,8 @@ class CubeView(QOpenGLWidget):
     def _render_frame(self):
         clear_gl_errors()
         # the fbo qt bound for paintGL is the widget content (nonzero for
-        # QOpenGLWidget); pyrender's forward pass would rebind framebuffer 0
-        # and draw somewhere else - render offscreen and blit it over instead
-        widget_fbo = int(glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING))
+        # QOpenGLWidget) - captured for the patched viewport setup
+        self._widget_fbo = int(glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING))
         pose = self.trackball.pose
         self.gui_scene.scene.set_pose(self.gui_scene.camera, pose)
         # the matura lighting follows the camera - the vertex colors are
@@ -175,17 +221,24 @@ class CubeView(QOpenGLWidget):
         if self.gui_scene.lighting:
             self.gui_scene.update_lighting(pose)
             self.gui_scene.flush_lighting()
-        self.renderer.render(self.gui_scene.scene, RenderFlags.OFFSCREEN)
-        width = self.renderer.viewport_width
-        height = self.renderer.viewport_height
-        glBindFramebuffer(GL_READ_FRAMEBUFFER, self.renderer._main_fb)  # noqa: SLF001 - pyrender 0.1.45
-        glBindFramebuffer(GL_DRAW_FRAMEBUFFER, widget_fbo)
-        glBlitFramebuffer(0, 0, width, height, 0, 0, width, height,
-                          GL_COLOR_BUFFER_BIT, GL_NEAREST)
-        glBindFramebuffer(GL_FRAMEBUFFER, widget_fbo)
+        if self.direct_render:
+            # draws straight into the widget framebuffer
+            self.renderer.render(self.gui_scene.scene, RenderFlags.NONE)
+        else:
+            # fallback (unexpected pyrender version): render offscreen and
+            # blit over the widget framebuffer
+            self.renderer.render(self.gui_scene.scene, RenderFlags.OFFSCREEN)
+            width = self.renderer.viewport_width
+            height = self.renderer.viewport_height
+            glBindFramebuffer(GL_READ_FRAMEBUFFER, self.renderer._main_fb)  # noqa: SLF001 - pyrender 0.1.45
+            glBindFramebuffer(GL_DRAW_FRAMEBUFFER, self._widget_fbo)
+            glBlitFramebuffer(0, 0, width, height, 0, 0, width, height,
+                              GL_COLOR_BUFFER_BIT, GL_NEAREST)
+            glBindFramebuffer(GL_FRAMEBUFFER, self._widget_fbo)
         if GUI_LOG_LEVEL >= LOG_LEVELS["extra"]:
-            log("extra", f"widget fbo {widget_fbo}, pyrender fbo "
-                f"{self.renderer._main_fb}, viewport {width}x{height}")  # noqa: SLF001
+            log("extra", f"widget fbo {self._widget_fbo}, direct "
+                f"{self.direct_render}, viewport {self.renderer.viewport_width}"
+                f"x{self.renderer.viewport_height}")
             errors = []
             for _ in range(8):
                 code = glGetError()
