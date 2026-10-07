@@ -15,6 +15,7 @@ import imageio.v2 as imageio
 
 from cube_model import VisualCube
 from geometry import SOLVED_PIECES
+from main import run_solver
 from scene import PuppetScene
 
 
@@ -39,7 +40,6 @@ class OffscreenRenderer:
         self.events.put(event)
 
     def _solver_thread(self):
-        from main import run_solver
         try:
             run_solver(self.puppetpy, self._callback, self.args.solver_args)
         except Exception as error:  # noqa: BLE001 - surfaced after the event loop
@@ -51,32 +51,8 @@ class OffscreenRenderer:
         else:
             # canonical frame: undo the tracked whole cube rotation
             for piece_idx, node in enumerate(self.scene.nodes):
-                rotation = extra_rotation @ self.cube.rotations[piece_idx]
-                if piece_idx < 6:
-                    # centers can be spun around their own axis by the replay
-                    # (not tracked by the search, geometrically invisible but
-                    # visible in the shading) - verify the spin and align them
-                    # to the solved orientation
-                    snapped = np.round(rotation)
-                    assert np.allclose(rotation, snapped, atol=1e-6), \
-                        f"center piece {piece_idx} not solved up to the frame offset"
-                    solved_rotation = SOLVED_PIECES[piece_idx][2]
-                    relative = snapped @ solved_rotation.T
-                    # center meshes are modeled around the +y axis
-                    axis = solved_rotation @ np.array([0.0, 1.0, 0.0])
-                    assert np.allclose(relative @ axis, axis), \
-                        f"center piece {piece_idx} rotated off its own axis"
-                    rotation = solved_rotation
-                else:
-                    # edges and corners are tracked: the composed rotation is
-                    # an exact 90 degree multiple - snap away the float
-                    # rounding so the comparison becomes pixel exact
-                    snapped = np.round(rotation)
-                    assert np.allclose(rotation, snapped, atol=1e-6), \
-                        f"piece {piece_idx} not solved up to the frame offset"
-                    rotation = snapped
                 pose = np.eye(4)
-                pose[:3, :3] = rotation
+                pose[:3, :3] = self._canonical_rotation(piece_idx, extra_rotation)
                 self.scene.scene.set_pose(node, pose)
         if self.args.lighting:
             camera_pose = self.scene.scene.get_pose(self.scene.camera)
@@ -85,6 +61,28 @@ class OffscreenRenderer:
         color, _ = self.renderer.render(self.scene.scene)
         imageio.imwrite(os.path.join(self.out, name), color)
         return color
+
+    def _canonical_rotation(self, piece_idx, offset_inverse):
+        """Piece rotation for the canonical end frame: the tracked frame
+        offset undone, snapped to the exact 90 degree multiples (the
+        composed matrices carry float rounding ~1e-15)."""
+        rotation = offset_inverse @ self.cube.rotations[piece_idx]
+        snapped = np.round(rotation)
+        assert np.allclose(rotation, snapped, atol=1e-6), \
+            f"piece {piece_idx} not solved up to the frame offset"
+        if piece_idx < 6:
+            # centers can be spun around their own axis by the replay (not
+            # tracked by the search, geometrically invisible but visible in
+            # the shading) - verify the spin and align them to the solved
+            # orientation
+            solved_rotation = SOLVED_PIECES[piece_idx][2]
+            relative = snapped @ solved_rotation.T
+            # center meshes are modeled around the +y axis
+            axis = solved_rotation @ np.array([0.0, 1.0, 0.0])
+            assert np.allclose(relative @ axis, axis), \
+                f"center piece {piece_idx} rotated off its own axis"
+            return solved_rotation
+        return snapped
 
     def replay_run(self, run_idx, scramble, solution):
         self.render_frame(f"run{run_idx:02d}_00_start.png")

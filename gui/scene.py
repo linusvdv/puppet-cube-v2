@@ -4,6 +4,9 @@ PuppetScene builds one node per piece of the 26 piece visual model
 (geometry.py) and provides the matura thesis lighting: the vertex colors
 are recomputed per frame from the view direction (update_lighting) and
 uploaded in place (flush_lighting) - see the PuppetScene docstrings.
+
+The pyrender integration patches (framebuffer redirect, uniform location
+cache) live in gl_patches.py.
 """
 
 import numpy as np
@@ -11,7 +14,6 @@ import pyrender
 from OpenGL.GL import GL_ARRAY_BUFFER, GL_STATIC_DRAW, glBindBuffer, glBufferData
 from pyrender.constants import GLTF
 
-from cube_model import VisualCube
 from geometry import get_piece_geometry
 
 # numpy 2.0 compatibility for pyrender
@@ -20,31 +22,6 @@ if not hasattr(np, "infty"):
 
 CAMERA_EYE = np.array([3.0, 2.4, 3.6])
 CAMERA_TARGET = np.array([0.0, 0.0, 0.0])
-
-
-def install_uniform_location_cache():
-    """Memoizes pyrender's glGetUniformLocation lookups (module level).
-
-    pyrender re-resolves every uniform location on every set_uniform call -
-    with 52 primitives x ~6 uniforms per frame that is ~300 lookups per
-    frame, ~20% of the render time. Locations are stable for a program's
-    lifetime, so they are cached per (program id, name). The cache is
-    cleared on every call: it is installed when a gl context is set up, and
-    program ids can be reused by new programs after a context loss.
-    """
-    import pyrender.shader_program as shader_program
-    original = shader_program.glGetUniformLocation
-    cache = {}
-
-    def cached_lookup(program, name):
-        key = (program, name)
-        location = cache.get(key)
-        if location is None:
-            location = original(program, name)
-            cache[key] = location
-        return location
-
-    shader_program.glGetUniformLocation = cached_lookup
 
 
 def look_at(eye, target, up=(0.0, 1.0, 0.0)):
@@ -94,22 +71,22 @@ class PuppetScene:
             # per piece instead of one per color group - pyrender's per
             # primitive overhead dominates the frame time otherwise.
             indices = np.concatenate([faces for faces, _ in piece["groups"]])
-            vertex_colors = np.zeros((len(piece["vertices"]), 4), dtype=np.float32)
+            base_colors = np.zeros((len(piece["vertices"]), 3), dtype=np.float64)
             for faces, color in piece["groups"]:
-                vertex_colors[faces.reshape(-1)] = [color[0], color[1], color[2], 1.0]
+                base_colors[faces.reshape(-1)] = color
             primitive = pyrender.Primitive(
                 positions=piece["vertices"].astype(np.float32),
                 normals=piece["normals"].astype(np.float32),
                 indices=indices.astype(np.uint32), material=white_material)
-            primitive.color_0 = vertex_colors
+            primitive.color_0 = np.concatenate(
+                [base_colors, np.ones((len(base_colors), 1))], axis=1).astype(np.float32)
+            primitives = [primitive]
             if lighting:
                 # matura lighting model: color + (abs(dot(normal, view)) - 0.5)
                 # per vertex - rendered as unlit vertex colors (see
                 # update_lighting)
                 self.lit_primitives.append(
-                    (primitive, piece_idx, vertex_colors[:, :3].astype(np.float64),
-                     piece["normals"]))
-            primitives = [primitive]
+                    (primitive, piece_idx, base_colors, piece["normals"]))
 
             # black outline (the matura renderer drew the lines over the triangles)
             if len(piece["lines"]):
@@ -192,7 +169,7 @@ class PuppetScene:
                 continue
             vertex_data = np.ascontiguousarray(np.hstack(
                 [primitive.positions, primitive.normals, primitive.color_0]
-            ).flatten().astype(np.float32))
+            ).flatten(), dtype=np.float32)
             glBindBuffer(GL_ARRAY_BUFFER, primitive._buffers[0])  # noqa: SLF001
             glBufferData(GL_ARRAY_BUFFER, vertex_data.nbytes, vertex_data, GL_STATIC_DRAW)
         self.pending_reupload.clear()
