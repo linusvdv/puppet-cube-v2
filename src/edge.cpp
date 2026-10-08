@@ -3,6 +3,7 @@
 #include <bit>
 #include <cstdint>
 #include <map>
+#include <memory>
 #include <mutex>
 #include <numeric>
 #include <thread>
@@ -263,6 +264,7 @@ void InitPositionChangeSymmetryChange(const std::array<std::array<uint8_t, kNumE
 
     // the position ids are the prefix sums of the representative counts over
     // the chunks (the chunk order is the lexicographic order)
+    LOG_ALL("[2/7] phase A done");
     std::vector<uint32_t> rep_offset(kNumChunks+1, 0);
     for (uint32_t chunk = 0; chunk < kNumChunks; chunk++) {
         rep_offset[chunk+1] = rep_offset[chunk] + uint32_t(rep_perms[chunk].size());
@@ -273,48 +275,61 @@ void InitPositionChangeSymmetryChange(const std::array<std::array<uint8_t, kNumE
 
     // fill the lehmer position lookup and the active symmetry of every
     // representative (the orbits are disjoint -> representatives never write
-    // the same entry)
-    std::vector<uint32_t> lehmer_pos_to_pos(kNumLehmerPos, uint32_t(-1));
-    std::vector<uint32_t> rep_lehmer_pos(kNumPos);
-    std::vector<std::array<uint8_t, kNumSym>> rep_active_sym(kNumPos);
+    // the same entry, an initialization of the lookup is not needed); work
+    // stealing over representative ranges because the representatives are
+    // heavily skewed towards the small chunk prefixes
+    std::unique_ptr<uint32_t[]> lehmer_pos_to_pos(new uint32_t[kNumLehmerPos]);
+    std::unique_ptr<uint32_t[]> rep_lehmer_pos(new uint32_t[kNumPos]);
+    std::unique_ptr<std::array<uint8_t, kNumSym>[]> rep_active_sym(new std::array<uint8_t, kNumSym>[kNumPos]);
     {
-        std::atomic<uint32_t> next_chunk(0);
+        constexpr uint64_t kRangeSize = 32768;
+        const uint64_t num_ranges = (uint64_t(kNumPos)+kRangeSize-1)/kRangeSize;
+        std::atomic<uint64_t> next_range(0);
         std::vector<std::jthread> threads;
         threads.reserve(Settings::GetNumThreads());
         for (int thread = 0; thread < Settings::GetNumThreads(); thread++) {
             threads.emplace_back([&](){
-                uint32_t chunk;
-                while ((chunk = next_chunk.fetch_add(1, std::memory_order_relaxed)) < kNumChunks) {
-                    uint32_t cnt = rep_offset[chunk];
-                    for (const std::array<uint8_t, kNumEdges>& pos_perm : rep_perms[chunk]) {
-                        std::array<uint8_t, kNumSym> cur_active_sym;
-                        std::array<uint32_t, kNumSym> cur_lehmer_pos{};
-                        std::array<uint8_t, kNumSym> cur_lehmer_active{};
-                        uint8_t cur_cnt = 0;
-                        for (uint32_t sym = 0; sym < kNumSym; sym++) {
-                            uint32_t lehmer_pos = PosPermToLehmerPos(SymmetryPositionRotation(idx_piece_sym, pos_perm, sym_trans[sym]));
-                            bool found = false;
-                            for (uint8_t i = 0; i < cur_cnt; i++) {
-                                if (cur_lehmer_pos[i] == lehmer_pos) {
-                                    cur_active_sym[sym] = cur_lehmer_active[i];
-                                    found = true;
-                                    break;
+                uint64_t range;
+                while ((range = next_range.fetch_add(1, std::memory_order_relaxed)) < num_ranges) {
+                    uint64_t cnt = range*kRangeSize;
+                    const uint64_t cnt_end = std::min(cnt+kRangeSize, uint64_t(kNumPos));
+                    uint32_t chunk = 0;
+                    while (rep_offset[chunk+1] <= cnt) {
+                        chunk++;
+                    }
+                    while (cnt < cnt_end) {
+                        const uint64_t chunk_end = std::min(cnt_end, uint64_t(rep_offset[chunk+1]));
+                        for (; cnt < chunk_end; cnt++) {
+                            const std::array<uint8_t, kNumEdges>& pos_perm = rep_perms[chunk][cnt - rep_offset[chunk]];
+                            std::array<uint8_t, kNumSym> cur_active_sym;
+                            std::array<uint32_t, kNumSym> cur_lehmer_pos{};
+                            std::array<uint8_t, kNumSym> cur_lehmer_active{};
+                            uint8_t cur_cnt = 0;
+                            for (uint32_t sym = 0; sym < kNumSym; sym++) {
+                                uint32_t lehmer_pos = PosPermToLehmerPos(SymmetryPositionRotation(idx_piece_sym, pos_perm, sym_trans[sym]));
+                                bool found = false;
+                                for (uint8_t i = 0; i < cur_cnt; i++) {
+                                    if (cur_lehmer_pos[i] == lehmer_pos) {
+                                        cur_active_sym[sym] = cur_lehmer_active[i];
+                                        found = true;
+                                        break;
+                                    }
                                 }
-                            }
-                            if (!found) {
+                                if (found) {
+                                    // the image is already claimed by an
+                                    // earlier symmetry of this representative
+                                    continue;
+                                }
                                 cur_lehmer_pos[cur_cnt] = lehmer_pos;
                                 cur_lehmer_active[cur_cnt] = uint8_t(sym); // NOLINT
                                 cur_cnt++;
                                 cur_active_sym[sym] = uint8_t(sym); // NOLINT
+                                lehmer_pos_to_pos[lehmer_pos] = uint32_t(cnt) | (sym << kPosShift); // NOLINT
                             }
-                            if (lehmer_pos_to_pos[lehmer_pos] != uint32_t(-1)) {
-                                continue;
-                            }
-                            lehmer_pos_to_pos[lehmer_pos] = cnt | (sym << kPosShift);
+                            rep_lehmer_pos[cnt] = PosPermToLehmerPos(pos_perm);
+                            rep_active_sym[cnt] = cur_active_sym;
                         }
-                        rep_lehmer_pos[cnt] = PosPermToLehmerPos(pos_perm);
-                        rep_active_sym[cnt] = cur_active_sym;
-                        cnt++;
+                        chunk++;
                     }
                 }
             });
@@ -322,6 +337,7 @@ void InitPositionChangeSymmetryChange(const std::array<std::array<uint8_t, kNumE
     }
 
     // deduplicate the active symmetry vectors in representative order
+    LOG_ALL("[2/7] phase C done");
     std::vector<uint8_t> sym_pos_active_sym(kNumPos);
     std::map<std::array<uint8_t, kNumSym>, uint8_t> active_sym_map;
     std::vector<std::array<uint8_t, kNumSym>> sym_to_active_sym;
@@ -335,7 +351,8 @@ void InitPositionChangeSymmetryChange(const std::array<std::array<uint8_t, kNumE
     if (sym_to_active_sym.size() > 256) {
         LOG_CRITICAL("Active symmetry count not correct!");
     }
-    std::vector<std::array<uint8_t, kNumSym>>().swap(rep_active_sym);
+    LOG_ALL("[2/7] phase D done, active sym count", sym_to_active_sym.size());
+    rep_active_sym.reset();
     std::vector<std::vector<std::array<uint8_t, kNumEdges>>>().swap(rep_perms);
 
     // precompute the next position and the symmetry change pair of every
@@ -347,8 +364,9 @@ void InitPositionChangeSymmetryChange(const std::array<std::array<uint8_t, kNumE
     LOG_MEMORY();
     constexpr uint32_t kChangeBlockSize = 65536;
     const uint32_t num_change_blocks = (kNumPos+kChangeBlockSize-1)/kChangeBlockSize;
-    std::vector<uint32_t> packed_next(uint64_t(kNumPos)*kNumRot);
-    std::vector<uint32_t> symmetry_pair(uint64_t(kNumPos)*kNumRot);
+    // both are fully written by the block pass below (no initialization needed)
+    std::unique_ptr<uint32_t[]> packed_next(new uint32_t[uint64_t(kNumPos)*kNumRot]);
+    std::unique_ptr<uint32_t[]> symmetry_pair(new uint32_t[uint64_t(kNumPos)*kNumRot]);
     std::vector<std::vector<uint32_t>> block_pairs(num_change_blocks);
     {
         std::atomic<uint32_t> next_block(0);
@@ -377,8 +395,9 @@ void InitPositionChangeSymmetryChange(const std::array<std::array<uint8_t, kNumE
             });
         }
     }
-    std::vector<uint32_t>().swap(lehmer_pos_to_pos);
-    std::vector<uint32_t>().swap(rep_lehmer_pos);
+    lehmer_pos_to_pos.reset();
+    rep_lehmer_pos.reset();
+    LOG_ALL("[2/7] phase E done");
 
     // merge the blocks in order: the first occurrence of every symmetry
     // change vector over the (pos, rot) order defines its id
