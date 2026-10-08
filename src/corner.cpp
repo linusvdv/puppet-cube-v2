@@ -1,9 +1,12 @@
 #include <algorithm>
+#include <atomic>
 #include <cmath>
 #include <cstdint>
 #include <map>
 #include <numeric>
 #include <queue>
+#include <thread>
+#include <vector>
 
 #include "corner.hpp"
 #include "logger.hpp"
@@ -212,14 +215,6 @@ bool IsLegal (const std::array<Vec3i, kNumCorners>& idx_to_xyz_pos, const std::a
 }
 
 
-struct HeuristicData {
-    uint16_t pos;
-    uint16_t orient;
-    std::array<Vec3i, kNumCorners> protrusion;
-    uint8_t depth;
-};
-
-
 void InitHeuristic(const std::array<Vec3i, kNumCorners>& idx_to_xyz_pos,
                    const std::array<std::array<uint8_t, kNumCorners>, kNumRot>& idx_piece_rot) {
     heuristic.assign(kNumPos, {});
@@ -235,72 +230,101 @@ void InitHeuristic(const std::array<Vec3i, kNumCorners>& idx_to_xyz_pos,
         }
     }
     std::vector<uint8_t> visited(uint32_t(kNumPos) * kNumOrient, uint8_t(-2));
-    std::queue<HeuristicData> next;
-    next.push({0, 0, protrusion, 0});
+    // the rotation code of a state is a pure function of the final depth and
+    // the legality of the successor state (the protrusion of a state does not
+    // depend on the path taken to it), so the states of a BFS level can be
+    // expanded in parallel; the pending marker resolves the race between the
+    // discoverer of a state (which runs the legality check) and readers
+    constexpr uint8_t kPending = uint8_t(-3);
+
+    struct FrontierState {
+        uint16_t pos;
+        uint16_t orient;
+        std::array<Vec3i, kNumCorners> protrusion;
+    };
+    std::vector<FrontierState> frontier = {{0, 0, protrusion}};
     visited[0] = 0;
     uint32_t legal_cnt = 0;
-    uint32_t cur_legal_cnt = 0;
-    uint8_t cur_legal_cnt_depth = 0;
-    // bfs
-    while (!next.empty()) {
-        HeuristicData heuristic_data = next.front();
-        next.pop();
-        legal_cnt++;
-        if (heuristic_data.depth > cur_legal_cnt_depth) {
-            LOG_EXTRA("Depth", cur_legal_cnt_depth, ":", cur_legal_cnt);
-            cur_legal_cnt = 0;
-            cur_legal_cnt_depth = heuristic_data.depth;
+    uint8_t depth = 0;
+    // bfs over the levels
+    while (!frontier.empty()) {
+        legal_cnt += uint32_t(frontier.size());
+        LOG_EXTRA("Depth", uint32_t(depth), ":", frontier.size());
+        std::vector<std::vector<FrontierState>> next_frontier(Settings::GetNumThreads());
+        {
+            std::atomic<uint64_t> next_range(0);
+            constexpr uint64_t kRangeSize = 4096;
+            std::vector<std::jthread> threads;
+            threads.reserve(Settings::GetNumThreads());
+            for (int thread = 0; thread < Settings::GetNumThreads(); thread++) {
+                threads.emplace_back([&, thread](){
+                    uint64_t left = next_range.fetch_add(1, std::memory_order_relaxed)*kRangeSize;
+                    while (left < frontier.size()) {
+                        uint64_t right = std::min(left+kRangeSize, frontier.size());
+                        for (uint64_t i = left; i < right; i++) {
+                            const FrontierState& state = frontier[i];
+                            uint64_t cur_heuristic = depth;
+                            for (uint8_t rot = 0; rot < kNumRot; rot++) {
+                                uint16_t next_pos = position_change[state.pos][rot];
+                                uint16_t next_orient = orientation_change[state.orient][rot];
+                                uint32_t idx = (uint32_t(next_orient)*kNumPos) + next_pos;
+                                std::atomic_ref<uint8_t> visited_ref(visited[idx]);
+                                uint8_t next_visited = visited_ref.load(std::memory_order_relaxed);
+                                if (next_visited == uint8_t(-2) &&
+                                    visited_ref.compare_exchange_strong(next_visited, kPending,
+                                        std::memory_order_relaxed, std::memory_order_relaxed)) {
+                                    // discover the state
+                                    FrontierState next_state{next_pos, next_orient, {}};
+                                    for (int i2 = 0; i2 < kNumCorners; i2++) {
+                                        if (idx_piece_rot[rot][i2] == i2) {
+                                            next_state.protrusion[i2] = state.protrusion[i2];
+                                            continue;
+                                        }
+                                        next_state.protrusion[idx_piece_rot[rot][i2]] = MatVecMul(idx_to_rot_rep[rot].matrix, state.protrusion[i2]);
+                                    }
+                                    if (!IsLegal(idx_to_xyz_pos, next_state.protrusion)) {
+                                        visited_ref.store(uint8_t(-1), std::memory_order_relaxed);
+                                    }
+                                    else {
+                                        visited_ref.store(depth+1, std::memory_order_relaxed);
+                                        next_frontier[thread].push_back(next_state);
+                                    }
+                                    next_visited = visited_ref.load(std::memory_order_relaxed);
+                                }
+                                else {
+                                    while ((next_visited = visited_ref.load(std::memory_order_relaxed)) == kPending) {}
+                                }
+                                uint8_t code = 0; // better
+                                if (next_visited == uint8_t(-1)) {
+                                    code = 3; // illegal
+                                }
+                                else if (next_visited > depth) {
+                                    code = 2; // worse
+                                }
+                                else if (next_visited == depth) {
+                                    code = 1; // same
+                                }
+                                cur_heuristic |= uint64_t(code) << (rot*2+8);
+                            }
+                            heuristic[state.pos][state.orient] = cur_heuristic;
+                        }
+                        left = next_range.fetch_add(1, std::memory_order_relaxed)*kRangeSize;
+                    }
+                });
+            }
         }
-        cur_legal_cnt++;
-
-        // add current depth
-        uint64_t cur_heuristic = heuristic_data.depth;
-
-        for (uint8_t rot = 0; rot < kNumRot; rot++) {
-            HeuristicData next_heuristic_data;
-            next_heuristic_data.depth = heuristic_data.depth+1;
-            next_heuristic_data.pos = position_change[heuristic_data.pos][rot];
-            next_heuristic_data.orient = orientation_change[heuristic_data.orient][rot];
-
-            uint32_t idx = (uint32_t(next_heuristic_data.orient)*kNumPos) + next_heuristic_data.pos;
-            if (visited[idx] != uint8_t(-2)) {
-                if (visited[idx] == uint8_t(-1)) { // illegal 11
-                    cur_heuristic |= uint64_t(3) << (rot*2+8);
-                }
-                else if (visited[idx] > heuristic_data.depth) { // worse 10
-                    cur_heuristic |= uint64_t(2) << (rot*2+8);
-                }
-                else if (visited[idx] == heuristic_data.depth) { // same 01
-                    cur_heuristic |= uint64_t(1) << (rot*2+8);
-                }
-                // better 00
-                continue;
-            }
-            visited[idx] = next_heuristic_data.depth;
-
-            for (int i = 0; i < kNumCorners; i++) {
-                if (idx_piece_rot[rot][i] == i) {
-                    next_heuristic_data.protrusion[i] = heuristic_data.protrusion[i];
-                    continue;
-                }
-                next_heuristic_data.protrusion[idx_piece_rot[rot][i]] = MatVecMul(idx_to_rot_rep[rot].matrix, heuristic_data.protrusion[i]);
-            }
-            if (!IsLegal(idx_to_xyz_pos, next_heuristic_data.protrusion)) {
-                visited[idx] = uint8_t(-1);
-                cur_heuristic |= uint64_t(3) << (rot*2+8);
-                continue;
-            }
-            if (visited[idx] > heuristic_data.depth) { // worse 10
-                cur_heuristic |= uint64_t(2) << (rot*2+8);
-            }
-            else if (visited[idx] == heuristic_data.depth) { // same 01
-                cur_heuristic |= uint64_t(1) << (rot*2+8);
-            }
-            next.push(next_heuristic_data);
+        uint64_t next_size = 0;
+        for (const std::vector<FrontierState>& cur_frontier : next_frontier) {
+            next_size += cur_frontier.size();
         }
-        heuristic[heuristic_data.pos][heuristic_data.orient] = cur_heuristic;
+        frontier.clear();
+        frontier.reserve(next_size);
+        for (std::vector<FrontierState>& cur_frontier : next_frontier) {
+            frontier.insert(frontier.end(), cur_frontier.begin(), cur_frontier.end());
+            cur_frontier.clear();
+        }
+        depth++;
     }
-    LOG_EXTRA("Depth", cur_legal_cnt_depth, ":", cur_legal_cnt);
     LOG_EXTRA("Legal Position Count:", legal_cnt);
 }
 

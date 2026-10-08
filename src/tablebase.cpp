@@ -1,6 +1,9 @@
 #include <array>
+#include <atomic>
 #include <cstdint>
 #include <random>
+#include <thread>
+#include <vector>
 
 #include "corner.hpp"
 #include "cube.hpp"
@@ -187,35 +190,78 @@ void GenerateDepth(const Tablebase& tb_prev_depth, const Tablebase& tb_cur_depth
     uint64_t next_tb_depth_cnt = 0;
     InitTablebaseNeutralElement(next_size, tb_next_depth);
     uint64_t cur_size = tb_cur_depth.size()>>1;
-    for (uint64_t idx = 0; idx < tb_cur_depth.size(); idx++) {
-        for (int bucket = 0; bucket < kBucketSize; bucket++) {
-            State state;
-            if (idx < cur_size) {
-                if (tb_cur_depth[idx][bucket] == (idx ^ kNeutralElementXOR)) {
-                    continue;
+
+    // parallel scan: collect the insert candidates in (idx, bucket, rot)
+    // order; the order defines the rng stream of the sequential inserts
+    // below (the random walk of the cuckoo hashing), so the tablebase stays
+    // bit-identical to the sequential generation
+    constexpr uint64_t kScanBlockSize = 1024;
+    const uint64_t num_elements = tb_cur_depth.size()*kBucketSize;
+    const uint64_t num_blocks = (num_elements+kScanBlockSize-1)/kScanBlockSize;
+    std::vector<std::vector<State>> block_candidates(num_blocks);
+    {
+        std::atomic<uint64_t> next_block(0);
+        std::vector<std::jthread> threads;
+        threads.reserve(Settings::GetNumThreads());
+        for (int thread = 0; thread < Settings::GetNumThreads(); thread++) {
+            threads.emplace_back([&](){
+                uint64_t block;
+                while ((block = next_block.fetch_add(1, std::memory_order_relaxed)) < num_blocks) {
+                    std::vector<State>& candidates = block_candidates[block];
+                    for (uint64_t element = block*kScanBlockSize; element < (block+1)*kScanBlockSize && element < num_elements; element++) {
+                        uint64_t idx = element/kBucketSize;
+                        int bucket = int(element%kBucketSize);
+                        State state;
+                        if (idx < cur_size) {
+                            if (tb_cur_depth[idx][bucket] == (idx ^ kNeutralElementXOR)) {
+                                continue;
+                            }
+                            InverseStateHash1(cur_size, idx, tb_cur_depth[idx][bucket], state);
+                        }
+                        else {
+                            if (tb_cur_depth[idx][bucket] == ((idx-cur_size) ^ kNeutralElementXOR)) {
+                                continue;
+                            }
+                            InverseStateHash2(cur_size, idx-cur_size, tb_cur_depth[idx][bucket], state);
+                        }
+                        uint64_t corner_heuristic = corner::GetHeuristic(state.corner_pos, state.corner_orient);
+                        for (uint8_t rot = 0; rot < kNumRot; rot++) {
+                            if (((corner_heuristic >> (8+2*rot)) & 3) == 3) { // illegal rotation
+                                continue;
+                            }
+                            State next_state = state;
+                            corner::Rotate(next_state.corner_pos, next_state.corner_orient, rot);
+                            edge::Rotate(next_state.edge_pos, next_state.edge_sym, next_state.edge_orient, rot);
+                            if (TablebaseContains(tb_prev_depth, next_state) || TablebaseContains(tb_cur_depth, next_state)) {
+                                continue;
+                            }
+                            candidates.push_back(next_state);
+                        }
+                    }
                 }
-                InverseStateHash1(cur_size, idx, tb_cur_depth[idx][bucket], state);
+            });
+        }
+    }
+
+    // sequential inserts; the next candidate's buckets are prefetched
+    uint64_t next_tb_size = tb_next_depth.size()>>1;
+    auto prefetch_candidate = [&](const State& state) {
+        uint64_t idx1;
+        uint64_t value1;
+        uint64_t idx2;
+        uint64_t value2;
+        GetStateHash1(next_tb_size, idx1, value1, state);
+        GetStateHash2(next_tb_size, idx2, value2, state);
+        __builtin_prefetch(&tb_next_depth[idx1][0], 1, 1);
+        __builtin_prefetch(&tb_next_depth[idx2+next_tb_size][0], 1, 1);
+    };
+    for (const std::vector<State>& candidates : block_candidates) {
+        for (size_t i = 0; i < candidates.size(); i++) {
+            if (i+1 < candidates.size()) {
+                prefetch_candidate(candidates[i+1]);
             }
-            else {
-                if (tb_cur_depth[idx][bucket] == ((idx-cur_size) ^ kNeutralElementXOR)) {
-                    continue;
-                }
-                InverseStateHash2(cur_size, idx-cur_size, tb_cur_depth[idx][bucket], state);
-            }
-            uint64_t corner_heuristic = corner::GetHeuristic(state.corner_pos, state.corner_orient);
-            for (uint8_t rot = 0; rot < kNumRot; rot++) {
-                if (((corner_heuristic >> (8+2*rot)) & 3) == 3) { // illegal rotation
-                    continue;
-                }
-                State next_state = state;
-                corner::Rotate(next_state.corner_pos, next_state.corner_orient, rot);
-                edge::Rotate(next_state.edge_pos, next_state.edge_sym, next_state.edge_orient, rot);
-                if (TablebaseContains(tb_prev_depth, next_state) || TablebaseContains(tb_cur_depth, next_state)) {
-                    continue;
-                }
-                if (TablebaseInsert(tb_next_depth, next_state, gen)) {
-                    next_tb_depth_cnt++;
-                }
+            if (TablebaseInsert(tb_next_depth, candidates[i], gen)) {
+                next_tb_depth_cnt++;
             }
         }
     }

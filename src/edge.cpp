@@ -3,6 +3,7 @@
 #include <bit>
 #include <cstdint>
 #include <map>
+#include <mutex>
 #include <numeric>
 #include <thread>
 #include <unordered_map>
@@ -22,11 +23,9 @@ constexpr uint16_t kNumSymChange = 921; // this is unfortunatly more than 256 (w
 
 #ifndef REDUCE_MEMORY
 constexpr uint64_t kNumHeuristic = uint64_t(kNumPos)*kNumOrient;
-constexpr int kMyAtomicBitsetSizePerEl = 64;
 constexpr uint32_t kNumHeuristicBuckets = 81609107;
 
 using Heuristic = std::vector<std::array<uint64_t, kNumOrient/kNumStoredPerBucket>>;
-using NextVisited = std::vector<std::array<std::atomic<uint64_t>, kNumOrient/kMyAtomicBitsetSizePerEl>>;
 #endif
 
 constexpr std::array<uint32_t, kNumEdges+1> kFactorials = []{
@@ -218,98 +217,191 @@ void InitPositionChangeSymmetryChange(const std::array<std::array<uint8_t, kNumE
                                       const std::array<std::array<uint8_t, kNumEdges>, kNumSym>& idx_piece_sym,
                                       const std::array<std::array<uint8_t, kNumSym>, kNumSym>& sym_mul_sym,
                                       const std::array<uint8_t, kNumSym>& sym_trans) {
-    // create lehmer position
-    std::vector<std::array<uint32_t, kNumSym>> pos_to_lehmer_pos(kNumPos); // [symmetry_position][symmetry] -> position
-    std::fill(pos_to_lehmer_pos[0].data(), pos_to_lehmer_pos[0].data() + (kNumPos * kNumSym), uint32_t(-1));
-    std::vector<uint32_t> lehmer_pos_to_pos(kNumLehmerPos, uint32_t(-1));
-
-    // active symmetry
-    std::vector<uint8_t> sym_pos_active_sym(kNumPos);
-    std::map<std::array<uint8_t, kNumSym>, uint8_t> active_sym_map;
-    std::vector<std::array<uint8_t, kNumSym>> sym_to_active_sym;
-
-    // precompute
-    std::array<uint8_t, kNumEdges> pos_perm;
-    std::iota(pos_perm.begin(), pos_perm.end(), 0);
-    uint32_t cnt = 0;
-    uint32_t progress = 0;
-    uint8_t active_sym_map_cnt = 0;
-    do {
-        uint32_t lehmer_pos_default = PosPermToLehmerPos(pos_perm);
-        if (lehmer_pos_to_pos[lehmer_pos_default] != uint32_t(-1)) {
-            continue;
-        }
-        std::array<uint8_t, kNumSym> cur_active_sym;
-        std::unordered_map<uint32_t, uint8_t> lehmer_pos_to_active_sym;
-        for (uint32_t sym = 0; sym < kNumSym; sym++) {
-            uint32_t lehmer_pos = PosPermToLehmerPos(SymmetryPositionRotation(idx_piece_sym, pos_perm, sym_trans[sym]));
-            if (lehmer_pos_to_active_sym.contains(lehmer_pos)) {
-                cur_active_sym[sym] = lehmer_pos_to_active_sym[lehmer_pos];
+    // find the position class representatives: the lexicographically smallest
+    // permutation of every symmetry orbit; the 12! permutations are enumerated
+    // in parallel over the 12*11 prefixes of the first two elements (the chunk
+    // order over the prefixes is the lexicographic order)
+    constexpr uint32_t kNumChunks = kNumEdges*(kNumEdges-1);
+    std::vector<std::vector<std::array<uint8_t, kNumEdges>>> rep_perms(kNumChunks);
+    {
+        auto is_rep = [&](const std::array<uint8_t, kNumEdges>& pos_perm) {
+            for (uint8_t sym = 0; sym < kNumSym; sym++) {
+                if (SymmetryPositionRotation(idx_piece_sym, pos_perm, sym_trans[sym]) < pos_perm) {
+                    return false;
+                }
             }
-            else {
-                lehmer_pos_to_active_sym[lehmer_pos] = sym;
-                cur_active_sym[sym] = sym;
-            }
-
-            if (lehmer_pos_to_pos[lehmer_pos] != uint32_t(-1)) {
-                continue;
-            }
-
-            progress++;
-            if (progress % 1000000 == 0) {
-                LOG_EXTRA(progress, "/", kNumLehmerPos);
-            }
-            lehmer_pos_to_pos[lehmer_pos] = cnt | (sym << kPosShift);
-            pos_to_lehmer_pos[cnt][sym] = lehmer_pos;
+            return true;
+        };
+        std::atomic<uint32_t> next_chunk(0);
+        std::vector<std::jthread> threads;
+        threads.reserve(Settings::GetNumThreads());
+        for (int thread = 0; thread < Settings::GetNumThreads(); thread++) {
+            threads.emplace_back([&](){
+                uint32_t chunk;
+                while ((chunk = next_chunk.fetch_add(1, std::memory_order_relaxed)) < kNumChunks) {
+                    std::array<uint8_t, kNumEdges> pos_perm{};
+                    pos_perm[0] = uint8_t(chunk/(kNumEdges-1)); // NOLINT
+                    pos_perm[1] = uint8_t(chunk%(kNumEdges-1)); // NOLINT
+                    if (pos_perm[1] >= pos_perm[0]) {
+                        pos_perm[1]++;
+                    }
+                    uint8_t cnt = 2;
+                    for (uint8_t i = 0; i < kNumEdges; i++) {
+                        if (i != pos_perm[0] && i != pos_perm[1]) {
+                            pos_perm[cnt++] = i;
+                        }
+                    }
+                    do {
+                        if (is_rep(pos_perm)) {
+                            rep_perms[chunk].push_back(pos_perm);
+                        }
+                    } while (std::next_permutation(pos_perm.begin()+2, pos_perm.end()));
+                }
+            });
         }
-        if (active_sym_map.contains(cur_active_sym)) {
-            sym_pos_active_sym[lehmer_pos_to_pos[lehmer_pos_default]&kPosMask] = active_sym_map[cur_active_sym];
-        }
-        else {
-            active_sym_map[cur_active_sym] = active_sym_map_cnt;
+    }
 
-            sym_to_active_sym.push_back(cur_active_sym);
-
-            sym_pos_active_sym[lehmer_pos_to_pos[lehmer_pos_default]&kPosMask] = active_sym_map_cnt;
-            active_sym_map_cnt++;
-        }
-        cnt++;
-    } while (std::next_permutation(pos_perm.begin(), pos_perm.end()));
-    if (cnt != kNumPos) {
+    // the position ids are the prefix sums of the representative counts over
+    // the chunks (the chunk order is the lexicographic order)
+    std::vector<uint32_t> rep_offset(kNumChunks+1, 0);
+    for (uint32_t chunk = 0; chunk < kNumChunks; chunk++) {
+        rep_offset[chunk+1] = rep_offset[chunk] + uint32_t(rep_perms[chunk].size());
+    }
+    if (rep_offset[kNumChunks] != kNumPos) {
         LOG_CRITICAL("Lehmer pos count not correct!");
     }
 
-    int sym_change_cnt = 0;
-    std::map<std::array<uint16_t, kNumSym>, int> sym_change_map;
+    // fill the lehmer position lookup and the active symmetry of every
+    // representative (the orbits are disjoint -> representatives never write
+    // the same entry)
+    std::vector<uint32_t> lehmer_pos_to_pos(kNumLehmerPos, uint32_t(-1));
+    std::vector<uint32_t> rep_lehmer_pos(kNumPos);
+    std::vector<std::array<uint8_t, kNumSym>> rep_active_sym(kNumPos);
+    {
+        std::atomic<uint32_t> next_chunk(0);
+        std::vector<std::jthread> threads;
+        threads.reserve(Settings::GetNumThreads());
+        for (int thread = 0; thread < Settings::GetNumThreads(); thread++) {
+            threads.emplace_back([&](){
+                uint32_t chunk;
+                while ((chunk = next_chunk.fetch_add(1, std::memory_order_relaxed)) < kNumChunks) {
+                    uint32_t cnt = rep_offset[chunk];
+                    for (const std::array<uint8_t, kNumEdges>& pos_perm : rep_perms[chunk]) {
+                        std::array<uint8_t, kNumSym> cur_active_sym;
+                        std::array<uint32_t, kNumSym> cur_lehmer_pos{};
+                        std::array<uint8_t, kNumSym> cur_lehmer_active{};
+                        uint8_t cur_cnt = 0;
+                        for (uint32_t sym = 0; sym < kNumSym; sym++) {
+                            uint32_t lehmer_pos = PosPermToLehmerPos(SymmetryPositionRotation(idx_piece_sym, pos_perm, sym_trans[sym]));
+                            bool found = false;
+                            for (uint8_t i = 0; i < cur_cnt; i++) {
+                                if (cur_lehmer_pos[i] == lehmer_pos) {
+                                    cur_active_sym[sym] = cur_lehmer_active[i];
+                                    found = true;
+                                    break;
+                                }
+                            }
+                            if (!found) {
+                                cur_lehmer_pos[cur_cnt] = lehmer_pos;
+                                cur_lehmer_active[cur_cnt] = uint8_t(sym); // NOLINT
+                                cur_cnt++;
+                                cur_active_sym[sym] = uint8_t(sym); // NOLINT
+                            }
+                            if (lehmer_pos_to_pos[lehmer_pos] != uint32_t(-1)) {
+                                continue;
+                            }
+                            lehmer_pos_to_pos[lehmer_pos] = cnt | (sym << kPosShift);
+                        }
+                        rep_lehmer_pos[cnt] = PosPermToLehmerPos(pos_perm);
+                        rep_active_sym[cnt] = cur_active_sym;
+                        cnt++;
+                    }
+                }
+            });
+        }
+    }
+
+    // deduplicate the active symmetry vectors in representative order
+    std::vector<uint8_t> sym_pos_active_sym(kNumPos);
+    std::map<std::array<uint8_t, kNumSym>, uint8_t> active_sym_map;
+    std::vector<std::array<uint8_t, kNumSym>> sym_to_active_sym;
+    for (uint32_t pos = 0; pos < kNumPos; pos++) {
+        if (!active_sym_map.contains(rep_active_sym[pos])) {
+            active_sym_map[rep_active_sym[pos]] = uint8_t(sym_to_active_sym.size()); // NOLINT
+            sym_to_active_sym.push_back(rep_active_sym[pos]);
+        }
+        sym_pos_active_sym[pos] = active_sym_map[rep_active_sym[pos]];
+    }
+    if (sym_to_active_sym.size() > 256) {
+        LOG_CRITICAL("Active symmetry count not correct!");
+    }
+    std::vector<std::array<uint8_t, kNumSym>>().swap(rep_active_sym);
+    std::vector<std::vector<std::array<uint8_t, kNumEdges>>>().swap(rep_perms);
+
+    // precompute the next position and the symmetry change pair of every
+    // (pos, rot) in parallel over position blocks; the symmetry change pair
+    // (symmetry change id, active symmetry) fully determines the symmetry
+    // change vector and is deduplicated locally per block
     symmetry_change.assign(kNumSymChange, {});
     position_change.assign(kNumPos, {});
     LOG_MEMORY();
+    constexpr uint32_t kChangeBlockSize = 65536;
+    const uint32_t num_change_blocks = (kNumPos+kChangeBlockSize-1)/kChangeBlockSize;
+    std::vector<uint32_t> packed_next(uint64_t(kNumPos)*kNumRot);
+    std::vector<uint32_t> symmetry_pair(uint64_t(kNumPos)*kNumRot);
+    std::vector<std::vector<uint32_t>> block_pairs(num_change_blocks);
+    {
+        std::atomic<uint32_t> next_block(0);
+        std::vector<std::jthread> threads;
+        threads.reserve(Settings::GetNumThreads());
+        for (int thread = 0; thread < Settings::GetNumThreads(); thread++) {
+            threads.emplace_back([&](){
+                uint32_t block;
+                while ((block = next_block.fetch_add(1, std::memory_order_relaxed)) < num_change_blocks) {
+                    LOG_EXTRA("block", block, "/", num_change_blocks);
+                    std::unordered_map<uint32_t, uint32_t> pair_to_local;
+                    for (uint32_t pos = block*kChangeBlockSize; pos < (block+1)*kChangeBlockSize && pos < kNumPos; pos++) {
+                        for (uint8_t rot = 0; rot < kNumRot; rot++) {
+                            uint32_t next_lehmer_pos = RotatePieces(idx_piece_rot, rep_lehmer_pos[pos], rot);
+                            uint32_t packed = lehmer_pos_to_pos[next_lehmer_pos];
+                            packed_next[uint64_t(pos)*kNumRot+rot] = packed;
+                            uint32_t pair = ((packed >> kPosShift) << 8) | sym_pos_active_sym[packed & kPosMask];
+                            auto [it, inserted] = pair_to_local.try_emplace(pair, uint32_t(block_pairs[block].size()));
+                            if (inserted) {
+                                block_pairs[block].push_back(pair);
+                            }
+                            symmetry_pair[uint64_t(pos)*kNumRot+rot] = it->second;
+                        }
+                    }
+                }
+            });
+        }
+    }
+    std::vector<uint32_t>().swap(lehmer_pos_to_pos);
+    std::vector<uint32_t>().swap(rep_lehmer_pos);
 
-    for (uint32_t pos = 0; pos < kNumPos; pos++) {
-        for (uint8_t rot = 0; rot < kNumRot; rot++) {
-            uint32_t lehmer_pos = pos_to_lehmer_pos[pos][0];
-            uint32_t next_lehmer_pos = RotatePieces(idx_piece_rot, lehmer_pos, rot);
-
-            uint32_t packed = lehmer_pos_to_pos[next_lehmer_pos];
-            uint32_t next_sym_position = packed & kPosMask;
-            uint32_t next_sym_change = packed >> kPosShift;
-            uint8_t next_pos_active_sym = sym_pos_active_sym[next_sym_position];
-
+    // merge the blocks in order: the first occurrence of every symmetry
+    // change vector over the (pos, rot) order defines its id
+    int sym_change_cnt = 0;
+    std::map<std::array<uint16_t, kNumSym>, int> sym_change_map;
+    std::vector<std::vector<uint32_t>> block_sym_change(num_change_blocks);
+    for (uint32_t block = 0; block < num_change_blocks; block++) {
+        block_sym_change[block].resize(block_pairs[block].size());
+        for (size_t local = 0; local < block_pairs[block].size(); local++) {
+            uint32_t pair = block_pairs[block][local];
+            uint32_t next_sym_change = pair >> 8;
+            uint32_t next_pos_active_sym = pair & 0xFF;
             std::array<uint16_t, kNumSym> cur_sym_change;
             cur_sym_change.fill(uint16_t(-1));
             for (int sym = 0; sym < kNumSym; sym++) {
                 cur_sym_change[sym] = sym_to_active_sym[next_pos_active_sym][sym_mul_sym[next_sym_change][sym]];
             }
-
             if (!sym_change_map.contains(cur_sym_change)) {
                 symmetry_change[sym_change_cnt] = cur_sym_change;
                 sym_change_map[cur_sym_change] = sym_change_cnt;
                 sym_change_cnt++;
             }
-            position_change[pos][rot] = (uint64_t(sym_change_map[cur_sym_change]) << kPosShift) | next_sym_position;
-        }
-        if (pos % 100000 == 0) {
-            LOG_EXTRA(pos, "/", kNumPos);
+            block_sym_change[block][local] = uint32_t(sym_change_map[cur_sym_change]);
         }
     }
 
@@ -324,6 +416,26 @@ void InitPositionChangeSymmetryChange(const std::array<std::array<uint8_t, kNumE
 
     if (sym_change_cnt != kNumSymChange) {
         LOG_CRITICAL("Wrong precomputation with symmetry change");
+    }
+
+    // write the position change table
+    {
+        std::atomic<uint32_t> next_block(0);
+        std::vector<std::jthread> threads;
+        threads.reserve(Settings::GetNumThreads());
+        for (int thread = 0; thread < Settings::GetNumThreads(); thread++) {
+            threads.emplace_back([&](){
+                uint32_t block;
+                while ((block = next_block.fetch_add(1, std::memory_order_relaxed)) < num_change_blocks) {
+                    for (uint32_t pos = block*kChangeBlockSize; pos < (block+1)*kChangeBlockSize && pos < kNumPos; pos++) {
+                        for (uint8_t rot = 0; rot < kNumRot; rot++) {
+                            position_change[pos][rot] = (uint64_t(block_sym_change[block][symmetry_pair[uint64_t(pos)*kNumRot+rot]]) << kPosShift)
+                                                        | (packed_next[uint64_t(pos)*kNumRot+rot] & kPosMask);
+                        }
+                    }
+                }
+            });
+        }
     }
 }
 
@@ -427,34 +539,44 @@ void InitOrientationChange(const std::array<Vec3i, kNumEdges>& idx_to_xyz_pos,
 
 
 #ifndef REDUCE_MEMORY
-inline uint8_t GetPreHeuristic(const Heuristic& heuristic, uint32_t pos, uint16_t orient) {
-    return heuristic[pos][orient/kNumStoredPerBucket] >> ((orient%kNumStoredPerBucket) * 4) & kSingleHeuristicValue;
+// marks the state directly in the heuristic table; the first marker of a
+// state counts it (the states are marked exactly once per level)
+inline void MarkHeuristic(Heuristic& heuristic, uint32_t pos, uint16_t orient, uint8_t depth, uint64_t& local_cnt) {
+    std::atomic_ref<uint64_t> word(heuristic[pos][orient/kNumStoredPerBucket]);
+    int shift = (orient%kNumStoredPerBucket) * 4;
+    uint64_t cur = word.load(std::memory_order_relaxed);
+    while (((cur >> shift) & kSingleHeuristicValue) == kSingleHeuristicValue) {
+        uint64_t next = (cur & ~(kSingleHeuristicValue << shift)) | (uint64_t(depth) << shift);
+        if (word.compare_exchange_weak(cur, next, std::memory_order_relaxed, std::memory_order_relaxed)) {
+            local_cnt++;
+            return;
+        }
+    }
 }
 
 
-inline void SetAtomicNextVisited(NextVisited& next_visited, uint32_t pos, uint16_t orient) {
-    next_visited[pos][orient/kMyAtomicBitsetSizePerEl].fetch_or(uint64_t(1)<<(orient%kMyAtomicBitsetSizePerEl), std::memory_order_relaxed);
-}
-
-
-void HeuristicMultithread(const Heuristic& heuristic, NextVisited& next_visited,
+void HeuristicMultithread(Heuristic& heuristic,
                           const std::vector<uint64_t>& sym_pos_same_sym,
                           const std::array<std::array<uint16_t, kNumOrient>, kNumSym>& default_to_sym_orient,
-                          uint32_t pos_left, uint32_t pos_right, uint8_t next_depth) {
-    for (uint32_t pos = pos_left; pos < pos_right && pos < kNumPos; pos++) {
-        for (uint16_t orient = 0; orient < kNumOrient; orient++) {
-            if (GetPreHeuristic(heuristic, pos, orient) != next_depth-1) {
-                continue;
-            }
+                          std::atomic<uint32_t>& next_block, uint8_t next_depth, std::atomic<uint64_t>& num_pos_level) {
+    constexpr uint32_t kBlockSize = 4096;
+    // the frontier states are buffered: the 18 successor words of every
+    // buffered state are prefetched on enqueue and expanded later (the
+    // heuristic lookups are random accesses into the ~10 GB table)
+    struct Successor {
+        uint32_t next_pos;
+        uint16_t next_orient;
+    };
+    constexpr int kBufferSize = 32;
+    std::array<std::array<Successor, kNumRot>, kBufferSize> buffer;
+    int buffer_cnt = 0;
+    uint64_t local_cnt = 0;
+    auto expand_buffer = [&]() {
+        for (int i = 0; i < buffer_cnt; i++) {
             for (uint8_t rot = 0; rot < kNumRot; rot++) {
-                uint32_t next_pos = pos;
-                uint8_t next_sym = 0;
-                uint16_t next_orient = orient;
-                Rotate(next_pos, next_sym, next_orient, rot);
-                if (GetPreHeuristic(heuristic, next_pos, next_orient) != kSingleHeuristicValue) {
-                    continue;
-                }
-                SetAtomicNextVisited(next_visited, next_pos, next_orient);
+                uint32_t next_pos = buffer[i][rot].next_pos;
+                uint16_t next_orient = buffer[i][rot].next_orient;
+                MarkHeuristic(heuristic, next_pos, next_orient, next_depth, local_cnt);
                 uint64_t cur_sym_pos_same_sym = sym_pos_same_sym[next_pos];
                 if (std::popcount(cur_sym_pos_same_sym) <= 1) {
                     continue;
@@ -463,34 +585,53 @@ void HeuristicMultithread(const Heuristic& heuristic, NextVisited& next_visited,
                     if (((cur_sym_pos_same_sym >> sym) & 1) == 0) {
                         continue;
                     }
-                    SetAtomicNextVisited(next_visited, next_pos, default_to_sym_orient[sym][next_orient]);
+                    MarkHeuristic(heuristic, next_pos, default_to_sym_orient[sym][next_orient], next_depth, local_cnt);
                 }
             }
         }
-    }
-}
-
-
-void UpdateHeuristicMultithread(Heuristic& heuristic, NextVisited& next_visited,
-                                uint32_t pos_left, uint32_t pos_right, uint64_t& local_cnt, uint8_t depth) {
-    uint64_t local_num_pos = 0;
-    for (uint32_t pos = pos_left; pos < pos_right && pos < kNumPos; pos++) {
-        for (uint16_t orient_idx = 0; orient_idx < kNumOrient/kMyAtomicBitsetSizePerEl; orient_idx++) {
-            uint64_t value = next_visited[pos][orient_idx].load(std::memory_order_relaxed);
-            if (value == 0) {
-                continue;
-            }
-            next_visited[pos][orient_idx].store(uint64_t(0), std::memory_order_relaxed);
-
-            local_num_pos += std::popcount(value);
-            while (value != 0U) {
-                uint16_t orient = (orient_idx*kMyAtomicBitsetSizePerEl) + std::countr_zero(value);
-                heuristic[pos][orient/kNumStoredPerBucket] ^= uint64_t(kSingleHeuristicValue - depth) << ((orient % kNumStoredPerBucket) * 4);
-                value &= value - 1;
+        buffer_cnt = 0;
+    };
+    uint32_t pos_left = next_block.fetch_add(1, std::memory_order_relaxed)*kBlockSize;
+    while (pos_left < kNumPos) {
+        uint32_t pos_right = std::min(pos_left+kBlockSize, kNumPos);
+        for (uint32_t pos = pos_left; pos < pos_right; pos++) {
+            for (uint32_t orient_bucket = 0; orient_bucket < kNumOrient/kNumStoredPerBucket; orient_bucket++) {
+                uint64_t word = std::atomic_ref<uint64_t>(heuristic[pos][orient_bucket]).load(std::memory_order_relaxed);
+                // swar skip: a nibble equal to next_depth-1 corresponds to a
+                // zero nibble after the xor with the broadcast value
+                const uint64_t frontier_value = next_depth-1;
+                uint64_t equal = word ^ (frontier_value*0x1111111111111111ULL);
+                if (((equal-0x1111111111111111ULL) & ~equal & 0x8888888888888888ULL) == 0) {
+                    continue;
+                }
+                for (uint32_t nibble = 0; nibble < kNumStoredPerBucket; nibble++) {
+                    if (((word >> (nibble*4)) & kSingleHeuristicValue) != frontier_value) {
+                        continue;
+                    }
+                    uint16_t orient = uint16_t(orient_bucket*kNumStoredPerBucket + nibble); // NOLINT
+                    if (buffer_cnt == kBufferSize) {
+                        expand_buffer();
+                    }
+                    std::array<Successor, kNumRot>& successors = buffer[buffer_cnt++];
+                    for (uint8_t rot = 0; rot < kNumRot; rot++) {
+                        // rotate the state (the expansion always starts with
+                        // symmetry 0: the rotation index and the new symmetry
+                        // are not needed)
+                        uint64_t packed = position_change[pos][rot];
+                        uint32_t next_pos = uint32_t(packed & kPosMask);
+                        uint8_t rel_sym = uint8_t(symmetry_change[packed >> kPosShift][0] >> 8); // NOLINT
+                        uint16_t next_orient = orientation_change[orient][rel_sym][rot];
+                        successors[rot] = {next_pos, next_orient};
+                        __builtin_prefetch(&heuristic[next_pos][next_orient/kNumStoredPerBucket], 1, 2);
+                        __builtin_prefetch(&sym_pos_same_sym[next_pos], 0, 1);
+                    }
+                }
             }
         }
+        pos_left = next_block.fetch_add(1, std::memory_order_relaxed)*kBlockSize;
     }
-    local_cnt = local_num_pos;
+    expand_buffer();
+    num_pos_level.fetch_add(local_cnt, std::memory_order_relaxed);
 }
 
 
@@ -530,72 +671,189 @@ void InitHeuristic(const std::array<Vec3i, kNumEdges>& idx_to_xyz_pos,
     Heuristic heuristic(kNumPos);
     std::fill(heuristic[0].data(), heuristic[0].data() + (kNumHeuristic / kNumStoredPerBucket), ~uint64_t(0));
     LOG_MEMORY();
-    NextVisited next_visited(kNumPos);
-    LOG_MEMORY();
 
     heuristic[0][0] ^= kSingleHeuristicValue;
     uint64_t num_pos = 1;
     uint8_t heuristic_level = 1; // 0 to 14
     while (num_pos < kNumHeuristic) {
+        std::atomic<uint32_t> next_block(0);
+        std::atomic<uint64_t> num_pos_level(0);
         {
             std::vector<std::jthread> heuristic_threads;
             heuristic_threads.reserve(Settings::GetNumThreads());
             for (int thread = 0; thread < Settings::GetNumThreads(); thread++) {
                 heuristic_threads.emplace_back(HeuristicMultithread,
-                                               std::ref(heuristic), std::ref(next_visited),
+                                               std::ref(heuristic),
                                                std::ref(sym_pos_same_sym),
                                                std::ref(default_to_sym_orient),
-                                               uint32_t(((kNumPos/Settings::GetNumThreads())+1)*thread),
-                                               uint32_t(((kNumPos/Settings::GetNumThreads())+1)*(thread+1)),
-                                               heuristic_level);
+                                               std::ref(next_block),
+                                               heuristic_level,
+                                               std::ref(num_pos_level));
             }
         }
-        uint64_t num_pos_level = 0;
-        std::vector<uint64_t> per_thread_cnt(Settings::GetNumThreads(), 0);
-        {
-            std::vector<std::jthread> update_heuristic_threads;
-            update_heuristic_threads.reserve(Settings::GetNumThreads());
-            for (int thread = 0; thread < Settings::GetNumThreads(); thread++) {
-                update_heuristic_threads.emplace_back(UpdateHeuristicMultithread,
-                                               std::ref(heuristic), std::ref(next_visited),
-                                               uint32_t(((kNumPos/Settings::GetNumThreads())+1)*thread),
-                                               uint32_t(((kNumPos/Settings::GetNumThreads())+1)*(thread+1)),
-                                               std::ref(per_thread_cnt[thread]),
-                                               heuristic_level);
-            }
+        uint64_t cur_num_pos_level = num_pos_level.load(std::memory_order_relaxed);
+        if (cur_num_pos_level == 0) {
+            LOG_CRITICAL("Heuristic level did not find any new positions");
         }
-        for (uint64_t local_cnt : per_thread_cnt) {
-            num_pos_level += local_cnt;
-        }
-        num_pos += num_pos_level;
-        LOG_EXTRA("Level", heuristic_level, ":", num_pos_level);
+        num_pos += cur_num_pos_level;
+        LOG_EXTRA("Level", heuristic_level, ":", cur_num_pos_level);
         heuristic_level++;
     }
     LOG_ALL("Finished Generation");
-    NextVisited().swap(next_visited);
+    std::vector<uint64_t>().swap(sym_pos_same_sym);
     LOG_MEMORY();
 
     heuristic_bucket.assign(kNumPos, {});
-    heuristic_value.assign(kNumHeuristicBuckets, 0);
     LOG_MEMORY();
-    phmap::flat_hash_map<uint64_t, uint32_t> heuristic_value_bucket;
-    uint32_t bucket_cnt = 0;
-    for (uint32_t pos = 0; pos < kNumPos; pos++) {
-        for (uint16_t orient_bucket = 0; orient_bucket < kNumOrient/kNumStoredPerBucket; orient_bucket++) {
-            uint64_t cur_heuristic = heuristic[pos][orient_bucket];
-            auto [it, inserted] = heuristic_value_bucket.try_emplace(cur_heuristic, bucket_cnt);
-            if (inserted) {
-                heuristic_value[bucket_cnt] = cur_heuristic;
-                bucket_cnt++;
-            }
-            heuristic_bucket[pos][orient_bucket] = it->second;
+
+    // deduplicate the heuristic words in parallel: the words are sharded over
+    // 256 hash maps; every shard assigns local ids and tracks the first
+    // occurrence of every word (the ids of the sequential scan order are
+    // recovered with a sort by the first occurrence)
+    constexpr uint32_t kNumShards = 256;
+    constexpr uint32_t kShardShift = 24;
+    std::vector<phmap::flat_hash_map<uint64_t, uint32_t>> shard_maps(kNumShards);
+    std::vector<std::mutex> shard_mtx(kNumShards);
+    std::vector<std::vector<uint64_t>> shard_words(kNumShards);
+    std::vector<std::vector<uint64_t>> shard_first(kNumShards);
+    {
+        std::atomic<uint32_t> next_block(0);
+        std::vector<std::jthread> threads;
+        threads.reserve(Settings::GetNumThreads());
+        for (int thread = 0; thread < Settings::GetNumThreads(); thread++) {
+            threads.emplace_back([&](){
+                constexpr uint32_t kBlockSize = 4096;
+                uint32_t pos_left = next_block.fetch_add(1, std::memory_order_relaxed)*kBlockSize;
+                while (pos_left < kNumPos) {
+                    if (pos_left % 262144 == 0) {
+                        LOG_EXTRA(pos_left, "/", kNumPos);
+                    }
+                    uint32_t pos_right = std::min(pos_left+kBlockSize, kNumPos);
+                    for (uint32_t pos = pos_left; pos < pos_right; pos++) {
+                        for (uint32_t orient_bucket = 0; orient_bucket < kNumOrient/kNumStoredPerBucket; orient_bucket++) {
+                            uint64_t cur_heuristic = heuristic[pos][orient_bucket];
+                            uint32_t shard = uint32_t((cur_heuristic*0x9E3779B97F4A7C15) >> 56); // NOLINT
+                            uint64_t first = uint64_t(pos)*(kNumOrient/kNumStoredPerBucket)+orient_bucket;
+                            std::lock_guard<std::mutex> lock(shard_mtx[shard]);
+                            auto [it, inserted] = shard_maps[shard].try_emplace(cur_heuristic, uint32_t(shard_words[shard].size()));
+                            if (inserted) {
+                                shard_words[shard].push_back(cur_heuristic);
+                                shard_first[shard].push_back(first);
+                            }
+                            else if (first < shard_first[shard][it->second]) {
+                                shard_first[shard][it->second] = first;
+                            }
+                            heuristic_bucket[pos][orient_bucket] = (shard << kShardShift) | it->second;
+                        }
+                    }
+                    pos_left = next_block.fetch_add(1, std::memory_order_relaxed)*kBlockSize;
+                }
+            });
         }
-        if (pos % 100000 == 0) {
-            LOG_EXTRA(pos, "/", kNumPos);
-        }
+    }
+    Heuristic().swap(heuristic);
+    LOG_MEMORY();
+
+    // sort the distinct words by their first occurrence with a radix sort
+    // (first occurrence << 32 | shard << 24 | local id)
+    uint64_t bucket_cnt = 0;
+    for (uint32_t shard = 0; shard < kNumShards; shard++) {
+        bucket_cnt += shard_words[shard].size();
     }
     if (bucket_cnt != kNumHeuristicBuckets) {
         LOG_CRITICAL("Heuristic bucket cnt incorrect", bucket_cnt, kNumHeuristicBuckets);
+    }
+    std::vector<uint64_t> sort_data(bucket_cnt);
+    std::vector<uint64_t> sort_tmp(bucket_cnt);
+    {
+        uint64_t cnt = 0;
+        for (uint32_t shard = 0; shard < kNumShards; shard++) {
+            for (size_t local = 0; local < shard_words[shard].size(); local++) {
+                sort_data[cnt++] = (shard_first[shard][local] << 32) | (uint64_t(shard) << kShardShift) | local;
+            }
+        }
+    }
+    { // bits 32 to 47 of the first occurrence
+        std::array<uint32_t, 1<<16> counts{};
+        for (uint64_t value : sort_data) {
+            counts[uint32_t(value >> 32) & 0xFFFF]++;
+        }
+        uint32_t sum = 0;
+        for (uint32_t& count : counts) {
+            uint32_t cur_count = count;
+            count = sum;
+            sum += cur_count;
+        }
+        for (uint64_t value : sort_data) {
+            sort_tmp[counts[uint32_t(value >> 32) & 0xFFFF]++] = value;
+        }
+    }
+    { // bits 48 to 62 of the first occurrence
+        std::array<uint32_t, 1<<15> counts{};
+        for (uint64_t value : sort_tmp) {
+            counts[uint32_t(value >> 48) & 0x7FFF]++;
+        }
+        uint32_t sum = 0;
+        for (uint32_t& count : counts) {
+            uint32_t cur_count = count;
+            count = sum;
+            sum += cur_count;
+        }
+        for (uint64_t value : sort_tmp) {
+            sort_data[counts[uint32_t(value >> 48) & 0x7FFF]++] = value;
+        }
+    }
+
+    // the sorted position is the bucket id (the first occurrence order)
+    heuristic_value.assign(kNumHeuristicBuckets, 0);
+    std::vector<std::vector<uint32_t>> shard_rank(kNumShards);
+    for (uint32_t shard = 0; shard < kNumShards; shard++) {
+        shard_rank[shard].resize(shard_words[shard].size());
+    }
+    {
+        std::atomic<uint64_t> next_range(0);
+        std::vector<std::jthread> threads;
+        threads.reserve(Settings::GetNumThreads());
+        constexpr uint64_t kRangeSize = 1<<20;
+        for (int thread = 0; thread < Settings::GetNumThreads(); thread++) {
+            threads.emplace_back([&](){
+                uint64_t left = next_range.fetch_add(1, std::memory_order_relaxed)*kRangeSize;
+                while (left < bucket_cnt) {
+                    uint64_t right = std::min(left+kRangeSize, bucket_cnt);
+                    for (uint64_t bucket = left; bucket < right; bucket++) {
+                        uint64_t value = sort_data[bucket];
+                        uint32_t shard = uint32_t(value >> kShardShift) & 0xFF;
+                        uint32_t local = uint32_t(value & 0xFFFFFF);
+                        shard_rank[shard][local] = uint32_t(bucket); // NOLINT
+                        heuristic_value[bucket] = shard_words[shard][local];
+                    }
+                    left = next_range.fetch_add(1, std::memory_order_relaxed)*kRangeSize;
+                }
+            });
+        }
+    }
+
+    // replace the temporary shard entries with the bucket ids
+    {
+        std::atomic<uint32_t> next_block(0);
+        std::vector<std::jthread> threads;
+        threads.reserve(Settings::GetNumThreads());
+        for (int thread = 0; thread < Settings::GetNumThreads(); thread++) {
+            threads.emplace_back([&](){
+                constexpr uint32_t kBlockSize = 4096;
+                uint32_t pos_left = next_block.fetch_add(1, std::memory_order_relaxed)*kBlockSize;
+                while (pos_left < kNumPos) {
+                    uint32_t pos_right = std::min(pos_left+kBlockSize, kNumPos);
+                    for (uint32_t pos = pos_left; pos < pos_right; pos++) {
+                        for (uint32_t orient_bucket = 0; orient_bucket < kNumOrient/kNumStoredPerBucket; orient_bucket++) {
+                            uint32_t entry = heuristic_bucket[pos][orient_bucket];
+                            heuristic_bucket[pos][orient_bucket] = shard_rank[entry >> kShardShift][entry & 0xFFFFFF];
+                        }
+                    }
+                    pos_left = next_block.fetch_add(1, std::memory_order_relaxed)*kBlockSize;
+                }
+            });
+        }
     }
 }
 #else
