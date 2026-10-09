@@ -65,7 +65,7 @@ void Initialize (const std::vector<std::string>& arguments) {
     // precomputation
     if (!std::filesystem::exists(GetFilePath(""))) {
         if (std::filesystem::create_directories(GetFilePath(""))) {
-            LOG_ALL("Create precomputation folder for precomputation");
+            LOG_EXTRA("Create precomputation folder for precomputation");
         }
         else {
             LOG_CRITICAL("Failed to create folder for precomputation");

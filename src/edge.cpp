@@ -264,7 +264,6 @@ void InitPositionChangeSymmetryChange(const std::array<std::array<uint8_t, kNumE
 
     // the position ids are the prefix sums of the representative counts over
     // the chunks (the chunk order is the lexicographic order)
-    LOG_ALL("[2/7] phase A done");
     std::vector<uint32_t> rep_offset(kNumChunks+1, 0);
     for (uint32_t chunk = 0; chunk < kNumChunks; chunk++) {
         rep_offset[chunk+1] = rep_offset[chunk] + uint32_t(rep_perms[chunk].size());
@@ -337,7 +336,6 @@ void InitPositionChangeSymmetryChange(const std::array<std::array<uint8_t, kNumE
     }
 
     // deduplicate the active symmetry vectors in representative order
-    LOG_ALL("[2/7] phase C done");
     std::vector<uint8_t> sym_pos_active_sym(kNumPos);
     std::map<std::array<uint8_t, kNumSym>, uint8_t> active_sym_map;
     std::vector<std::array<uint8_t, kNumSym>> sym_to_active_sym;
@@ -351,7 +349,6 @@ void InitPositionChangeSymmetryChange(const std::array<std::array<uint8_t, kNumE
     if (sym_to_active_sym.size() > 256) {
         LOG_CRITICAL("Active symmetry count not correct!");
     }
-    LOG_ALL("[2/7] phase D done, active sym count", sym_to_active_sym.size());
     rep_active_sym.reset();
     std::vector<std::vector<std::array<uint8_t, kNumEdges>>>().swap(rep_perms);
 
@@ -376,7 +373,6 @@ void InitPositionChangeSymmetryChange(const std::array<std::array<uint8_t, kNumE
             threads.emplace_back([&](){
                 uint32_t block;
                 while ((block = next_block.fetch_add(1, std::memory_order_relaxed)) < num_change_blocks) {
-                    LOG_EXTRA("block", block, "/", num_change_blocks);
                     std::unordered_map<uint32_t, uint32_t> pair_to_local;
                     for (uint32_t pos = block*kChangeBlockSize; pos < (block+1)*kChangeBlockSize && pos < kNumPos; pos++) {
                         for (uint8_t rot = 0; rot < kNumRot; rot++) {
@@ -397,7 +393,6 @@ void InitPositionChangeSymmetryChange(const std::array<std::array<uint8_t, kNumE
     }
     lehmer_pos_to_pos.reset();
     rep_lehmer_pos.reset();
-    LOG_ALL("[2/7] phase E done");
 
     // merge the blocks in order: the first occurrence of every symmetry
     // change vector over the (pos, rot) order defines its id
@@ -718,7 +713,7 @@ void InitHeuristic(const std::array<Vec3i, kNumEdges>& idx_to_xyz_pos,
         LOG_EXTRA("Level", heuristic_level, ":", cur_num_pos_level);
         heuristic_level++;
     }
-    LOG_ALL("Finished Generation");
+    LOG_EXTRA("Finished Generation");
     std::vector<uint64_t>().swap(sym_pos_same_sym);
     LOG_MEMORY();
 
@@ -903,7 +898,7 @@ void InitReducedHeuristic() {
         frontier = std::move(next_frontier);
         depth++;
     }
-    LOG_ALL("Edge position heuristic finished at depth", depth-1);
+    LOG_EXTRA("Edge position heuristic finished at depth", depth-1);
     if (depth-1 > 14) {
         LOG_CRITICAL("Edge position heuristic exceeds the maximum edge distance 14");
     }
@@ -931,7 +926,7 @@ void InitReducedHeuristic() {
         frontier = std::move(next_frontier);
         depth++;
     }
-    LOG_ALL("Edge orientation heuristic finished at depth", depth-1);
+    LOG_EXTRA("Edge orientation heuristic finished at depth", depth-1);
     if (depth-1 > 14) {
         LOG_CRITICAL("Edge orientation heuristic exceeds the maximum edge distance 14");
     }
