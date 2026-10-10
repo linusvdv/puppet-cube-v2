@@ -2,7 +2,7 @@
 
 [PuppetCubeV2.webm](https://github.com/user-attachments/assets/a0779cad-28bf-48d4-9e59-f1440ea8e9c0)
 
-An optimal solver for the Puppet Cube V2, a shapeshifting variant of the Rubik's Cube with about $5 \cdot 10^{18}$ positions. It finds short solutions to randomly scrambled cubes almost instantly, improves them with additional search time, and can prove that a solution is optimal. On a GPU this takes seconds, and under a second even for the hardest cubes on strong hardware. A 3D viewer replays every scramble and solution.
+An optimal solver for the Puppet Cube V2, a shapeshifting variant of the Rubik's Cube with about $5 \cdot 10^{18}$ positions. It finds a shortest possible solution for any scrambled cube and proves that it is optimal. With GPU acceleration this takes a fraction of a second for a random position on high-end consumer hardware, and only slightly longer for the hardest positions. A 3D viewer replays every scramble and solution.
 
 <!--toc:start-->
 - [Puppet Cube V2](#puppet-cube-v2)
@@ -86,12 +86,11 @@ The most useful options:
 
 | Option | Description | Default |
 |--------|-------------|---------|
-| `-r`, `--num_runs` | Number of scrambled cubes to solve | 10 |
-| `-s`, `--scrambling_depth` | Number of random moves in the scramble | 100 |
-| `-m`, `--min_corner_heuristic` | Only use start positions with at least this corner heuristic (use 27 for the hardest cubes) | 0 |
-| `--run_offset` | Start at a given run number (scrambles are reproducible) | 0 |
-| `-t`, `--threads` | Number of threads | all |
 | `--use_cuda` | Use the GPU search (`false` for CPU) | true if built with CUDA |
+| `-t`, `--threads` | Number of threads | all |
+| `-m`, `--min_corner_heuristic` | Only use start positions with at least this corner heuristic (use 27 for the hardest cubes) | 0 |
+| `-r`, `--num_runs` | Number of scrambled cubes to solve | 10 |
+| `--run_offset` | Start at a given run number (scrambles are reproducible) | 0 |
 | `-l`, `--log_level` | Amount of output (`critical` ... `memory`) | `memory` (the most verbose) |
 
 For example, to solve one cube and print less output:
