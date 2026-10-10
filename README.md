@@ -2,41 +2,49 @@
 
 [PuppetCubeV2.webm](https://github.com/user-attachments/assets/a0779cad-28bf-48d4-9e59-f1440ea8e9c0)
 
+An optimal solver for the Puppet Cube V2, a shapeshifting variant of the Rubik's Cube with about $5 \cdot 10^{18}$ positions. It finds short solutions to randomly scrambled cubes almost instantly, improves them with additional search time, and can prove that a solution is optimal. On a GPU this takes seconds, and under a second even for the hardest cubes on strong hardware. A 3D viewer replays every scramble and solution.
+
 <!--toc:start-->
 - [Puppet Cube V2](#puppet-cube-v2)
-  - [About this project](#about-this-project)
-  - [Abstract of the matura thesis](#abstract-of-the-matura-thesis)
-  - [Graphical user interface](#graphical-user-interface)
-  - [Compilation](#compilation)
+  - [Features](#features)
+  - [Requirements](#requirements)
+  - [Build](#build)
   - [Run](#run)
-  - [Help](#help)
+  - [Graphical user interface](#graphical-user-interface)
+  - [Project history](#project-history)
+  - [Abstract of the matura thesis](#abstract-of-the-matura-thesis)
+  - [Future plans](#future-plans)
 <!--toc:end-->
 
-## About this project
+## Features
 
-This project started as a matura thesis, a graded project at the end of my Gymnasium (high school). The Puppet Cube V2 is a shapeshifting variant of the Rubik's Cube. The program consists of two main parts: 3D rendering of the cube and solution finding with the help of a search. It quickly finds short solutions to randomly scrambled cubes and improves them with additional search time. Given enough time and memory, this implementation can even prove a solution optimal, i.e. shortest possible. The state of the project from the matura thesis can be found at release [tag v1.0](https://github.com/linusvdv/puppet-cube-v2/tree/v1.0).
+- **Optimal solving.** Search with precomputed heuristics and a tablebase, with proof of optimality.
+- **GPU or CPU.** The CUDA search is the fast path. A CPU-only search is available when no GPU is present.
+- **Low-memory mode.** A compile-time option cuts memory use to roughly a third, at the cost of speed.
+- **3D viewer.** A Qt/pyrender GUI replays scrambles and solutions while the solver keeps running.
 
-The following year was spent redesigning the project from the ground up, and the result can be found at [tag v2.0](https://github.com/linusvdv/puppet-cube-v2/tree/v2.0). Further breakthroughs in the heuristic algorithms were found, and GPU acceleration was added, which required writing a new search from scratch. This new implementation proves optimality directly, in a few seconds, and in under a second even for the hardest cubes on strong hardware. Up to this point, no AI was used in this project.
+## Requirements
 
-From v2.0 onwards, AI is being used for three main purposes: tidying up the search so the code can run on the CPU alone, re-adding a 3D rendering of the cube, and verifying correctness, improving runtime efficiency, and optionally reducing memory usage (selectable at compile time) by using two smaller edge heuristic.
+- A C++20 compiler and CMake
+- Optional: the CUDA toolkit and an NVIDIA GPU for the fast search (build with `-DUSE_CUDA=OFF` otherwise)
+- Optional: Python 3 for the GUI (the setup script installs the Python packages)
+- Network access during the first configure, which downloads [parallel-hashmap](https://github.com/greg7mdp/parallel-hashmap)
 
-Future plans include solving arbitrary user-defined positions (after checking that the cube is in a legal, solvable state), adding a neural network for image recognition to detect the user's position, and possibly a web interface.
+The solver needs large precomputed tables. The memory use depends on how you build it:
 
-## Abstract of the matura thesis
+|                        | Default build | `REDUCE_MEMORY=ON` |
+|------------------------|---------------|--------------------|
+| Disk (`precomputation/`) | ~8 GB       | ~2.6 GB            |
+| RAM                    | ~10 GB        | ~4.5 GB            |
+| GPU memory             | ~8 GB         | ~2.5 GB            |
 
-In this thesis, the Puppet Cube V2, a shapeshifting variant of the classic Rubik’s Cube, is investigated in two parts, namely its 3D rendering and its solution finding with the help of a search. The interactive visualization of this cube incorporates features such as lighting and transparency. The primary focus of this study was the search. The Puppet Cube V2, represented as a graph, is used to investigate five different graph algorithms. The resulting program is able to find short solutions to randomly scrambled cubes quickly and improves the found solution with additional search time. A comprehensive description of the final implementation is provided, which is able to prove an optimal solution, although there exist $5 \cdot 10^{18}$ positions of the Puppet Cube V2. The algorithm runs in parallel to enhance computational efficiency. Additionally, the thesis presents key properties of the Puppet Cube V2 and the employed algorithm. Notably, a lower bound for God’s Number is established, which shows that there exist positions where 30 moves are required to solve the cube. Furthermore, the research highlights improvements in the average depth when searching for longer. Finally, a comparison to a state-of-the-art Rubik’s Cube solver further proves the effectiveness of the proposed approach.
+These are the values for the default tablebase depth. Deeper tablebases need more (`--tb_depth 9` uses about 40 GB of RAM). GPU memory is only needed for the CUDA search.
 
-## Graphical user interface
+The tables are generated automatically on the first start if they are missing. This takes about 5 minutes for the default build (with a peak of roughly 20 GB of RAM) and under a minute with `REDUCE_MEMORY=ON`.
 
-The gui replays the scrambles and solutions of the search on a 3D model of the cube (the visual model of the matura thesis, rendered with [pyrender](https://github.com/mmatl/pyrender) inside a [Qt](https://www.qt.io) window). The solver runs in the background through a python binding of the c++ search and reports every scramble/solution to the gui. Built with cuda it uses the gpu accelerated search (run with `--use_cuda=false` for the cpu search).
+## Build
 
-It needs the precomputation tables (~8 GB on disk and ~10 GB RAM at the default tablebase depth, ~8 GB of gpu memory when using the cuda search).
-
-The window: a list of the runs (scrambles) on the left, the 3D view in the middle, and the moves of the current run at the bottom right - the scramble and the solution on two lines, with transport controls (play/pause, single step, jump to the scrambled/solved position). Clicking the timeline jumps to that exact position. New runs are followed automatically (each replay finishes before the next one starts) until you interact manually (follow checkbox to re-enable). Keyboard: space play/pause, left/right single step, Home/End jump. Mouse: left drag orbits, wheel zooms. The window opens immediately with a solved cube while the tables are loaded in the background; the log output of the search is printed to the terminal (`--gui_log_level extra` adds gui/gl diagnostics for debugging). Closing the window exits the program (the search can not be aborted mid-run).
-
-## Compilation
-
-The python binding `puppetpy` for the gui is built by default (`-DBUILD_PYTHON=ON`) and needs pybind11 - set up the python environment before configuring (pybind11 is located automatically, no `CMAKE_PREFIX_PATH` needed):
+The GUI's Python module (`puppetpy`) is built by default and needs pybind11, so set up the Python environment first. The script has to be sourced so that the activation persists:
 
 ```bash
 source gui/setup_venv.sh
@@ -44,38 +52,60 @@ cmake -B build
 cmake --build build -j
 ```
 
-`gui/setup_venv.sh` creates `.venv/` (pyrender, trimesh, PyOpenGL, imageio, pybind11, PySide6, numpy<2) and has to be sourced so the activation persists. The qt gui additionally needs the usual desktop libraries (libxkbcommon, libxcb-\*, libpulse, ... - present on any desktop system, listed in `gui/setup_venv.sh`).
+The binary is written to `build/bin/PuppetCubeV2`.
 
-Disable the gui option:
+### Build options
 
-```bash
-cmake -B build -DBUILD_PYTHON=OFF
-cmake --build build -j
-```
+| Option | Effect |
+|--------|--------|
+| `-DUSE_CUDA=OFF` | Build without CUDA (CPU search only) |
+| `-DREDUCE_MEMORY=ON` | Use two small edge heuristics instead of the large one (less memory, slower) |
+| `-DBUILD_PYTHON=OFF` | Skip the Python module and the GUI dependency |
+| `-DCMAKE_CUDA_COMPILER=<path>` | Select a specific `nvcc` |
+| `-DCUDA_ARCH=<n>` | Select the GPU architecture, e.g. `90` |
+| `-DCMAKE_BUILD_TYPE=Debug` | Debug build (the default is Release with LTO) |
 
-Without cuda:
-
-```bash
-cmake -B build -DUSE_CUDA=OFF
-cmake --build build -j
-```
-
-Extra arguments:
+Options can be combined, for example:
 
 ```bash
-cmake -B build -DCMAKE_CUDA_COMPILER=/usr/local/cuda-12.8/bin/nvcc -DCMAKE_BUILD_TYPE=Debug -DCUDA_ARCH=90
+cmake -B build -DUSE_CUDA=OFF -DBUILD_PYTHON=OFF -DREDUCE_MEMORY=ON
 cmake --build build -j
 ```
 
 ## Run
 
-Solver:
+Run the solver from the repository root:
 
 ```bash
 ./build/bin/PuppetCubeV2
 ```
 
-Gui:
+If you start it from elsewhere, pass `--root_path=/path/to/puppet-cube-v2/` so it can find the `precomputation/` folder.
+
+The most useful options:
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `-r`, `--num_runs` | Number of scrambled cubes to solve | 10 |
+| `-s`, `--scrambling_depth` | Number of random moves in the scramble | 100 |
+| `-m`, `--min_corner_heuristic` | Only use start positions with at least this corner heuristic (use 27 for the hardest cubes) | 0 |
+| `--run_offset` | Start at a given run number (scrambles are reproducible) | 0 |
+| `-t`, `--threads` | Number of threads | all |
+| `--use_cuda` | Use the GPU search (`false` for CPU) | true if built with CUDA |
+| `-l`, `--log_level` | Amount of output (`critical` ... `memory`) | `memory` (the most verbose) |
+
+For example, to solve one cube and print less output:
+
+```bash
+./build/bin/PuppetCubeV2 -r 1 -l extra
+```
+
+The full list of options is in [docs/OPTIONS.md](docs/OPTIONS.md).
+
+## Graphical user interface
+<img width="1856" height="1532" alt="PuppetCubeV2Renderer" src="https://github.com/user-attachments/assets/299fcf6e-0d14-4841-86cc-61e6220e4e6d" />
+
+The GUI replays the scrambles and solutions on a 3D model of the cube, rendered with [pyrender](https://github.com/mmatl/pyrender) inside a [Qt](https://www.qt.io) window. The solver runs in the background through the `puppetpy` binding and reports every scramble and solution to the GUI. With a CUDA build it uses the GPU search; pass `--use_cuda=false` to use the CPU search.
 
 ```bash
 python3 gui/main.py                 # interactive viewer with the matura thesis lighting
@@ -89,31 +119,18 @@ Without a display:
 python3 gui/main.py --mode offscreen -r 2
 ```
 
-## Help
+`gui/setup_venv.sh` creates a `.venv/` with pyrender, trimesh, PyOpenGL, imageio, pybind11, PySide6 and numpy<2. The Qt GUI also needs the usual desktop libraries (libxkbcommon, libxcb-\*, libpulse, ...). Any desktop system has them, and the full list is in the script. Headless rendering additionally needs `libegl1` and `libgles2`.
 
-```
-usage: ./build/bin/PuppetCubeV2 [options]
-    --option=value
-    --option value
-    -ovalue
-    -o value
+## Project history
 
-list of options
-    -h --help                  show this message
+The project started as a matura thesis and was later rebuilt from the ground up, with AI assistance used from v2.0 onwards. The full story, including what changed in each release, is in [docs/HISTORY.md](docs/HISTORY.md).
 
-    --root_path                path to root folder puppet-cube-v2                         [./PathToPuppetCubeV2/../../]
-    --use_cuda                 run cuda                                                   [USE_CUDA]     (true|1|false|0)
-    -d --device_count          number of gpu                                              [NUM_GPUS]     (1, NUM_GPUS)
-    -i --info                  show additional hardware info
-    -l --log_level             logger/error level                                         [memory]       (critical|error|warning|info|all|extra|memory)
+## Abstract of the matura thesis
 
-    -r --num_runs              number of runs                                             [10]           (0, 1e18)
-    --run_offset               start at a specific run number                             [0]           (0, 1e18)
-    -s --scrambling_depth      how many moves to scramble                                 [100]          (0, 1000000)
-    -m --min_corner_heuristic  all starting position have at least this corner heuristic  [0]           (0, 27)
+In this thesis, the Puppet Cube V2, a shapeshifting variant of the classic Rubik’s Cube, is investigated in two parts, namely its 3D rendering and its solution finding with the help of a search. The interactive visualization of this cube incorporates features such as lighting and transparency. The primary focus of this study was the search. The Puppet Cube V2, represented as a graph, is used to investigate five different graph algorithms. The resulting program is able to find short solutions to randomly scrambled cubes quickly and improves the found solution with additional search time. A comprehensive description of the final implementation is provided, which is able to prove an optimal solution, although there exist $5 \cdot 10^{18}$ positions of the Puppet Cube V2. The algorithm runs in parallel to enhance computational efficiency. Additionally, the thesis presents key properties of the Puppet Cube V2 and the employed algorithm. Notably, a lower bound for God’s Number is established, which shows that there exist positions where 30 moves are required to solve the cube. Furthermore, the research highlights improvements in the average depth when searching for longer. Finally, a comparison to a state-of-the-art Rubik’s Cube solver further proves the effectiveness of the proposed approach.
 
-    -t --threads               number of threads used in the program                      [MAX_THREADS]  (1, MAX_THREADS)
-    --tt_size                  size of the transposition table in MB                      [1000]         (128, 1000000)
+## Future plans
 
-    --tb_depth                 depth of the tablebase (9 uses 40 GB RAM)                  [6]           (0, 9)
-```
+- Solve arbitrary user-defined positions, after checking that the cube is in a legal, solvable state
+- A neural network for image recognition to detect the user's position
+- Possibly a web interface
