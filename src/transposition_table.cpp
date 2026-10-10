@@ -26,9 +26,9 @@ void Clear(size_t thread_idx, size_t num_threads) {
 
 
 void Init() {
-    uint64_t num_elements = (uint64_t(Settings::GetTTSize())*1024*1024) / sizeof(uint64_t); // NOLINT
+    uint64_t num_elements = (uint64_t(Settings::GetTTSize())*1024*1024) / sizeof(uint64_t) / 2; // NOLINT
     constexpr uint64_t kMinTTSize = (1<<6) * (1<<8);
-    if (num_elements < kMinTTSize) {
+    if (num_elements < kMinTTSize) { // This should never happen as it is < 1MB
         LOG_ERROR("Trabsposition Table too small");
         num_elements = kMinTTSize;
         LOG_WARNING("Set Transposition Table size to ", num_elements*sizeof(uint64_t) / 1024 / 1024, "MB");

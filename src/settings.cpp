@@ -35,7 +35,11 @@ int Settings::num_threads;                      // automatic detection
 int Settings::num_gputhreads;                   // automatic detection
 int Settings::num_positions_per_batch = 1000;   // NOLINT
 int Settings::num_parallel_batches;             // automatic detection
+#ifndef REDUCE_MEMORY
 int Settings::tt_size = 1000;   // 1 GB         // NOLINT
+#else
+int Settings::tt_size = 64;     // 64 MB        // NOLINT
+#endif
 
 // tablebase
 int Settings::tb_depth = 7;                     // NOLINT
