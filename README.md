@@ -2,7 +2,7 @@
 
 [PuppetCubeV2.webm](https://github.com/user-attachments/assets/a0779cad-28bf-48d4-9e59-f1440ea8e9c0)
 
-An optimal solver for the Puppet Cube V2, a shapeshifting variant of the Rubik's Cube with about $5 \cdot 10^{18}$ positions. It finds a shortest possible solution for any scrambled cube and proves that it is optimal. With GPU acceleration this takes a fraction of a second for a random position on high-end consumer hardware, and only slightly longer for the hardest positions. A 3D viewer replays every scramble and solution, and a test suite in `tests/` covers the solver bindings, the 3D model and the GUI logic.
+An optimal solver for the Puppet Cube V2, a shapeshifting variant of the Rubik's Cube with about $5 \cdot 10^{18}$ positions. It finds a shortest possible solution for any scrambled cube and proves that it is optimal. With GPU acceleration this takes a fraction of a second for a random position on high-end consumer hardware, and only slightly longer for the hardest positions. A 3D viewer replays every scramble and solution — and positions painted in the built-in editor are solved with the same optimality guarantee.
 
 <!--toc:start-->
 - [Puppet Cube V2](#puppet-cube-v2)
@@ -11,7 +11,6 @@ An optimal solver for the Puppet Cube V2, a shapeshifting variant of the Rubik's
   - [Build](#build)
   - [Run](#run)
   - [Graphical user interface](#graphical-user-interface)
-  - [Tests](#tests)
   - [Project history](#project-history)
   - [Abstract of the matura thesis](#abstract-of-the-matura-thesis)
   - [Future plans](#future-plans)
@@ -23,6 +22,7 @@ An optimal solver for the Puppet Cube V2, a shapeshifting variant of the Rubik's
 - **GPU or CPU.** The CUDA search is the fast path. A CPU-only search is available when no GPU is present.
 - **Low-memory mode.** A compile-time option cuts memory use to roughly a third, at the cost of speed.
 - **3D viewer.** A Qt/pyrender GUI replays scrambles and solutions while the solver keeps running.
+- **Custom positions.** Any cube state can be painted in the built-in editor; the solver checks that it is legal and finds a provably optimal solution for it.
 
 ## Requirements
 
@@ -119,18 +119,9 @@ Without a display:
 python3 gui/main.py --mode offscreen -r 2
 ```
 
+**Solving custom positions.** The viewer includes an editor for arbitrary cube states: click *edit* for a paintable standard 3×3, color the stickers of your position (the centers are fixed — undo/redo, an eraser and per-color sticker counters help while painting), and press *solve*. Illegal positions — unknown or duplicated pieces, mirrored corner colorings, parity violations — are reported immediately by flashing the offending pieces. The optimal solution is then replayed from exactly the painted arrangement; the *puppet cube* view toggle previews the real bandaged piece shapes of your position while you paint.
+
 `gui/setup_venv.sh` creates a `.venv/` with pyrender, trimesh, PyOpenGL, imageio, pybind11, PySide6 and numpy<2. The Qt GUI also needs the usual desktop libraries (libxkbcommon, libxcb-\*, libpulse, ...). Any desktop system has them, and the full list is in the script. Headless rendering additionally needs `libegl1` and `libgles2`.
-
-## Tests
-
-The regression tests live in `tests/` and cover the 3D model and move derivation, the playback and timeline widgets, the conversion of user-defined positions into solver states, the editor, and the full GUI flow with the real solver. Every file runs standalone with the same virtual environment as the GUI:
-
-```bash
-python3 tests/verify_model.py
-python3 tests/qt_test.py    # GUI flow, sets the offscreen platform itself
-```
-
-The render tests (`editor_render_test.py`, `gl_bench.py`) use EGL and run without a display.
 
 ## Project history
 
@@ -142,6 +133,5 @@ In this thesis, the Puppet Cube V2, a shapeshifting variant of the classic Rubik
 
 ## Future plans
 
-- Solve arbitrary user-defined positions, after checking that the cube is in a legal, solvable state
 - A neural network for image recognition to detect the user's position
 - Possibly a web interface
