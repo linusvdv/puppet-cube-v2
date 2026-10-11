@@ -1,5 +1,6 @@
 #pragma once
 #include <cstdint>
+#include <vector>
 
 #include "utils.hpp"
 
@@ -16,6 +17,12 @@ constexpr uint32_t kPosMask = (1<<kPosShift)-1;
 
 constexpr int kNumStoredPerBucket = 16;
 constexpr uint64_t kSingleHeuristicValue = 15;
+
+
+// sorted lehmer codes of the position class representatives (the class id is
+// the index); used to convert user input positions into the internal
+// representation
+extern std::vector<uint32_t> rep_lehmer_pos;
 
 
 void Init();

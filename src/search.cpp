@@ -329,17 +329,85 @@ void BaseSearchManager (
 }
 
 
-void SearchManager (const SearchEventCallback& event_callback) {
-    if (Settings::GetNumRuns() <= 0) {
+// solves one position: notifies the gui about the scramble, searches (or
+// takes the tablebase short circuit), notifies the gui about the solution
+// and verifies the solution by replaying it
+void SolveRun(SharedSearch& shared_search, SharedLeafSolution& shared_leaf_solution, SharedLeafStates& shared_leaf_states,
+              ThreadPool& search_thread_pool, const State& start_state, size_t idx, size_t num_runs,
+              const std::vector<uint8_t>& scramble, double& acc_depth, uint64_t& acc_total_num_positions,
+              const SearchEventCallback& event_callback) {
+    // notify the gui about the scramble of this run
+    if (event_callback) {
+        SearchEvent event = {SearchEventKind::kScramble, idx, 0, scramble};
+        event_callback(event);
+    }
+
+    // already in TB
+    if (GetTBLayer(start_state) >= 0) {
+        std::vector<Rotations> tb_rotations(GetTBLayer(start_state));
+        SolutionTB(tb_rotations, GetTBLayer(start_state), start_state);
+        LOG_EXTRA("Proven optimal solution");
+        LOG_EXTRA("Position already in tablebase");
+        LOG_EXTRA("solution moves:", tb_rotations);
+        LOG_ALL(SkipSpace("["), SkipSpace(idx+1), SkipSpace("/"), SkipSpace(num_runs), "] Depth:", GetTBLayer(start_state), "num_positions: 0");
+        if (event_callback) {
+            SearchEvent event = {SearchEventKind::kSolution, idx, uint8_t(tb_rotations.size()),
+                                 std::vector<uint8_t>(tb_rotations.begin(), tb_rotations.end())};
+            event_callback(event);
+        }
         return;
     }
 
-    // random starting positions
-    LOG_EXTRA("Start calculating random positions");
-    std::vector<std::vector<uint8_t>> scrambles;
-    std::vector<State> random_positions = RandomPositions(Settings::GetNumRuns(), Settings::GetRunOffset(), scrambles);
-    LOG_ALL("Calculated random positions");
+    // Transposition Table
+    search_thread_pool.Run([](size_t thread_id){transposition_table::Clear(thread_id, Settings::GetNumThreads());});
+    transposition_table::Insert(start_state, 0);
+    upload_to_leaf_map.clear();
 
+    // Search
+    uint8_t solution_depth = 0;
+    uint64_t total_num_positions = 0;
+    BaseSearchManager(shared_search, shared_leaf_solution, shared_leaf_states, search_thread_pool,
+                      start_state, idx, solution_depth, total_num_positions);
+
+    acc_depth += solution_depth;
+    acc_total_num_positions += total_num_positions;
+
+    // guarantee that the starting position is in TT
+    transposition_table::Insert<true>(start_state, 0);
+
+    // reconstruct the solution
+    std::vector<Rotations> solution_rotations(solution_depth);
+    SolutionTB(solution_rotations, Settings::GetTBDepth(), shared_leaf_solution.state);
+    SolutionSearch(solution_rotations, solution_depth-Settings::GetTBDepth(), shared_leaf_solution.state);
+
+    LOG_EXTRA("solution moves:", solution_rotations);
+
+    LOG_ALL(SkipSpace("["), SkipSpace(idx+1), SkipSpace("/"), SkipSpace(num_runs), "] Depth:", solution_depth, "num_positions:", total_num_positions);
+    LOG_MEMORY();
+
+    // notify the gui about the solution of this run
+    if (event_callback) {
+        SearchEvent event = {SearchEventKind::kSolution, idx, solution_depth,
+                             std::vector<uint8_t>(solution_rotations.begin(), solution_rotations.end())};
+        event_callback(event);
+    }
+
+    if (Logger::GetLoggerLevel() >= LoggerLevel::kExtra) { // test if the solution works
+        State test_state = start_state;
+        for (Rotations rotation : solution_rotations) {
+            corner::Rotate(test_state.corner_pos, test_state.corner_orient, uint8_t(rotation));
+            edge::Rotate(test_state.edge_pos, test_state.edge_sym, test_state.edge_orient, uint8_t(rotation));
+        }
+        if (test_state != kSolvedState) {
+            LOG_WARNING("Not correct solution!");
+        }
+    }
+}
+
+
+// search loop shared by the scramble search and the user input position search
+void SearchManagerRuns(const std::vector<State>& start_states, const std::vector<std::vector<uint8_t>>& scrambles,
+                       const SearchEventCallback& event_callback) {
     // start timing
     std::chrono::time_point start_time = std::chrono::high_resolution_clock::now();
 
@@ -374,73 +442,10 @@ void SearchManager (const SearchEventCallback& event_callback) {
 
     // start base search on CPU
     ThreadPool search_thread_pool(Settings::GetNumThreads());
-    for (size_t idx = 0; idx < random_positions.size(); idx++) {
-        // notify the gui about the scramble of this run
-        if (event_callback) {
-            SearchEvent event = {SearchEventKind::kScramble, idx, 0, std::move(scrambles[idx])};
-            event_callback(event);
-        }
-
-        // already in TB
-        if (GetTBLayer(random_positions[idx]) >= 0) {
-            std::vector<Rotations> tb_rotations(GetTBLayer(random_positions[idx]));
-            SolutionTB(tb_rotations, GetTBLayer(random_positions[idx]), random_positions[idx]);
-            LOG_EXTRA("Proven optimal solution");
-            LOG_EXTRA("Position already in tablebase");
-            LOG_EXTRA("solution moves:", tb_rotations);
-            LOG_ALL(SkipSpace("["), SkipSpace(idx+1), SkipSpace("/"), SkipSpace(Settings::GetNumRuns()), "] Depth:", GetTBLayer(random_positions[idx]), "num_positions: 0");
-            if (event_callback) {
-                SearchEvent event = {SearchEventKind::kSolution, idx, uint8_t(tb_rotations.size()),
-                                     std::vector<uint8_t>(tb_rotations.begin(), tb_rotations.end())};
-                event_callback(event);
-            }
-            continue;
-        }
-
-        // Transposition Table
-        search_thread_pool.Run([](size_t thread_id){transposition_table::Clear(thread_id, Settings::GetNumThreads());});
-        transposition_table::Insert(random_positions[idx], 0);
-        upload_to_leaf_map.clear();
-
-        // Search
-        uint8_t solution_depth = 0;
-        uint64_t total_num_positions = 0;
-        BaseSearchManager(shared_search, shared_leaf_solution, shared_leaf_states, search_thread_pool,
-                          random_positions[idx], idx, solution_depth, total_num_positions);
-
-        acc_depth += solution_depth;
-        acc_total_num_positions += total_num_positions;
-
-        // guarantee that the starting position is in TT
-        transposition_table::Insert<true>(random_positions[idx], 0);
-
-        // reconstruct the solution
-        std::vector<Rotations> solution_rotations(solution_depth);
-        SolutionTB(solution_rotations, Settings::GetTBDepth(), shared_leaf_solution.state);
-        SolutionSearch(solution_rotations, solution_depth-Settings::GetTBDepth(), shared_leaf_solution.state);
-
-        LOG_EXTRA("solution moves:", solution_rotations);
-
-        LOG_ALL(SkipSpace("["), SkipSpace(idx+1), SkipSpace("/"), SkipSpace(Settings::GetNumRuns()), "] Depth:", solution_depth, "num_positions:", total_num_positions);
-        LOG_MEMORY();
-
-        // notify the gui about the solution of this run
-        if (event_callback) {
-            SearchEvent event = {SearchEventKind::kSolution, idx, solution_depth,
-                                 std::vector<uint8_t>(solution_rotations.begin(), solution_rotations.end())};
-            event_callback(event);
-        }
-
-        if (Logger::GetLoggerLevel() >= LoggerLevel::kExtra) { // test if the solution works
-            State test_state = random_positions[idx];
-            for (Rotations rotation : solution_rotations) {
-                corner::Rotate(test_state.corner_pos, test_state.corner_orient, uint8_t(rotation));
-                edge::Rotate(test_state.edge_pos, test_state.edge_sym, test_state.edge_orient, uint8_t(rotation));
-            }
-            if (test_state != kSolvedState) {
-                LOG_WARNING("Not correct solution!");
-            }
-        }
+    for (size_t idx = 0; idx < start_states.size(); idx++) {
+        SolveRun(shared_search, shared_leaf_solution, shared_leaf_states, search_thread_pool,
+                 start_states[idx], idx, start_states.size(), scrambles[idx],
+                 acc_depth, acc_total_num_positions, event_callback);
     }
     shared_search.finished.store(true);
     shared_search.start_work->arrive_and_wait();
@@ -449,9 +454,29 @@ void SearchManager (const SearchEventCallback& event_callback) {
     std::chrono::time_point end_time = std::chrono::high_resolution_clock::now();
     std::chrono::milliseconds elapsed_millis = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
 
-    LOG_ALL("Average time:", elapsed_millis.count()/Settings::GetNumRuns(), "ms");
-    LOG_ALL("Average depth:", acc_depth/Settings::GetNumRuns());
-    LOG_ALL("Average number of positions:", acc_total_num_positions/Settings::GetNumRuns());
+    LOG_ALL("Average time:", elapsed_millis.count()/int64_t(start_states.size()), "ms");
+    LOG_ALL("Average depth:", acc_depth/start_states.size());
+    LOG_ALL("Average number of positions:", acc_total_num_positions/start_states.size());
     LOG_ALL("Positions per seconds:", acc_total_num_positions * 1000 / elapsed_millis.count());
+}
 
+
+void SearchManager (const SearchEventCallback& event_callback) {
+    if (Settings::GetNumRuns() <= 0) {
+        return;
+    }
+
+    // random starting positions
+    LOG_EXTRA("Start calculating random positions");
+    std::vector<std::vector<uint8_t>> scrambles;
+    std::vector<State> random_positions = RandomPositions(Settings::GetNumRuns(), Settings::GetRunOffset(), scrambles);
+    LOG_ALL("Calculated random positions");
+
+    SearchManagerRuns(random_positions, scrambles, event_callback);
+}
+
+
+// solves a single user input position (no scramble, run index 0)
+void SearchManagerCustom(const State& state, const SearchEventCallback& event_callback) {
+    SearchManagerRuns({state}, {std::vector<uint8_t>()}, event_callback);
 }

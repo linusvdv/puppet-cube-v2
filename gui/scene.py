@@ -44,7 +44,7 @@ class PuppetScene:
     # radial offset of the outline lines to avoid z-fighting with the surfaces
     OUTLINE_OFFSET = 0.001
 
-    def __init__(self, cube, lighting=False):
+    def __init__(self, cube, lighting=False, piece_geometry=None):
         self.cube = cube
         self.lighting = lighting
         # (primitive, piece_idx, base color per vertex, canonical normals) of
@@ -52,6 +52,11 @@ class PuppetScene:
         self.lit_primitives = []
         self.pending_reupload = set()
         self._lighting_signature = None
+        # sticker structure per piece: the color groups of the geometry and
+        # the per primitive handles (needed to recolor stickers at runtime)
+        self.groups = []
+        self.primitives = []
+        self.base_colors = []
         self.scene = pyrender.Scene(ambient_light=[1.0, 1.0, 1.0],
                                     bg_color=[0.12, 0.12, 0.15, 1.0])
         # the piece meshes have an inconsistent triangle winding (the matura
@@ -63,7 +68,9 @@ class PuppetScene:
             baseColorFactor=[0.0, 0.0, 0.0, 1.0],
             roughnessFactor=1.0, metallicFactor=0.0, doubleSided=True)
         self.nodes = []
-        for piece_idx, piece in enumerate(get_piece_geometry()):
+        if piece_geometry is None:
+            piece_geometry = get_piece_geometry()
+        for piece_idx, piece in enumerate(piece_geometry):
             # one triangle primitive per piece with per vertex colors: the
             # color groups of a piece share the material (the colors ride in
             # color_0) and geometry.py splits the vertices by (position,
@@ -81,6 +88,9 @@ class PuppetScene:
             primitive.color_0 = np.concatenate(
                 [base_colors, np.ones((len(base_colors), 1))], axis=1).astype(np.float32)
             primitives = [primitive]
+            self.groups.append(piece["groups"])
+            self.primitives.append(primitive)
+            self.base_colors.append(base_colors)
             if lighting:
                 # matura lighting model: color + (abs(dot(normal, view)) - 0.5)
                 # per vertex - rendered as unlit vertex colors (see
@@ -106,6 +116,26 @@ class PuppetScene:
         if lighting:
             self.update_lighting(look_at(CAMERA_EYE, CAMERA_TARGET))
         self.update_poses(0.0)
+
+    def recolor_groups(self, colors):
+        """Sets sticker colors: {(piece idx, group idx): rgb (length 3)}.
+
+        With the matura lighting the base colors are changed in place and
+        the lighting recompute is forced (the next update_lighting call in
+        the gl thread rebuilds and uploads the vertex colors); without
+        lighting color_0 is written directly and the upload happens in the
+        next flush_lighting call.
+        """
+        self._lighting_signature = None
+        for (piece_idx, group_idx), color in colors.items():
+            faces, _ = self.groups[piece_idx][group_idx]
+            verts = faces.reshape(-1)
+            primitive = self.primitives[piece_idx]
+            if self.lighting:
+                self.base_colors[piece_idx][verts] = color
+            else:
+                primitive.color_0[verts, :3] = color
+                self.pending_reupload.add(primitive)
 
     def update_lighting(self, camera_pose, extra_rotation=None):
         """Recomputes the matura vertex colors for the current view.

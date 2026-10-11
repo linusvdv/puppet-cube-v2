@@ -44,16 +44,21 @@ class PlaybackController:
         # playback ran out of moves because the solution is not known yet -
         # continue automatically when it arrives
         self._parked_waiting = False
+        # custom initial position (user input runs): (piece, grid, rotation)
+        # per piece - boundary 0 is this position instead of the solved cube
+        self._initial = None
 
     # --- run management ----------------------------------------------------
 
-    def set_run(self, run_id, scramble, solution=None):
-        """Loads a run. Resets to boundary 0 (solved cube), stops playback."""
+    def set_run(self, run_id, scramble, solution=None, initial=None):
+        """Loads a run. Resets to boundary 0 (the solved cube, or the custom
+        initial position), stops playback."""
         self._run_id = run_id
         self._scramble = list(scramble)
         self._solution = list(solution) if solution is not None else None
+        self._initial = initial
         self._cancel_animation()
-        self.cube.reset()
+        self._reset_to_start()
         self._boundary = 0
         self._state = "idle"
         self._wait = 0.0
@@ -118,7 +123,7 @@ class PlaybackController:
         """Jumps to boundary b (state after moves[0:b]) without animation."""
         b = max(0, min(b, self.num_moves))
         self._cancel_animation()
-        self.cube.reset()
+        self._reset_to_start()
         for move in self.moves[:b]:
             self.cube.apply_move(move)
         self._boundary = b
@@ -139,6 +144,12 @@ class PlaybackController:
     def play(self):
         """Plays forwards (animated). Resumes a frozen move animation."""
         if self._boundary >= self.num_moves and self._anim is None:
+            if not self.has_solution:
+                # nothing to play yet, but the solution is still unknown
+                # (e.g. a custom run parked at its input position) - arm the
+                # automatic continue for when it arrives
+                self._state = "playing"
+                self._parked_waiting = True
             return
         self._state = "playing"
         self._parked_waiting = False
@@ -193,7 +204,7 @@ class PlaybackController:
         # bookkeeping to the target boundary first, then visibly turn the
         # last undone move back without applying it again
         self._cancel_animation()
-        self.cube.reset()
+        self._reset_to_start()
         for move in self.moves[:target]:
             self.cube.apply_move(move)
         self._boundary = target
@@ -240,6 +251,15 @@ class PlaybackController:
         return True
 
     # --- internals --------------------------------------------------------------
+
+    def _reset_to_start(self):
+        """Resets the cube to boundary 0 (the solved cube, or the custom
+        initial position of a user input run)."""
+        self.cube.reset()
+        if self._initial:
+            for piece, grid, rotation in self._initial:
+                self.cube.grids[piece] = [int(c) for c in grid]
+                self.cube.rotations[piece] = rotation
 
     def _start_animation(self, move_idx, direction, duration):
         self.cube.begin_move(self.moves[move_idx])

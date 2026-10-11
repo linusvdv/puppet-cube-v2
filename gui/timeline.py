@@ -65,6 +65,7 @@ class MoveTimeline(QWidget):
 
         solution may be None (search still running): the solution line then
         shows a searching indicator; call again with the solution later.
+        An empty scramble (user input runs) collapses the scramble line.
         """
         self.scramble = list(scramble)
         self.solution = list(solution) if solution is not None else None
@@ -72,6 +73,12 @@ class MoveTimeline(QWidget):
         self.boundary_row = None
         self.hover_chip = (-1, -1)
         self._apply_size()
+
+    @property
+    def single_row(self):
+        """No scramble line (user input runs - the solution starts at
+        boundary 0, the custom input position)."""
+        return not self.scramble
 
     def set_boundary(self, b, row=None):
         """Moves the playhead to boundary b (no signal emitted).
@@ -117,16 +124,22 @@ class MoveTimeline(QWidget):
     def minimumSizeHint(self):
         longest = max(len(self.scramble), len(self.solution or []))
         width = LABEL_W + PAD + longest * (CHIP_W + SPACING) + SPACING
-        height = TOP + 2 * CHIP_H + ROW_SPACING + 4
+        rows = 1 if self.single_row else 2
+        height = TOP + rows * CHIP_H + (rows - 1) * ROW_SPACING + 4
         return QRect(0, 0, max(width, 200), height).size()
 
     # --- geometry helpers ------------------------------------------------------
 
     def row_y(self, row):
+        if self.single_row:
+            return TOP
         return TOP + row * (CHIP_H + ROW_SPACING)
 
     def row_split_y(self):
-        """y that separates the scramble line from the solution line."""
+        """y that separates the scramble line from the solution line
+        (negative when there is only the solution line)."""
+        if self.single_row:
+            return -1.0
         return TOP + CHIP_H + ROW_SPACING / 2.0
 
     def chip_rect(self, row, i):
@@ -188,6 +201,8 @@ class MoveTimeline(QWidget):
         rows = [(ROW_SCRAMBLE, self.scramble, "scramble"),
                 (ROW_SOLUTION, self.solution if self.solution is not None else [],
                  "solution")]
+        if self.single_row:
+            rows = rows[1:]
 
         for row, names, label in rows:
             # row label

@@ -22,6 +22,7 @@ mid run). Run with: python3 gui/main.py
 """
 
 import os
+import queue
 import sys
 import threading
 import time
@@ -46,8 +47,10 @@ import pyrender
 from pyrender.constants import RenderFlags
 from pyrender.trackball import Trackball
 
+import editor
 import gl_patches
 from cube_model import VisualCube
+from geometry import COLORS
 from main import run_solver
 from playback import PlaybackController
 from scene import CAMERA_TARGET, CAMERA_EYE, PuppetScene, look_at
@@ -97,6 +100,12 @@ class CubeView(QOpenGLWidget):
         self.paint_failures = 0
         self.direct_render = False
         self._widget_fbo = 0
+        # editor picking: (x, y) -> painted sticker click (widget coords,
+        # top left origin); while set, a left click without dragging picks
+        # instead of only rotating the camera
+        self.pick_handler = None
+        self._press_pos = None
+        self._dragged = False
         # orbit camera (mouse), wheel zooms
         self.trackball = Trackball(look_at(CAMERA_EYE, CAMERA_TARGET),
                                    (640, 480), 5.2, CAMERA_TARGET)
@@ -182,10 +191,11 @@ class CubeView(QOpenGLWidget):
         pose = self.trackball.pose
         self.gui_scene.scene.set_pose(self.gui_scene.camera, pose)
         # the matura lighting follows the camera - the vertex colors are
-        # recomputed and uploaded in the gl thread (this one) before drawing
+        # recomputed and uploaded in the gl thread (this one) before drawing;
+        # without lighting the flush uploads sticker recolors of the editor
         if self.gui_scene.lighting:
             self.gui_scene.update_lighting(pose)
-            self.gui_scene.flush_lighting()
+        self.gui_scene.flush_lighting()
         if self.direct_render:
             # draws straight into the widget framebuffer
             self.renderer.render(self.gui_scene.scene, RenderFlags.NONE)
@@ -221,6 +231,9 @@ class CubeView(QOpenGLWidget):
         pos = np.array([event.position().x(), self.height() - event.position().y()])
         if event.button() == Qt.MouseButton.LeftButton:
             self.trackball.set_state(Trackball.STATE_ROTATE)
+            if self.pick_handler is not None:
+                self._press_pos = (event.position().x(), event.position().y())
+                self._dragged = False
         elif event.button() == Qt.MouseButton.MiddleButton:
             self.trackball.set_state(Trackball.STATE_PAN)
         elif event.button() == Qt.MouseButton.RightButton:
@@ -230,9 +243,22 @@ class CubeView(QOpenGLWidget):
 
     def mouseMoveEvent(self, event):
         if event.buttons():
+            if self._press_pos is not None:
+                dx = event.position().x() - self._press_pos[0]
+                dy = event.position().y() - self._press_pos[1]
+                if dx * dx + dy * dy > 36.0:
+                    self._dragged = True
             pos = np.array([event.position().x(), self.height() - event.position().y()])
             self.trackball.drag(pos)
             self.update()
+
+    def mouseReleaseEvent(self, event):
+        if (event.button() == Qt.MouseButton.LeftButton
+                and self._press_pos is not None):
+            if not self._dragged:
+                self.pick_handler(*self._press_pos)
+            self._press_pos = None
+            self._dragged = False
 
     def wheelEvent(self, event):
         self.trackball.scroll(event.angleDelta().y() / 120.0)
@@ -248,13 +274,22 @@ class SolverBridge(QObject):
 
 
 class RunData:
-    """One solver run: scramble and (once found) solution move lists."""
+    """One solver run: scramble and (once found) solution move lists.
 
-    def __init__(self, run_idx, scramble):
+    Custom runs (user input positions) carry the initial piece placement of
+    the position (boundary 0 shows it instead of the solved cube).
+    """
+
+    def __init__(self, run_idx, scramble, initial=None):
         self.run_idx = run_idx
         self.scramble = scramble
         self.solution = None
         self.depth = 0
+        self.initial = initial
+
+    @property
+    def label(self):
+        return "custom" if self.initial is not None else f"run {self.run_idx}"
 
 
 class MainWindow(QMainWindow):
@@ -264,6 +299,7 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.args = args
         self.moves = moves
+        self.puppetpy = puppetpy
         self.cube = VisualCube()
         self.gui_scene = PuppetScene(self.cube, lighting=args.lighting)
         self.controller = PlaybackController(self.cube, args.scramble_duration,
@@ -276,6 +312,34 @@ class MainWindow(QMainWindow):
         # when the current replay finished (follow mode) - run_pause countdown
         self._pending_since = None
         self._last_tick = time.perf_counter()
+
+        # the editor (built lazily - the edit mode swaps the view to it)
+        self.editor_state = editor.EditorState()
+        self.editor_scene = None
+        self.editor_triangles = None
+        self.editing = False
+        # the preview scene shows the painted position with the real puppet
+        # cube piece shapes (rebuilt when the painted position changed)
+        self.editor_preview_scene = None
+        self._editor_preview_revision = -1
+        # the dark red flashing of invalid pieces (generation counter: any
+        # paint/edit stops a running flash)
+        self._flash_generation = 0
+        self._flash_groups = None
+        self._flash_colors = {}
+        # custom runs get their own (huge) run ids: the solver reports them
+        # with run index 0, the gui remaps them in the callback
+        self._next_custom_id = 1000000
+        self._pending_custom = {}  # gui run id -> initial placement
+        # the custom run to show when it arrives (the solve button jumps
+        # the view to its result; a manual run selection cancels it)
+        self._auto_show_custom = None
+        # select the first run when it arrives after leaving the editor
+        # without a selection (and without a pending custom solve)
+        self._auto_show_first_run = False
+        # additional solver tasks of the solver thread (custom solves are
+        # queued after the scramble search - the search can not be aborted)
+        self._solver_tasks = queue.Queue()
 
         self.setWindowTitle("Puppet Cube V2")
         self.resize(args.width, args.height)
@@ -302,6 +366,25 @@ class MainWindow(QMainWindow):
         self.runs_list.setMinimumWidth(180)
         self.runs_list.currentRowChanged.connect(self.on_run_selected)
 
+        # follow search + edit live at the bottom left, under the run list
+        self.follow_box = QCheckBox("follow search")
+        self.follow_box.setChecked(True)
+        self.follow_box.toggled.connect(self.on_follow_toggled)
+        self.edit_button = QPushButton("edit")
+        self.edit_button.setToolTip("paint an arbitrary position")
+        self.edit_button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.edit_button.clicked.connect(lambda: self.set_edit_mode(not self.editing))
+        left_buttons = QHBoxLayout()
+        left_buttons.addWidget(self.follow_box)
+        left_buttons.addWidget(self.edit_button)
+        left_buttons.addStretch(1)
+        left = QWidget()
+        left_layout = QVBoxLayout(left)
+        left_layout.setContentsMargins(0, 0, 0, 0)
+        left_layout.setSpacing(2)
+        left_layout.addWidget(self.runs_list)
+        left_layout.addLayout(left_buttons)
+
         self.view = CubeView(self.gui_scene)
 
         self.timeline = MoveTimeline()
@@ -313,10 +396,6 @@ class MainWindow(QMainWindow):
                                             + self.timeline_scroll.horizontalScrollBar().sizeHint().height())
 
         # transport bar
-        self.follow_box = QCheckBox("follow search")
-        self.follow_box.setChecked(True)
-        self.follow_box.toggled.connect(self.on_follow_toggled)
-
         def transport_button(icon, tooltip, handler):
             button = QPushButton()
             button.setIcon(self.style().standardIcon(icon))
@@ -342,7 +421,6 @@ class MainWindow(QMainWindow):
             self.on_jump_solved)
 
         transport = QHBoxLayout()
-        transport.addWidget(self.follow_box)
         transport.addStretch(1)
         for button in (self.skip_back_button, self.step_back_button, self.play_button,
                        self.step_forward_button, self.skip_forward_button):
@@ -360,11 +438,22 @@ class MainWindow(QMainWindow):
         right_split.setStretchFactor(0, 1)
         right_split.setStretchFactor(1, 0)
 
+        # editor color panel (right side, only visible in the edit mode)
+        self.editor_panel = editor.EditorPanel()
+        self.editor_panel.undo_button.clicked.connect(self.on_editor_undo)
+        self.editor_panel.redo_button.clicked.connect(self.on_editor_redo)
+        self.editor_panel.clear_button.clicked.connect(self.on_editor_clear)
+        self.editor_panel.solve_button.clicked.connect(self.on_editor_solve)
+        self.editor_panel.puppet_view.toggled.connect(self.set_editor_preview)
+        self.editor_panel.setVisible(False)
+
         split = QSplitter(Qt.Orientation.Horizontal)
-        split.addWidget(self.runs_list)
+        split.addWidget(left)
         split.addWidget(right_split)
+        split.addWidget(self.editor_panel)
         split.setStretchFactor(0, 0)
         split.setStretchFactor(1, 1)
+        split.setStretchFactor(2, 0)
 
         self.setCentralWidget(split)
 
@@ -383,6 +472,16 @@ class MainWindow(QMainWindow):
             run_solver(puppetpy, self._solver_callback, self.args.solver_args)
         except Exception as error:  # noqa: BLE001 - reported via the status bar
             self.bridge.failed_signal.emit(f"{type(error).__name__}: {error}")
+            return
+        # the scramble search can not be aborted - custom solves wait in
+        # the task queue until it is done. A failing task (e.g. an invalid
+        # position) must not kill the queue - it is reported and skipped.
+        while True:
+            task = self._solver_tasks.get()
+            try:
+                task(puppetpy)
+            except Exception as error:  # noqa: BLE001 - reported via the status bar
+                self.bridge.failed_signal.emit(f"{type(error).__name__}: {error}")
 
     def _solver_callback(self, event):
         kind = str(event.kind)
@@ -393,13 +492,38 @@ class MainWindow(QMainWindow):
             self.bridge.solution_signal.emit(
                 event.run_idx, [self.moves[m] for m in event.moves], len(event.moves))
 
+    def _custom_callback(self, gui_run_id):
+        """Callback of a custom solve: the solver reports run index 0, the
+        gui uses its own id space instead (scramble runs collide there)."""
+        def callback(event):
+            kind = str(event.kind)
+            if kind == "SearchEventKind.SCRAMBLE":
+                self.bridge.scramble_signal.emit(gui_run_id, [])
+            elif kind == "SearchEventKind.SOLUTION":
+                self.bridge.solution_signal.emit(
+                    gui_run_id, [self.moves[m] for m in event.moves], len(event.moves))
+        return callback
+
     def on_scramble(self, run_idx, scramble):
-        run = RunData(run_idx, scramble)
+        initial = self._pending_custom.pop(run_idx, None)
+        run = RunData(run_idx, scramble, initial)
         self.runs[run_idx] = run
-        item = QListWidgetItem(f"run {run_idx} - searching...")
+        item = QListWidgetItem(f"{run.label} - searching...")
         item.setData(Qt.ItemDataRole.UserRole, run_idx)
-        self.runs_list.insertItem(run_idx, item)
-        log("info", f"run {run_idx}: {len(scramble)} scramble moves")
+        self.runs_list.insertItem(self.runs_list.count(), item)
+        log("info", f"{run.label}: {len(scramble)} scramble moves")
+        # the solve button jumps to the custom run when it arrives (the
+        # editor disabled the follow mode, so the regular path would not)
+        if run_idx == self._auto_show_custom:
+            self._auto_show_custom = None
+            self._load_run(run_idx, autoplay=True)
+            return
+        # leaving the editor while nothing was computed yet: take over the
+        # first arriving run (like a manual selection, paused at scrambled)
+        if self._auto_show_first_run and self.controller.run_id is None:
+            self._auto_show_first_run = False
+            self._load_run(run_idx, autoplay=False)
+            return
         if self.follow_box.isChecked():
             busy = (self.controller.is_playing or self.controller.is_animating
                     or self.controller.state == "stepping")
@@ -409,16 +533,24 @@ class MainWindow(QMainWindow):
             # list - the timer switches to the successor of the current
             # run when the replay finished
 
+    def _run_row(self, run_idx):
+        for row in range(self.runs_list.count()):
+            if self.runs_list.item(row).data(Qt.ItemDataRole.UserRole) == run_idx:
+                return row
+        return None
+
     def on_solution(self, run_idx, solution, depth):
         run = self.runs[run_idx]
         run.solution = solution
         run.depth = depth
-        self.runs_list.item(run_idx).setText(f"run {run_idx} - depth {depth}")
-        log("info", f"run {run_idx}: solution depth {depth}")
+        row = self._run_row(run_idx)
+        if row is not None:
+            self.runs_list.item(row).setText(f"{run.label} - depth {depth}")
+        log("info", f"{run.label}: solution depth {depth}")
         if self.controller.run_id == run_idx:
             self.controller.set_solution(solution)
-            self.timeline.set_moves([m.name for m in run.scramble],
-                                    [m.name for m in solution])
+            self._set_timeline_moves([m.name for m in run.scramble],
+                                     [m.name for m in solution])
 
     def on_solver_failed(self, message):
         self.statusBar().showMessage(f"search failed: {message}")
@@ -426,16 +558,27 @@ class MainWindow(QMainWindow):
 
     # --- run selection and navigation ----------------------------------------
 
+    def _set_timeline_moves(self, scramble_names, solution_names):
+        """Sets the timeline moves and adapts the scroll area height to the
+        row count (2 rows for scramble runs, 1 for custom runs - the height
+        is fixed once, so it has to follow every change)."""
+        self.timeline.set_moves(scramble_names, solution_names)
+        self.timeline_scroll.setFixedHeight(
+            self.timeline.minimumSizeHint().height()
+            + self.timeline_scroll.horizontalScrollBar().sizeHint().height())
+
     def _load_run(self, run_idx, autoplay):
         run = self.runs[run_idx]
         self._pending_since = None
         self._loading_run = True
-        self.runs_list.setCurrentRow(run_idx)
+        row = self._run_row(run_idx)
+        if row is not None:
+            self.runs_list.setCurrentRow(row)
         self._loading_run = False
-        self.controller.set_run(run_idx, run.scramble, run.solution)
-        self.timeline.set_moves([m.name for m in run.scramble],
-                                [m.name for m in run.solution]
-                                if run.solution is not None else None)
+        self.controller.set_run(run_idx, run.scramble, run.solution, initial=run.initial)
+        self._set_timeline_moves([m.name for m in run.scramble],
+                                 [m.name for m in run.solution]
+                                 if run.solution is not None else None)
         self._shown_boundary = None
         self._shown_state = None
         if autoplay:
@@ -464,7 +607,10 @@ class MainWindow(QMainWindow):
         run_idx = self.runs_list.item(row).data(Qt.ItemDataRole.UserRole)
         if run_idx == self.controller.run_id:
             return
-        # manual selection stops the automatic follow
+        # manual selection stops the automatic follow and cancels the
+        # pending jump to a custom run / the first-run takeover
+        self._auto_show_custom = None
+        self._auto_show_first_run = False
         self.follow_box.setChecked(False)
         self._load_run(run_idx, autoplay=False)
 
@@ -525,6 +671,236 @@ class MainWindow(QMainWindow):
         self.gui_scene.update_poses(0.0)
         self.view.schedule_repaint()
 
+    # --- editor ------------------------------------------------------------
+
+    def _build_editor_scene(self):
+        """The editor scene: a standard 3x3 (every corner uses the small
+        simple corner mesh - all 54 stickers visible), gray stickers, fixed
+        center colors. Built once, the paint state lives in the editor."""
+        geometry = editor.editor_geometry()
+        placements = editor.editor_placements()
+        cube = VisualCube()
+        for p, rotation in enumerate(placements):
+            cube.rotations[p] = rotation
+        self.editor_scene = PuppetScene(cube, lighting=self.args.lighting,
+                                        piece_geometry=geometry)
+        self.editor_triangles = editor.build_triangles(geometry, placements)
+        self.on_editor_clear()
+
+    def set_edit_mode(self, on):
+        """Swaps between the run view and the editor."""
+        if on == self.editing:
+            return
+        self.editing = on
+        self.edit_button.setText("done" if on else "edit")
+        self.edit_button.setToolTip("leave the editor" if on
+                                    else "paint an arbitrary position")
+        if on:
+            self.follow_box.setChecked(False)
+            self.controller.pause()
+            if self.editor_scene is None:
+                self._build_editor_scene()
+            self.view.gui_scene = self.editor_scene
+            self.view.pick_handler = self.on_editor_pick
+            self.editor_panel.setVisible(True)
+            self._update_editor_status()
+        else:
+            self._stop_flash()
+            self._set_puppet_view_checked(False)
+            self.view.gui_scene = self.gui_scene
+            self.view.pick_handler = None
+            self.editor_panel.setVisible(False)
+            # leaving the editor with no run selected (and no custom solve
+            # pending): select run 0 - now or when it arrives
+            if self.controller.run_id is None and self._auto_show_custom is None:
+                if self.runs:
+                    self._load_run(min(self.runs), autoplay=False)
+                else:
+                    self._auto_show_first_run = True
+            self.gui_scene.update_poses(self.controller.angle)
+        self.view.schedule_repaint()
+        log("info", f"edit mode {'on' if on else 'off'}")
+
+    def _set_puppet_view_checked(self, checked):
+        button = self.editor_panel.puppet_view
+        button.blockSignals(True)
+        button.setChecked(checked)
+        button.blockSignals(False)
+        self.editor_panel.set_puppet_view_active(checked)
+
+    def set_editor_preview(self, on):
+        """Toggles the editor between the paintable standard 3x3 and the
+        painted position rendered with the real puppet cube piece shapes
+        (painting is only possible in the standard view)."""
+        if on:
+            try:
+                corners, edges = self.editor_state.placements()
+            except editor.InvalidPosition as invalid:
+                self._set_puppet_view_checked(False)
+                self._report_editor_error(str(invalid), invalid.slots)
+                return
+            if (self.editor_preview_scene is None
+                    or self._editor_preview_revision != self.editor_state.revision):
+                cube = VisualCube()
+                for piece, grid, rotation in editor.initial_placement_data(corners, edges):
+                    cube.grids[piece] = [int(c) for c in grid]
+                    cube.rotations[piece] = rotation
+                self.editor_preview_scene = PuppetScene(cube, lighting=self.args.lighting)
+                self._editor_preview_revision = self.editor_state.revision
+            self.view.gui_scene = self.editor_preview_scene
+            self.view.pick_handler = None
+        else:
+            self.view.gui_scene = self.editor_scene
+            self.view.pick_handler = self.on_editor_pick
+        self.editor_panel.set_puppet_view_active(on)
+        self.view.schedule_repaint()
+        log("info", f"editor view: {'puppet cube' if on else 'standard 3x3'}")
+
+    def on_editor_pick(self, x, y):
+        """Click in the edit mode: paint the picked sticker with the
+        selected color (or erase it back to gray)."""
+        hit = editor.pick(x, y, self.view, self.editor_triangles)
+        if hit is None:
+            return
+        piece, group = hit
+        self._stop_flash()
+        color = self.editor_panel.selected_color()
+        self.editor_state.set_color(piece, group, color)
+        rgb = editor.GRAY if color is None else COLORS[color]
+        self.editor_scene.recolor_groups({(piece, group): rgb})
+        self._update_editor_status()
+        self.view.schedule_repaint()
+
+    def on_editor_undo(self):
+        """Reverts the last paint action (a sticker or a clear)."""
+        keys = self.editor_state.undo()
+        if keys is None:
+            return
+        self._stop_flash()
+        self._recolor_editor_keys(keys)
+        self._update_editor_status()
+        self.view.schedule_repaint()
+
+    def on_editor_redo(self):
+        """Re-applies the last undone paint action."""
+        keys = self.editor_state.redo()
+        if keys is None:
+            return
+        self._stop_flash()
+        self._recolor_editor_keys(keys)
+        self._update_editor_status()
+        self.view.schedule_repaint()
+
+    def _recolor_editor_keys(self, keys):
+        """Recolors scene stickers from the editor state."""
+        recolors = {}
+        for piece, group in keys:
+            color = self.editor_state.sticker_color(piece, group)
+            recolors[(piece, group)] = editor.GRAY if color is None else COLORS[color]
+        self.editor_scene.recolor_groups(recolors)
+
+    def on_editor_clear(self):
+        """Clears all painted stickers back to gray."""
+        self._stop_flash()
+        self.editor_state.clear()
+        if self.editor_scene is not None:
+            recolors = {(p, group): editor.GRAY for p in range(6, 26)
+                        for group in range(len(self.editor_scene.groups[p]))}
+            self.editor_scene.recolor_groups(recolors)
+        self._update_editor_status()
+        self.view.schedule_repaint()
+
+    def _update_editor_status(self):
+        """Panel status line + the remaining sticker counts on the colors."""
+        self.editor_panel.set_status(self.editor_state.summary())
+        self.editor_panel.update_counts(self.editor_state.remaining_per_color())
+
+    def on_editor_solve(self):
+        """Solves the painted position: validate + convert locally (the
+        errors are reported immediately, the offending pieces flash dark
+        red), then hand the placements to the solver thread (queued after a
+        still running scramble search)."""
+        try:
+            corners, edges = self.editor_state.placements()
+        except editor.InvalidPosition as invalid:
+            self._report_editor_error(str(invalid), invalid.slots)
+            return
+        # the solver side checks (orientation parities, corner reachability,
+        # permutation parity) - a parity error identifies no single piece,
+        # the whole piece class flashes
+        ok, _state, error, message = self.puppetpy.convert_position(corners, edges)
+        if not ok:
+            self._report_editor_error(message, None, editor.invalid_pieces_for_error(error))
+            return
+        placement = editor.initial_placement_data(corners, edges)
+        gui_run_id = self._next_custom_id
+        self._next_custom_id += 1
+        self._pending_custom[gui_run_id] = placement
+        self._auto_show_custom = gui_run_id
+        self.set_edit_mode(False)
+        self.statusBar().showMessage("solving the custom position...")
+        callback = self._custom_callback(gui_run_id)
+        self._solver_tasks.put(
+            lambda puppetpy: puppetpy.solve_position(corners, edges, callback))
+        log("info", f"custom position submitted to the solver (id {gui_run_id})")
+
+    def _report_editor_error(self, message, slots=None, pieces=None):
+        """Reports an invalid editor position: status bar, panel status and
+        the offending pieces flashing dark red."""
+        self.statusBar().showMessage(f"invalid position: {message}")
+        self.editor_panel.set_status(message)
+        log("warning", f"invalid position: {message}")
+        if self.editing:
+            if pieces is None:
+                pieces = [editor.PIECE_OF_GRID[tuple(slot)] for slot in (slots or [])]
+            self._flash_pieces(pieces)
+
+    def _flash_pieces(self, pieces):
+        """Flashes the stickers of the pieces dark red three times (any
+        paint or edit stops the flash and restores the colors)."""
+        if not pieces or self.editor_scene is None:
+            return
+        self._stop_flash()
+        self._flash_generation += 1
+        generation = self._flash_generation
+        self._flash_groups = {(p, group) for p in pieces
+                              for group in range(len(self.editor_scene.groups[p]))}
+        # fresh capture of the current colors (a reused dict would restore
+        # stale colors of an earlier flash over later paints)
+        self._flash_colors = {}
+        for key in self._flash_groups:
+            color = self.editor_state.sticker_color(*key)
+            self._flash_colors[key] = editor.GRAY if color is None else COLORS[color]
+        step = {"half": 0}
+
+        def flash_step():
+            if generation != self._flash_generation or not self.editing \
+                    or self.editor_scene is None:
+                return
+            on = step["half"] % 2 == 0
+            step["half"] += 1
+            if on:
+                self.editor_scene.recolor_groups(
+                    {key: editor.DARK_RED for key in self._flash_groups})
+                self.view.schedule_repaint()
+                QTimer.singleShot(500, flash_step)
+            elif step["half"] < 5:
+                self.editor_scene.recolor_groups(self._flash_colors)
+                self.view.schedule_repaint()
+                QTimer.singleShot(250, flash_step)
+            else:
+                self._stop_flash()
+
+        flash_step()
+
+    def _stop_flash(self):
+        """Stops a running flash and restores the sticker colors."""
+        self._flash_generation += 1
+        if self._flash_groups is not None and self.editor_scene is not None:
+            self.editor_scene.recolor_groups(self._flash_colors)
+            self.view.schedule_repaint()
+        self._flash_groups = None
+
     # --- animation -------------------------------------------------------------
 
     def _tick(self):
@@ -583,7 +959,7 @@ class MainWindow(QMainWindow):
         total = self.controller.num_moves
         depth = f", depth {run.depth}" if run.solution is not None else ", searching..."
         self.statusBar().showMessage(
-            f"run {run.run_idx}: move {self.controller.boundary}/{total}{depth}")
+            f"{run.label}: move {self.controller.boundary}/{total}{depth}")
 
     def closeEvent(self, event):
         # the search can not be aborted mid run - exit without unwinding the
@@ -620,5 +996,7 @@ def run_qt_gui(args, moves, puppetpy):
         f"PyOpenGL {OpenGL.__version__}, pyrender {pyrender.__version__}, "
         f"pybind11 module {puppetpy.__file__}")
     window = MainWindow(args, moves, puppetpy)
+    if args.edit:
+        window.set_edit_mode(True)
     window.show()
     app.exec()

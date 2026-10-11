@@ -69,6 +69,8 @@ def parse_args():
     parser.add_argument("--gui_log_level", choices=["error", "warning", "info", "extra"],
                         default="info",
                         help="log level of the gui (extra adds gl diagnostics)")
+    parser.add_argument("--edit", action="store_true",
+                        help="start in the cube editor (qt mode)")
     args, solver_args = parser.parse_known_args()
 
     if args.mode is None:

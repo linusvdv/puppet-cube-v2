@@ -12,6 +12,7 @@
 
 #include "edge.hpp"
 #include "logger.hpp"
+#include "piece_geometry.hpp"
 #include "rotation.hpp"
 #include "utils.hpp"
 #include "parallel_hashmap/phmap.h"
@@ -22,6 +23,11 @@ constexpr uint32_t kNumLehmerPos = Factorial(12);
 constexpr uint32_t kNumPos = 9985968;
 constexpr uint16_t kNumSymChange = 921; // this is unfortunatly more than 256 (which would fit in uint8_t and could therefore be packed in a uint32_t with the position)
 
+using piece_geometry::InitXYZOrient;
+using piece_geometry::LehmerPosToPosPerm;
+using piece_geometry::PosPermToLehmerPos;
+using piece_geometry::SymmetryPositionRotation;
+
 #ifndef REDUCE_MEMORY
 constexpr uint64_t kNumHeuristic = uint64_t(kNumPos)*kNumOrient;
 constexpr uint32_t kNumHeuristicBuckets = 81609107;
@@ -29,20 +35,17 @@ constexpr uint32_t kNumHeuristicBuckets = 81609107;
 using Heuristic = std::vector<std::array<uint64_t, kNumOrient/kNumStoredPerBucket>>;
 #endif
 
-constexpr std::array<uint32_t, kNumEdges+1> kFactorials = []{
-    std::array<uint32_t, kNumEdges+1> arr{};
-    for (int i = 0; i <= kNumEdges; i++) {
-        arr[i] = Factorial(i);
-    }
-    return arr;
-}();
-
 
 // this is the data used for rotation
 std::vector<std::array<uint8_t, kNumRot>> rotation_change;
 std::vector<std::array<uint64_t, kNumRot>> position_change;
 std::vector<std::array<uint16_t, kNumSym>> symmetry_change;
 std::vector<std::array<std::array<uint16_t, kNumRot>, kNumSym>> orientation_change;
+
+// sorted lehmer codes of the position class representatives (the class id is
+// the index); used to convert user input positions into the internal
+// representation
+std::vector<uint32_t> rep_lehmer_pos;
 
 // heuristic
 #ifdef REDUCE_MEMORY
@@ -83,56 +86,6 @@ uint8_t GetHeuristic(uint32_t pos, uint16_t orient) {
 }
 
 
-void InitXYZPos(std::map<Vec3i, uint8_t, std::greater<>>& xyz_to_idx_pos, std::array<Vec3i, kNumEdges>& idx_to_xyz_pos) {
-    uint8_t cnt = 0;
-    for (int i = 1; i >= -1; i--) {
-        for (int j = 1; j >= -1; j--) {
-            for (int k = 1; k >= -1; k--) {
-                if (int(i != 0) + int(j != 0) + int(k != 0) == 2) {
-                    xyz_to_idx_pos[{i, j, k}] = cnt;
-                    idx_to_xyz_pos[cnt++] = {i, j, k};
-                }
-            }
-        }
-    }
-}
-
-
-void InitMatSym(std::array<Mat3i, kNumSym>& idx_to_mat_sym, std::map<Mat3i, uint8_t>& mat_to_idx_sym) {
-    std::array<int, 3> perm = {0, 1, 2};
-    uint8_t cnt = 0;
-    do {
-        for (int flipsign = 0; flipsign < (1<<3); flipsign++) {
-            Mat3i mat = {};
-            for (int i = 0; i < 3; i++) {
-                mat[i][perm[i]] = ((flipsign >> i) & 1) == 0 ? 1 : -1;
-            }
-            idx_to_mat_sym[cnt] = mat;
-            mat_to_idx_sym[mat] = cnt++;
-        }
-    } while (std::next_permutation(perm.begin(), perm.end()));
-}
-
-
-Vec3i RotateXYZPiece(const Vec3i& pos, uint8_t rot) {
-    RotRep rot_rep = idx_to_rot_rep[rot];
-    for (int i = 0; i < 3; i++) {
-        if (rot_rep.matrix[i][i] != 0) {
-            // quarter slice moves
-            if (rot_rep.activate == 0 && pos[i] == 0) {
-                return pos;
-            }
-            // quarter non slice moves
-            if (rot_rep.activate != 0 &&
-                rot_rep.activate != pos[i]) {
-                return pos;
-            }
-        }
-    }
-    return MatVecMul(rot_rep.matrix, pos);
-}
-
-
 void InitRotationChange(const std::array<Mat3i, kNumSym>& idx_to_mat_sym) {
     rotation_change = std::vector<std::array<uint8_t, kNumRot>>(kNumSym);
     for (uint8_t sym = 0; sym < kNumSym; sym++) {
@@ -154,54 +107,6 @@ void InitRotationChange(const std::array<Mat3i, kNumSym>& idx_to_mat_sym) {
             rotation_change[sym][rot] = mat_to_rot_rep[{mat, activate}].index;
         }
     }
-}
-
-
-uint32_t PosPermToLehmerPos(const std::array<uint8_t, kNumEdges>& pos_perm) {
-    uint32_t result = 0;
-    uint16_t available = (1<<kNumEdges) - 1; // 12 bits set = {0..11} available
-
-    for (int i = 0; i < kNumEdges; i++) {
-        // Count how many available elements are less than perm[i]
-        uint16_t below = available & ((1U << pos_perm[i]) - 1);
-        int idx = std::popcount(below);
-
-        result += idx * kFactorials[kNumEdges-1 - i];
-        available &= ~(1U << pos_perm[i]);
-    }
-    return result;
-}
-
-
-std::array<uint8_t, kNumEdges> LehmerPosToPosPerm(uint32_t lehmer_pos) {
-    std::array<uint8_t, kNumEdges> pos_perm;
-    uint16_t available = (1<<kNumEdges) - 1; // 12 bits set = {0..11} available
-
-    for (int i = kNumEdges-1; i >= 0; i--) {
-        int idx = lehmer_pos / kFactorials[i];
-        lehmer_pos %= kFactorials[i];
-
-        // Find idx-th set bit in available
-        uint16_t mask = available;
-        for (int k = 0; k < idx; k++) {
-            mask &= mask - 1; // clear lowest set bit
-        }
-        int bit = std::countr_zero(mask);
-
-        pos_perm[kNumEdges-1 - i] = bit;
-        available &= ~(1U << bit);
-    }
-    return pos_perm;
-}
-
-
-std::array<uint8_t, kNumEdges> SymmetryPositionRotation(const std::array<std::array<uint8_t, kNumEdges>, kNumSym>& idx_piece_sym,
-                                                        const std::array<uint8_t, kNumEdges>& pos_perm, uint8_t sym) {
-    std::array<uint8_t, kNumEdges> res{};
-    for (int i = 0; i < kNumEdges; i++) {
-        res[idx_piece_sym[sym][i]] = idx_piece_sym[sym][pos_perm[i]];
-    }
-    return res;
 }
 
 
@@ -278,7 +183,7 @@ void InitPositionChangeSymmetryChange(const std::array<std::array<uint8_t, kNumE
     // stealing over representative ranges because the representatives are
     // heavily skewed towards the small chunk prefixes
     std::unique_ptr<uint32_t[]> lehmer_pos_to_pos(new uint32_t[kNumLehmerPos]);
-    std::unique_ptr<uint32_t[]> rep_lehmer_pos(new uint32_t[kNumPos]);
+    rep_lehmer_pos.assign(kNumPos, 0);
     std::unique_ptr<std::array<uint8_t, kNumSym>[]> rep_active_sym(new std::array<uint8_t, kNumSym>[kNumPos]);
     {
         constexpr uint64_t kRangeSize = 32768;
@@ -392,7 +297,6 @@ void InitPositionChangeSymmetryChange(const std::array<std::array<uint8_t, kNumE
         }
     }
     lehmer_pos_to_pos.reset();
-    rep_lehmer_pos.reset();
 
     // merge the blocks in order: the first occurrence of every symmetry
     // change vector over the (pos, rot) order defines its id
@@ -461,20 +365,7 @@ void InitDefaultToSymOrient(std::array<std::array<uint16_t, kNumOrient>, kNumSym
                             const std::array<std::array<uint8_t, kNumEdges>, kNumSym>& idx_piece_sym) {
     std::array<std::map<Vec3i, uint16_t>, kNumEdges> xyz_to_idx_orient;
     std::array<std::array<Vec3i, 2>, kNumEdges> idx_to_xyz_orient;
-    for (int i = 0; i < kNumEdges; i++) {
-        for (int j = 0; j < 2; j++) {
-            Vec3i edge_pos = idx_to_xyz_pos[i];
-            Vec3i edge_orient = {0, 0, 0};
-            for (int k = 0; k < 3; k++) {
-                if (edge_pos[k] == 0) { // there is only one zero
-                    edge_orient[(k+j+1)%3] = edge_pos[(k+j+1)%3]; // the standard orientation is the next axis after the 0 element
-                    idx_to_xyz_orient[i][j] = edge_orient;
-                    xyz_to_idx_orient[i][edge_orient] = j;
-                    break;
-                }
-            }
-        }
-    }
+    InitXYZOrient(idx_to_xyz_pos, idx_to_xyz_orient, xyz_to_idx_orient);
     std::array<uint16_t, kNumSym> default_orient_change;
     for (uint16_t i = 0; i < kNumOrient; i++) {
         uint16_t orientation = i | (uint16_t(std::popcount(i)%2 == 1) << (kNumEdges-1)); // this is flipping the last bit to the correct place
@@ -503,20 +394,7 @@ void InitOrientationChange(const std::array<Vec3i, kNumEdges>& idx_to_xyz_pos,
                            const std::array<std::array<uint8_t, kNumEdges>, kNumSym>& idx_piece_sym) {
     std::array<std::map<Vec3i, uint16_t>, kNumEdges> xyz_to_idx_orient;
     std::array<std::array<Vec3i, 2>, kNumEdges> idx_to_xyz_orient;
-    for (int i = 0; i < kNumEdges; i++) {
-        for (int j = 0; j < 2; j++) {
-            Vec3i edge_pos = idx_to_xyz_pos[i];
-            Vec3i edge_orient = {0, 0, 0};
-            for (int k = 0; k < 3; k++) {
-                if (edge_pos[k] == 0) { // there is only one zero
-                    edge_orient[(k+j+1)%3] = edge_pos[(k+j+1)%3]; // the standard orientation is the next axis after the 0 element
-                    idx_to_xyz_orient[i][j] = edge_orient;
-                    xyz_to_idx_orient[i][edge_orient] = j;
-                    break;
-                }
-            }
-        }
-    }
+    InitXYZOrient(idx_to_xyz_pos, idx_to_xyz_orient, xyz_to_idx_orient);
 
     std::array<std::array<uint16_t, kNumRot>, kNumOrient> orient_rot;
     for (uint16_t i = 0; i < kNumOrient; i++) {
@@ -935,56 +813,23 @@ void InitReducedHeuristic() {
 
 
 void Init() {
-    // piece position
-    std::map<Vec3i, uint8_t, std::greater<>> xyz_to_idx_pos;
-    std::array<Vec3i, kNumEdges> idx_to_xyz_pos;
-    InitXYZPos(xyz_to_idx_pos, idx_to_xyz_pos);
+    // shared position, symmetry and orientation construction
+    piece_geometry::EdgeSymmetryData data = piece_geometry::BuildEdgeSymmetryData();
 
-    // symmetries
-    std::array<Mat3i, kNumSym> idx_to_mat_sym;
-    std::map<Mat3i, uint8_t> mat_to_idx_sym;
-    InitMatSym(idx_to_mat_sym, mat_to_idx_sym);
-
-    // idx piece rotation
-    std::array<std::array<uint8_t, kNumEdges>, kNumRot> idx_piece_rot;
-    for (uint8_t rot = 0; rot < kNumRot; rot++) {
-        for (int i = 0; i < kNumEdges; i++) {
-            idx_piece_rot[rot][i] = xyz_to_idx_pos[RotateXYZPiece(idx_to_xyz_pos[i], rot)];
-        }
-    }
-    // idx piece symmetry
-    std::array<std::array<uint8_t, kNumEdges>, kNumSym> idx_piece_sym;
-    for (uint8_t sym = 0; sym < kNumSym; sym++) {
-        for (int i = 0; i < kNumEdges; i++) {
-            idx_piece_sym[sym][i] = xyz_to_idx_pos[MatVecMul(idx_to_mat_sym[sym], idx_to_xyz_pos[i])];
-        }
-    }
-    // symmetry multiply symmetry
-    std::array<std::array<uint8_t, kNumSym>, kNumSym> sym_mul_sym;
-    for (int i = 0; i < kNumSym; i++) {
-        for (int j = 0; j < kNumSym; j++) {
-            sym_mul_sym[i][j] = mat_to_idx_sym[MatMul(idx_to_mat_sym[i], idx_to_mat_sym[j])];
-        }
-    }
-    // transpose symmetry
-    std::array<uint8_t, kNumSym> sym_trans;
-    for (int i = 0; i < kNumSym; i++) {
-        sym_trans[i] = mat_to_idx_sym[MatTrans(idx_to_mat_sym[i])];
-    }
-
-    LoadOrGenerate("[1/7] Edge Rotation Change", [&](){InitRotationChange(idx_to_mat_sym);},
+    LoadOrGenerate("[1/7] Edge Rotation Change", [&](){InitRotationChange(data.idx_to_mat_sym);},
                    "edge_rotation_change.bin", rotation_change, kNumSym);
-    LoadMultipleOrGenerate("[2/7] Edge Position Change, Symmetry Change", [&](){InitPositionChangeSymmetryChange(idx_piece_rot, idx_piece_sym, sym_mul_sym, sym_trans);},
+    LoadMultipleOrGenerate("[2/7] Edge Position Change, Symmetry Change, Representative Positions", [&](){InitPositionChangeSymmetryChange(data.idx_piece_rot, data.idx_piece_sym, data.sym_mul_sym, data.sym_trans);},
                            "edge_position_change.bin", position_change, kNumPos,
-                           "edge_symmetry_change.bin", symmetry_change, kNumSymChange);
-    LoadOrGenerate("[3/7] Edge Orientation Change", [&](){InitOrientationChange(idx_to_xyz_pos, idx_to_mat_sym, idx_piece_rot, idx_piece_sym);},
+                           "edge_symmetry_change.bin", symmetry_change, kNumSymChange,
+                           "edge_rep_lehmer.bin", rep_lehmer_pos, kNumPos);
+    LoadOrGenerate("[3/7] Edge Orientation Change", [&](){InitOrientationChange(data.idx_to_xyz_pos, data.idx_to_mat_sym, data.idx_piece_rot, data.idx_piece_sym);},
                    "edge_orientation_change.bin", orientation_change, kNumOrient);
 #ifdef REDUCE_MEMORY
     LoadMultipleOrGenerate("[4/7] Edge Heuristic (reduced)", [&](){InitReducedHeuristic();},
                            "edge_heuristic_position.bin", position_heuristic, kNumPos,
                            "edge_heuristic_orientation.bin", orientation_heuristic, kNumOrient);
 #else
-    LoadMultipleOrGenerate("[4/7] Edge Heuristic", [&](){InitHeuristic(idx_to_xyz_pos, idx_to_mat_sym, idx_piece_sym, sym_mul_sym, sym_trans);},
+    LoadMultipleOrGenerate("[4/7] Edge Heuristic", [&](){InitHeuristic(data.idx_to_xyz_pos, data.idx_to_mat_sym, data.idx_piece_sym, data.sym_mul_sym, data.sym_trans);},
                            "edge_heuristic_bucket.bin", heuristic_bucket, kNumPos,
                            "edge_heuristic_value.bin", heuristic_value, kNumHeuristicBuckets);
 #endif

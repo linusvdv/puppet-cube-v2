@@ -12,6 +12,7 @@
 #include "duplicate_rotations.hpp"
 #include "edge.hpp"
 #include "logger.hpp"
+#include "position_input.hpp"
 #include "rotation.hpp"
 #include "search.hpp"
 #include "settings.hpp"
@@ -33,6 +34,23 @@ namespace py = pybind11;
 namespace {
 
 bool initialized = false;
+
+// wraps the python callback such that it can be called from the search:
+// the python interpreter lock is acquired for every event and exceptions
+// are not allowed to propagate through the search (the search worker
+// threads wait on barriers and can not be unwound)
+SearchEventCallback MakeTrampoline (const SearchEventCallback& event_callback) {
+    return [&event_callback](const SearchEvent& event) {
+        py::gil_scoped_acquire acquire;
+        try {
+            event_callback(event);
+        }
+        catch (py::error_already_set& error) {
+            LOG_WARNING("python event callback raised an exception:", error.what());
+            error.discard_as_unraisable("puppetpy event callback");
+        }
+    };
+}
 
 }
 
@@ -115,22 +133,9 @@ void Run (const SearchEventCallback& event_callback) {
         throw std::runtime_error("puppetpy is not initialized - call initialize first");
     }
 
-    auto trampoline = [&event_callback](const SearchEvent& event) {
-        py::gil_scoped_acquire acquire;
-        try {
-            event_callback(event);
-        }
-        catch (py::error_already_set& error) {
-            // exceptions are not allowed to propagate through the search
-            // (the search worker threads wait on barriers and can not be unwound)
-            LOG_WARNING("python event callback raised an exception:", error.what());
-            error.discard_as_unraisable("puppetpy event callback");
-        }
-    };
-
     {
         py::gil_scoped_release release;
-        SearchManager(trampoline);
+        SearchManager(MakeTrampoline(event_callback));
     }
 }
 
@@ -143,6 +148,81 @@ std::vector<RotRep> RotationReps () {
         rotation_reps[i] = idx_to_rot_rep[i];
     }
     return rotation_reps;
+}
+
+
+// one piece placement as passed from python:
+// (slot xyz, piece home xyz, sticker home face dirs, sticker current face dirs)
+using PlacementTuple = std::tuple<std::array<int, 3>, std::array<int, 3>,
+                                  std::vector<std::array<int, 3>>, std::vector<std::array<int, 3>>>;
+
+
+std::vector<input::PiecePlacement> ToPlacements (const std::vector<PlacementTuple>& tuples) {
+    std::vector<input::PiecePlacement> placements;
+    placements.reserve(tuples.size());
+    for (const auto& [slot, piece, home_dirs, cur_dirs] : tuples) {
+        placements.push_back({slot, piece, home_dirs, cur_dirs});
+    }
+    return placements;
+}
+
+
+// converts a user input cube (piece placements) into the internal state
+// representation and checks that the position is solvable
+// returns (ok, state tuple or None, error, message)
+py::object ConvertPositionBinding (const std::vector<PlacementTuple>& corners, const std::vector<PlacementTuple>& edges) {
+    if (!initialized) {
+        throw std::runtime_error("puppetpy is not initialized - call initialize first");
+    }
+    input::PositionResult result = input::ConvertPosition(ToPlacements(corners), ToPlacements(edges));
+    if (!result.ok) {
+        return py::make_tuple(false, py::none(), result.error, result.message);
+    }
+    const State& state = result.state;
+    return py::make_tuple(true, py::make_tuple(state.edge_pos, state.corner_pos, state.corner_orient,
+                                               state.edge_orient, state.edge_sym),
+                          result.error, result.message);
+}
+
+
+// solves a user input position: converts and checks the piece placements,
+// then runs the search on the position; the callback receives the (empty)
+// scramble event and the solution event of the single run
+// throws std::runtime_error if the position is not valid
+void SolvePosition (const std::vector<PlacementTuple>& corners, const std::vector<PlacementTuple>& edges,
+                    const SearchEventCallback& event_callback) {
+    if (!initialized) {
+        throw std::runtime_error("puppetpy is not initialized - call initialize first");
+    }
+    input::PositionResult result = input::ConvertPosition(ToPlacements(corners), ToPlacements(edges));
+    if (!result.ok) {
+        throw std::runtime_error("invalid position: " + result.message);
+    }
+
+    {
+        py::gil_scoped_release release;
+        SearchManagerCustom(result.state, MakeTrampoline(event_callback));
+    }
+}
+
+
+// the internal state reached from a start state (the solved state if none is
+// given) after applying the moves (rotation indices); used to test the
+// conversion of user input positions
+std::array<uint32_t, 5> StateAfterMoves (const std::vector<uint8_t>& moves, const py::object& start_state) {
+    if (!initialized) {
+        throw std::runtime_error("puppetpy is not initialized - call initialize first");
+    }
+    State state = kSolvedState;
+    if (!start_state.is_none()) {
+        std::array<uint32_t, 5> fields = start_state.cast<std::array<uint32_t, 5>>();
+        state = State{fields[0], uint16_t(fields[1]), uint16_t(fields[2]), uint16_t(fields[3]), uint8_t(fields[4])};
+    }
+    for (uint8_t rot : moves) {
+        corner::Rotate(state.corner_pos, state.corner_orient, rot);
+        edge::Rotate(state.edge_pos, state.edge_sym, state.edge_orient, rot);
+    }
+    return {state.edge_pos, state.corner_pos, state.corner_orient, state.edge_orient, state.edge_sym};
 }
 
 
@@ -165,7 +245,23 @@ PYBIND11_MODULE(puppetpy, m) {
         .def_readonly("matrix", &RotRep::matrix)
         .def_readonly("activate", &RotRep::activate);
 
+    py::enum_<input::PositionError>(m, "PositionError")
+        .value("NONE", input::PositionError::kNone)
+        .value("INVALID_INPUT", input::PositionError::kInvalidInput)
+        .value("INVALID_SLOT", input::PositionError::kInvalidSlot)
+        .value("DUPLICATE_PIECE", input::PositionError::kDuplicatePiece)
+        .value("INVALID_ASSIGNMENT", input::PositionError::kInvalidAssignment)
+        .value("REFLECTED_CORNER", input::PositionError::kReflectedCorner)
+        .value("CORNER_ORIENT_PARITY", input::PositionError::kCornerOrientParity)
+        .value("EDGE_ORIENT_PARITY", input::PositionError::kEdgeOrientParity)
+        .value("CORNER_UNSOLVABLE", input::PositionError::kCornerUnsolvable)
+        .value("PARITY_MISMATCH", input::PositionError::kParityMismatch)
+        .value("INTERNAL", input::PositionError::kInternal);
+
     m.def("initialize", &Initialize, py::arg("arguments"));
     m.def("run", &Run, py::arg("event_callback"));
     m.def("rotation_reps", &RotationReps);
+    m.def("convert_position", &ConvertPositionBinding, py::arg("corners"), py::arg("edges"));
+    m.def("state_after_moves", &StateAfterMoves, py::arg("moves"), py::arg("start") = py::none());
+    m.def("solve_position", &SolvePosition, py::arg("corners"), py::arg("edges"), py::arg("event_callback"));
 }

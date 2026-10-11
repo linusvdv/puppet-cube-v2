@@ -104,6 +104,7 @@ add_executable(PuppetCubeV2
     src/rotation.cpp
     src/edge.cpp
     src/corner.cpp
+    src/position_input.cpp
 )
 
 if(USE_CUDA)
@@ -247,6 +248,7 @@ if(BUILD_PYTHON)
         src/rotation.cpp
         src/edge.cpp
         src/corner.cpp
+        src/position_input.cpp
     )
 
     if(USE_CUDA)

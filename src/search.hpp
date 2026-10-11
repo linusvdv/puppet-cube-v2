@@ -56,3 +56,4 @@ using SearchEventCallback = std::function<void(const SearchEvent&)>;
 
 
 void SearchManager(const SearchEventCallback& event_callback = nullptr);
+void SearchManagerCustom(const State& state, const SearchEventCallback& event_callback = nullptr);
