@@ -8,6 +8,7 @@
 #include <numeric>
 #include <thread>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 #include "edge.hpp"
@@ -260,15 +261,18 @@ void InitPositionChangeSymmetryChange(const std::array<std::array<uint8_t, kNumE
     // precompute the next position and the symmetry change pair of every
     // (pos, rot) in parallel over position blocks; the symmetry change pair
     // (symmetry change id, active symmetry) fully determines the symmetry
-    // change vector and is deduplicated locally per block
+    // change vector and is deduplicated locally per block. Only the symmetry
+    // bits of the packed lookups are buffered for the final pass - the
+    // position bits go into position_change right away - so there are no
+    // global (pos, rot) helper arrays (~1.3 GB less peak memory, the tables
+    // are bit identical)
     symmetry_change.assign(kNumSymChange, {});
     position_change.assign(kNumPos, {});
     LOG_MEMORY();
     constexpr uint32_t kChangeBlockSize = 65536;
     const uint32_t num_change_blocks = (kNumPos+kChangeBlockSize-1)/kChangeBlockSize;
-    // both are fully written by the block pass below (no initialization needed)
-    std::unique_ptr<uint32_t[]> packed_next(new uint32_t[uint64_t(kNumPos)*kNumRot]);
-    std::unique_ptr<uint32_t[]> symmetry_pair(new uint32_t[uint64_t(kNumPos)*kNumRot]);
+    // fully written by the block pass below (no initialization needed)
+    std::unique_ptr<uint8_t[]> packed_sym(new uint8_t[uint64_t(kNumPos)*kNumRot]);
     std::vector<std::vector<uint32_t>> block_pairs(num_change_blocks);
     {
         std::atomic<uint32_t> next_block(0);
@@ -278,18 +282,18 @@ void InitPositionChangeSymmetryChange(const std::array<std::array<uint8_t, kNumE
             threads.emplace_back([&](){
                 uint32_t block;
                 while ((block = next_block.fetch_add(1, std::memory_order_relaxed)) < num_change_blocks) {
-                    std::unordered_map<uint32_t, uint32_t> pair_to_local;
+                    std::unordered_set<uint32_t> seen_pairs;
                     for (uint32_t pos = block*kChangeBlockSize; pos < (block+1)*kChangeBlockSize && pos < kNumPos; pos++) {
                         for (uint8_t rot = 0; rot < kNumRot; rot++) {
                             uint32_t next_lehmer_pos = RotatePieces(idx_piece_rot, rep_lehmer_pos[pos], rot);
                             uint32_t packed = lehmer_pos_to_pos[next_lehmer_pos];
-                            packed_next[uint64_t(pos)*kNumRot+rot] = packed;
+                            const uint64_t idx = uint64_t(pos)*kNumRot+rot;
+                            position_change[pos][rot] = packed & kPosMask;
+                            packed_sym[idx] = uint8_t(packed >> kPosShift); // NOLINT
                             uint32_t pair = ((packed >> kPosShift) << 8) | sym_pos_active_sym[packed & kPosMask];
-                            auto [it, inserted] = pair_to_local.try_emplace(pair, uint32_t(block_pairs[block].size()));
-                            if (inserted) {
+                            if (seen_pairs.insert(pair).second) {
                                 block_pairs[block].push_back(pair);
                             }
-                            symmetry_pair[uint64_t(pos)*kNumRot+rot] = it->second;
                         }
                     }
                 }
@@ -299,14 +303,14 @@ void InitPositionChangeSymmetryChange(const std::array<std::array<uint8_t, kNumE
     lehmer_pos_to_pos.reset();
 
     // merge the blocks in order: the first occurrence of every symmetry
-    // change vector over the (pos, rot) order defines its id
+    // change vector over the (pos, rot) order defines its id; the pair value
+    // maps directly to the id (the final pass recomputes the pair of every
+    // (pos, rot) from the buffered symmetry bits)
     int sym_change_cnt = 0;
     std::map<std::array<uint16_t, kNumSym>, int> sym_change_map;
-    std::vector<std::vector<uint32_t>> block_sym_change(num_change_blocks);
+    std::vector<std::unordered_map<uint32_t, uint32_t>> block_pair_global(num_change_blocks);
     for (uint32_t block = 0; block < num_change_blocks; block++) {
-        block_sym_change[block].resize(block_pairs[block].size());
-        for (size_t local = 0; local < block_pairs[block].size(); local++) {
-            uint32_t pair = block_pairs[block][local];
+        for (uint32_t pair : block_pairs[block]) {
             uint32_t next_sym_change = pair >> 8;
             uint32_t next_pos_active_sym = pair & 0xFF;
             std::array<uint16_t, kNumSym> cur_sym_change;
@@ -319,7 +323,7 @@ void InitPositionChangeSymmetryChange(const std::array<std::array<uint8_t, kNumE
                 sym_change_map[cur_sym_change] = sym_change_cnt;
                 sym_change_cnt++;
             }
-            block_sym_change[block][local] = uint32_t(sym_change_map[cur_sym_change]);
+            block_pair_global[block][pair] = uint32_t(sym_change_map[cur_sym_change]);
         }
     }
 
@@ -336,7 +340,8 @@ void InitPositionChangeSymmetryChange(const std::array<std::array<uint8_t, kNumE
         LOG_CRITICAL("Wrong precomputation with symmetry change");
     }
 
-    // write the position change table
+    // write the symmetry change ids into the high bits of the position
+    // change table (the low bits - the next position - are already there)
     {
         std::atomic<uint32_t> next_block(0);
         std::vector<std::jthread> threads;
@@ -345,10 +350,13 @@ void InitPositionChangeSymmetryChange(const std::array<std::array<uint8_t, kNumE
             threads.emplace_back([&](){
                 uint32_t block;
                 while ((block = next_block.fetch_add(1, std::memory_order_relaxed)) < num_change_blocks) {
+                    const std::unordered_map<uint32_t, uint32_t>& pair_global = block_pair_global[block];
                     for (uint32_t pos = block*kChangeBlockSize; pos < (block+1)*kChangeBlockSize && pos < kNumPos; pos++) {
                         for (uint8_t rot = 0; rot < kNumRot; rot++) {
-                            position_change[pos][rot] = (uint64_t(block_sym_change[block][symmetry_pair[uint64_t(pos)*kNumRot+rot]]) << kPosShift)
-                                                        | (packed_next[uint64_t(pos)*kNumRot+rot] & kPosMask);
+                            const uint64_t idx = uint64_t(pos)*kNumRot+rot;
+                            uint32_t pair = (uint32_t(packed_sym[idx]) << 8)
+                                            | sym_pos_active_sym[uint32_t(position_change[pos][rot]) & kPosMask];
+                            position_change[pos][rot] |= uint64_t(pair_global.at(pair)) << kPosShift;
                         }
                     }
                 }
