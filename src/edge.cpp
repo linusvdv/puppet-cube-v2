@@ -20,7 +20,6 @@
 
 
 namespace edge {
-constexpr uint32_t kNumLehmerPos = Factorial(12);
 constexpr uint32_t kNumPos = 9985968;
 constexpr uint16_t kNumSymChange = 921; // this is unfortunatly more than 256 (which would fit in uint8_t and could therefore be packed in a uint32_t with the position)
 
@@ -111,12 +110,35 @@ void InitRotationChange(const std::array<Mat3i, kNumSym>& idx_to_mat_sym) {
 }
 
 
-uint32_t RotatePieces(const std::array<std::array<uint8_t, kNumEdges>, kNumRot>& idx_piece_rot, uint32_t lehmer_pos, uint8_t rot) {
-    std::array<uint8_t, kNumEdges> pos_perm = LehmerPosToPosPerm(lehmer_pos);
-    for (uint8_t& edge_piece : pos_perm) {
-        edge_piece = idx_piece_rot[rot][edge_piece];
+// (class id, first writer symmetry) of a position permutation, computed
+// from the orbit instead of a dense 12! lehmer lookup table (1.9 GB): the
+// orbit minimum is the class representative, its index in the sorted
+// rep_lehmer_pos is the class id; the symmetry is the first one mapping
+// the representative to the permutation (the first writer convention the
+// dense lookup used)
+uint32_t LehmerPermToPacked(const std::array<std::array<uint8_t, kNumEdges>, kNumSym>& idx_piece_sym,
+                            const std::array<uint8_t, kNumSym>& sym_trans,
+                            const std::array<uint8_t, kNumEdges>& pos_perm) {
+    std::array<uint8_t, kNumEdges> rep = pos_perm;
+    for (uint32_t sym = 0; sym < kNumSym; sym++) {
+        std::array<uint8_t, kNumEdges> image = SymmetryPositionRotation(idx_piece_sym, pos_perm, sym_trans[sym]);
+        if (image < rep) {
+            rep = image;
+        }
     }
-    return PosPermToLehmerPos(pos_perm);
+    const uint32_t rep_lehmer = PosPermToLehmerPos(rep);
+    const auto it = std::lower_bound(rep_lehmer_pos.begin(), rep_lehmer_pos.end(), rep_lehmer);
+    if (it == rep_lehmer_pos.end() || *it != rep_lehmer) {
+        LOG_CRITICAL("Orbit minimum is not a class representative!");
+    }
+    const uint32_t class_id = uint32_t(it - rep_lehmer_pos.begin());
+    for (uint32_t sym = 0; sym < kNumSym; sym++) {
+        if (SymmetryPositionRotation(idx_piece_sym, rep, sym_trans[sym]) == pos_perm) {
+            return class_id | (sym << kPosShift);
+        }
+    }
+    LOG_CRITICAL("Permutation is not in the orbit of its representative!");
+    return 0;
 }
 
 
@@ -178,12 +200,9 @@ void InitPositionChangeSymmetryChange(const std::array<std::array<uint8_t, kNumE
         LOG_CRITICAL("Lehmer pos count not correct!");
     }
 
-    // fill the lehmer position lookup and the active symmetry of every
-    // representative (the orbits are disjoint -> representatives never write
-    // the same entry, an initialization of the lookup is not needed); work
-    // stealing over representative ranges because the representatives are
-    // heavily skewed towards the small chunk prefixes
-    std::unique_ptr<uint32_t[]> lehmer_pos_to_pos(new uint32_t[kNumLehmerPos]);
+    // fill the representative lehmer codes and the active symmetry of every
+    // representative; work stealing over representative ranges because the
+    // representatives are heavily skewed towards the small chunk prefixes
     rep_lehmer_pos.assign(kNumPos, 0);
     std::unique_ptr<std::array<uint8_t, kNumSym>[]> rep_active_sym(new std::array<uint8_t, kNumSym>[kNumPos]);
     {
@@ -229,7 +248,6 @@ void InitPositionChangeSymmetryChange(const std::array<std::array<uint8_t, kNumE
                                 cur_lehmer_active[cur_cnt] = uint8_t(sym); // NOLINT
                                 cur_cnt++;
                                 cur_active_sym[sym] = uint8_t(sym); // NOLINT
-                                lehmer_pos_to_pos[lehmer_pos] = uint32_t(cnt) | (sym << kPosShift); // NOLINT
                             }
                             rep_lehmer_pos[cnt] = PosPermToLehmerPos(pos_perm);
                             rep_active_sym[cnt] = cur_active_sym;
@@ -284,9 +302,13 @@ void InitPositionChangeSymmetryChange(const std::array<std::array<uint8_t, kNumE
                 while ((block = next_block.fetch_add(1, std::memory_order_relaxed)) < num_change_blocks) {
                     std::unordered_set<uint32_t> seen_pairs;
                     for (uint32_t pos = block*kChangeBlockSize; pos < (block+1)*kChangeBlockSize && pos < kNumPos; pos++) {
+                        const std::array<uint8_t, kNumEdges> pos_perm = LehmerPosToPosPerm(rep_lehmer_pos[pos]);
                         for (uint8_t rot = 0; rot < kNumRot; rot++) {
-                            uint32_t next_lehmer_pos = RotatePieces(idx_piece_rot, rep_lehmer_pos[pos], rot);
-                            uint32_t packed = lehmer_pos_to_pos[next_lehmer_pos];
+                            std::array<uint8_t, kNumEdges> image_perm = pos_perm;
+                            for (uint8_t& edge_piece : image_perm) {
+                                edge_piece = idx_piece_rot[rot][edge_piece];
+                            }
+                            uint32_t packed = LehmerPermToPacked(idx_piece_sym, sym_trans, image_perm);
                             const uint64_t idx = uint64_t(pos)*kNumRot+rot;
                             position_change[pos][rot] = packed & kPosMask;
                             packed_sym[idx] = uint8_t(packed >> kPosShift); // NOLINT
@@ -300,7 +322,6 @@ void InitPositionChangeSymmetryChange(const std::array<std::array<uint8_t, kNumE
             });
         }
     }
-    lehmer_pos_to_pos.reset();
 
     // merge the blocks in order: the first occurrence of every symmetry
     // change vector over the (pos, rot) order defines its id; the pair value
