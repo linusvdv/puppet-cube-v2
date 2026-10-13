@@ -78,6 +78,7 @@ void Initialize (const std::vector<std::string>& arguments) {
     // settings initialization (reset of the getopt state)
     optind = 0;
     Settings(int(argv.size()), argv.data());
+    FixAllocatorThreshold();
     LOG_MEMORY();
 
     // precomputation

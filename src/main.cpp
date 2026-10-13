@@ -26,6 +26,7 @@ int main(int argc, char *argv[]) {
 
     // settings initialization
     Settings(argc, argv);
+    FixAllocatorThreshold();
     LOG_MEMORY();
 
     if (Settings::GetHardwareInfo()) {

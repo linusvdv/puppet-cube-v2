@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Puppet Cube V2</title>
+<style>
+    html, body { height: 100%; margin: 0; }
+    body { font-family: monospace; background: #1e1e1e; color: #d4d4d4;
+           display: flex; flex-direction: column; overflow: hidden; }
+    header { display: flex; gap: 16px; align-items: baseline; padding: 6px 12px;
+             background: #181818; border-bottom: 1px solid #333; font-size: 12px; }
+    header h1 { font-size: 14px; margin: 0; }
+    #status { color: #e8832d; }
+    #heap { color: #5087d0; }
+    #isolated-warn { color: #e05252; display: none; }
+
+    main { flex: 1; display: flex; min-height: 0; }
+
+    #left { width: 170px; display: flex; flex-direction: column; padding: 8px;
+            border-right: 1px solid #333; gap: 8px; }
+    #runs { flex: 1; overflow-y: auto; }
+    .run { padding: 4px 6px; cursor: pointer; border-radius: 3px; font-size: 12px; }
+    .run:hover { background: #2a2a2a; }
+    .run.selected { background: #2c3a4d; }
+    .btn { padding: 6px 10px; background: #2c3a4d; color: #f0f2f5; border: 1px solid #5087d0;
+           cursor: pointer; font-family: monospace; font-size: 12px; }
+    .btn:disabled { opacity: 0.4; cursor: default; }
+    .btn.selected { background: #5087d0; }
+
+    #center { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+    #view { flex: 1; min-height: 0; position: relative; }
+    #view canvas { position: absolute; inset: 0; }
+    #transport { display: flex; gap: 6px; justify-content: center; padding: 6px; }
+    #timeline_wrap { overflow-x: auto; border-top: 1px solid #333; padding: 4px 8px; }
+
+    #editor_panel { width: 190px; display: none; flex-direction: column; gap: 8px;
+                    padding: 8px; border-left: 1px solid #333; }
+    #colors { display: flex; flex-wrap: wrap; gap: 6px; }
+    #colors .color { width: 34px; height: 34px; border: 2px solid #333; border-radius: 4px;
+                     cursor: pointer; color: #111; font-weight: bold; font-family: monospace;
+                     font-size: 13px; text-shadow: 0 0 2px rgba(255,255,255,0.4); }
+    #colors .color.selected { border-color: #f0f2f5; }
+    #colors .tool { width: auto; padding: 0 8px; height: 34px; background: #444;
+                    color: #f0f2f5; border: 2px solid #333; border-radius: 4px;
+                    cursor: pointer; font-family: monospace; }
+    #colors .tool.selected { border-color: #f0f2f5; }
+    #editor_panel .row { display: flex; gap: 6px; }
+    #editor_panel .row .btn { flex: 1; }
+    #editor_status { font-size: 11px; color: #888d96; min-height: 28px; }
+
+    footer { height: 110px; border-top: 1px solid #333; background: #111; }
+    #log { height: 100%; box-sizing: border-box; overflow-y: auto; white-space: pre-wrap;
+           padding: 4px 10px; font-size: 11px; line-height: 1.35; }
+    .stage { color: #888d96; } .ready { color: #4ec94e; } .solution { color: #e8832d; }
+    .error { color: #e05252; } .scramble { color: #5087d0; }
+</style>
+</head>
+<body>
+<header>
+    <h1>Puppet Cube V2</h1>
+    <span>isolated: <b id="isolated">?</b></span>
+    <span>heap: <b id="heap">-</b></span>
+    <span>threads: <b id="threads">-</b></span>
+    <span id="status">loading module ...</span>
+    <span id="isolated-warn">NOT cross origin isolated - reload once (the coi service worker needs one reload)</span>
+</header>
+<main>
+    <div id="left">
+        <button class="btn" id="init" disabled>generate tables</button>
+        <div id="runs"></div>
+        <button class="btn" id="run" disabled>run scramble demo</button>
+        <button class="btn" id="edit">edit</button>
+    </div>
+    <div id="center">
+        <div id="view"></div>
+        <div id="transport">
+            <button class="btn" id="jump_scrambled">&#124;&lt;</button>
+            <button class="btn" id="step_back">&lt;</button>
+            <button class="btn" id="play">play / pause</button>
+            <button class="btn" id="step_forward">&gt;</button>
+            <button class="btn" id="jump_solved">&gt;&#124;</button>
+        </div>
+        <div id="timeline_wrap"><div id="timeline"></div></div>
+    </div>
+    <div id="editor_panel">
+        <div id="colors"></div>
+        <div class="row">
+            <button class="btn" id="undo">undo</button>
+            <button class="btn" id="redo">redo</button>
+        </div>
+        <div class="row">
+            <button class="btn" id="clear">clear</button>
+            <button class="btn" id="puppet_view">puppet cube</button>
+        </div>
+        <div id="editor_status">paint all the stickers</div>
+        <button class="btn" id="solve_position" disabled>solve</button>
+    </div>
+</main>
+<footer><div id="log"></div></footer>
+
+<script src="coi-serviceworker.js"></script>
+<script type="importmap">
+{
+    "imports": {
+        "three": "./libs/three.module.js"
+    }
+}
+</script>
+<script type="module" src="app.js"></script>
+<script>
+'use strict';
+if (!crossOriginIsolated) {
+    document.getElementById('isolated-warn').style.display = 'inline';
+}
+</script>
+</body>
+</html>

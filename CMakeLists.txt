@@ -30,12 +30,39 @@ include_directories(${parallel-hashmap_SOURCE_DIR})
 
 
 # ===========================================
+# Important option for the web build!
+# ===========================================
+# - ON (requires the emscripten toolchain: emcmake cmake -B build_web -DBUILD_WEB=ON)
+# - OFF
+# forces USE_CUDA=OFF, BUILD_PYTHON=OFF and REDUCE_MEMORY=ON (the 4 GB wasm
+# memory cap needs the reduced heuristic)
+
+option(BUILD_WEB "Build the WebAssembly module for the browser" OFF)
+
+if(BUILD_WEB)
+    if(NOT EMSCRIPTEN)
+        message(FATAL_ERROR "BUILD_WEB=ON needs the emscripten toolchain - run: emcmake cmake -B build_web -DBUILD_WEB=ON")
+    endif()
+    set(WEB_DEFAULT_CUDA OFF)    # no cuda in the browser
+    set(WEB_DEFAULT_PYTHON OFF)  # pybind11 does not work under emscripten
+    message(STATUS "WEB build: USE_CUDA=OFF, BUILD_PYTHON=OFF, REDUCE_MEMORY=ON")
+else()
+    set(WEB_DEFAULT_CUDA ON)
+    set(WEB_DEFAULT_PYTHON ON)
+endif()
+
+
+# ===========================================
 # Important option to enable the CUDA search!
 # ===========================================
 # - ON
 # - OFF
 
-option(USE_CUDA "Build with CUDA support" ON)
+option(USE_CUDA "Build with CUDA support" ${WEB_DEFAULT_CUDA})
+
+if(BUILD_WEB AND USE_CUDA)
+    message(FATAL_ERROR "BUILD_WEB=ON cannot be combined with USE_CUDA=ON")
+endif()
 
 if(USE_CUDA)
     find_package(CUDAToolkit 12.6 REQUIRED)
@@ -81,6 +108,10 @@ endif()
 
 option(REDUCE_MEMORY "Reduced memory edge heuristic (slower)" OFF)
 
+if(BUILD_WEB)
+    set(REDUCE_MEMORY ON)
+endif()
+
 if(REDUCE_MEMORY)
     add_compile_definitions(REDUCE_MEMORY)
 endif()
@@ -88,8 +119,8 @@ endif()
 
 include_directories(include/)
 
-add_executable(PuppetCubeV2
-    src/main.cpp
+# sources shared by all build targets (the entry points stay per target)
+set(PUPPET_CORE_SOURCES
     src/logger.cpp
     src/settings.cpp
     src/tablebase.cpp
@@ -107,82 +138,90 @@ add_executable(PuppetCubeV2
     src/position_input.cpp
 )
 
-if(USE_CUDA)
-    add_compile_definitions(USE_CUDA)
-
-    target_sources(PuppetCubeV2 PRIVATE
-        src/corner.cu
-        src/edge.cu
-        src/info.cu
-        src/leaf_search.cu
-        src/tablebase.cu
+# the native command line binary (not built for the web target)
+if(NOT BUILD_WEB)
+    add_executable(PuppetCubeV2
+        src/main.cpp
+        ${PUPPET_CORE_SOURCES}
     )
 
-    set(CUDA_KEEP_DIR "${CMAKE_BINARY_DIR}/comp")
-    file(MAKE_DIRECTORY ${CUDA_KEEP_DIR})
-
-    target_link_libraries(PuppetCubeV2 PRIVATE Threads::Threads)
-
-    target_compile_options(PuppetCubeV2 PRIVATE
-        $<$<COMPILE_LANGUAGE:CUDA>:-Wall -Wextra --expt-extended-lambda -diag-suppress 68 --keep --keep-dir=${CUDA_KEEP_DIR} -lineinfo>
-        $<$<CONFIG:Release>:$<$<COMPILE_LANGUAGE:CUDA>:-g>>
-        $<$<CONFIG:Debug>:$<$<COMPILE_LANGUAGE:CUDA>:-G>>
-    )
-
-    target_link_options(PuppetCubeV2 PRIVATE
-    $<DEVICE_LINK:-Xptxas=-v>
-    )
-else()
-    target_link_libraries(PuppetCubeV2 PRIVATE Threads::Threads)
-endif()
-
-
-# ============
-# Build Option
-# ============
-# - Release
-# - Debug
-
-if(NOT CMAKE_BUILD_TYPE)
-    set(CMAKE_BUILD_TYPE Release)
-endif()
-
-set(Debug_Options -O0 -fno-inline -fno-omit-frame-pointer -Wshadow -Wall -Wextra)
-set(Release_Options -O3 -Wshadow -Wall -Wextra)
-
-target_compile_options(PuppetCubeV2 PRIVATE
-    $<$<COMPILE_LANGUAGE:CXX>:-Wall -Wextra -g>
-    $<$<CONFIG:Debug>:${Debug_Options}>
-    $<$<CONFIG:Release>:${Release_Options}>
-)
-
-# ============
-# LTO (Release only)
-# ============
-# Enables interprocedural/link-time optimization for CXX, and -- since this
-# is a whole-target property, not scoped per language -- for CUDA device code
-# too (nvcc's device LTO has been supported by CMake since 3.25). That's
-# intentional here: we want both. The IPO check below covers CUDA explicitly
-# so a build would warn instead of silently doing the wrong thing if device
-# LTO ever weren't supported by the toolchain in use.
-#
-# If you ever want CXX LTO WITHOUT CUDA device LTO, this property can't be
-# scoped to one language on a mixed target -- the CUDA sources would need to
-# move into a separate target that doesn't have this property set.
-if(CMAKE_BUILD_TYPE STREQUAL "Release")
-    include(CheckIPOSupported)
-
-    set(ipo_languages CXX)
     if(USE_CUDA)
-        list(APPEND ipo_languages CUDA)
+        add_compile_definitions(USE_CUDA)
+
+        target_sources(PuppetCubeV2 PRIVATE
+            src/corner.cu
+            src/edge.cu
+            src/info.cu
+            src/leaf_search.cu
+            src/tablebase.cu
+        )
+
+        set(CUDA_KEEP_DIR "${CMAKE_BINARY_DIR}/comp")
+        file(MAKE_DIRECTORY ${CUDA_KEEP_DIR})
+
+        target_link_libraries(PuppetCubeV2 PRIVATE Threads::Threads)
+
+        target_compile_options(PuppetCubeV2 PRIVATE
+            $<$<COMPILE_LANGUAGE:CUDA>:-Wall -Wextra --expt-extended-lambda -diag-suppress 68 --keep --keep-dir=${CUDA_KEEP_DIR} -lineinfo>
+            $<$<CONFIG:Release>:$<$<COMPILE_LANGUAGE:CUDA>:-g>>
+            $<$<CONFIG:Debug>:$<$<COMPILE_LANGUAGE:CUDA>:-G>>
+        )
+
+        target_link_options(PuppetCubeV2 PRIVATE
+        $<DEVICE_LINK:-Xptxas=-v>
+        )
+    else()
+        target_link_libraries(PuppetCubeV2 PRIVATE Threads::Threads)
     endif()
 
-    check_ipo_supported(RESULT ipo_supported OUTPUT ipo_error LANGUAGES ${ipo_languages})
-    if(ipo_supported)
-        set_property(TARGET PuppetCubeV2 PROPERTY INTERPROCEDURAL_OPTIMIZATION TRUE)
-        message(STATUS "LTO enabled (${ipo_languages})")
-    else()
-        message(WARNING "LTO not supported: ${ipo_error}")
+
+    # ============
+    # Build Option
+    # ============
+    # - Release
+    # - Debug
+
+    if(NOT CMAKE_BUILD_TYPE)
+        set(CMAKE_BUILD_TYPE Release)
+    endif()
+
+    set(Debug_Options -O0 -fno-inline -fno-omit-frame-pointer -Wshadow -Wall -Wextra)
+    set(Release_Options -O3 -Wshadow -Wall -Wextra)
+
+    target_compile_options(PuppetCubeV2 PRIVATE
+        $<$<COMPILE_LANGUAGE:CXX>:-Wall -Wextra -g>
+        $<$<CONFIG:Debug>:${Debug_Options}>
+        $<$<CONFIG:Release>:${Release_Options}>
+    )
+
+    # ============
+    # LTO (Release only)
+    # ============
+    # Enables interprocedural/link-time optimization for CXX, and -- since this
+    # is a whole-target property, not scoped per language -- for CUDA device code
+    # too (nvcc's device LTO has been supported by CMake since 3.25). That's
+    # intentional here: we want both. The IPO check below covers CUDA explicitly
+    # so a build would warn instead of silently doing the wrong thing if device
+    # LTO ever weren't supported by the toolchain in use.
+    #
+    # If you ever want CXX LTO WITHOUT CUDA device LTO, this property can't be
+    # scoped to one language on a mixed target -- the CUDA sources would need to
+    # move into a separate target that doesn't have this property set.
+    if(CMAKE_BUILD_TYPE STREQUAL "Release")
+        include(CheckIPOSupported)
+
+        set(ipo_languages CXX)
+        if(USE_CUDA)
+            list(APPEND ipo_languages CUDA)
+        endif()
+
+        check_ipo_supported(RESULT ipo_supported OUTPUT ipo_error LANGUAGES ${ipo_languages})
+        if(ipo_supported)
+            set_property(TARGET PuppetCubeV2 PROPERTY INTERPROCEDURAL_OPTIMIZATION TRUE)
+            message(STATUS "LTO enabled (${ipo_languages})")
+        else()
+            message(WARNING "LTO not supported: ${ipo_error}")
+        endif()
     endif()
 endif()
 
@@ -197,7 +236,11 @@ endif()
 # needs pybind11 (pip install pybind11 / source gui/setup_venv.sh), found
 # automatically via the Python interpreter - no -DCMAKE_PREFIX_PATH needed
 
-option(BUILD_PYTHON "Build the python binding puppetpy" ON)
+option(BUILD_PYTHON "Build the python binding puppetpy" ${WEB_DEFAULT_PYTHON})
+
+if(BUILD_WEB AND BUILD_PYTHON)
+    message(FATAL_ERROR "BUILD_WEB=ON cannot be combined with BUILD_PYTHON=ON")
+endif()
 
 if(BUILD_PYTHON)
     # find python via the modern FindPython module and hand it to pybind11
@@ -234,21 +277,7 @@ if(BUILD_PYTHON)
     # a c++ linked shared module
     pybind11_add_module(puppetpy NO_EXTRAS
         src/puppet_py.cpp
-        src/logger.cpp
-        src/settings.cpp
-        src/tablebase.cpp
-        src/random_position.cpp
-        src/thread_pool.cpp
-        src/search.cpp
-        src/leaf_search.cpp
-        src/special_cubes.cpp
-        src/info.cpp
-        src/duplicate_rotations.cpp
-        src/transposition_table.cpp
-        src/rotation.cpp
-        src/edge.cpp
-        src/corner.cpp
-        src/position_input.cpp
+        ${PUPPET_CORE_SOURCES}
     )
 
     if(USE_CUDA)
@@ -267,5 +296,52 @@ if(BUILD_PYTHON)
         $<$<COMPILE_LANGUAGE:CXX>:-Wall -Wextra -g>
         $<$<COMPILE_LANGUAGE:CUDA>:-Wall -Wextra --expt-extended-lambda -diag-suppress 68 -lineinfo>
         $<$<CONFIG:Release>:-O3>
+    )
+endif()
+
+
+# ===========================================
+# WebAssembly module for the browser
+# ===========================================
+# runs the full threaded search inside a web worker (real pthreads via
+# SharedArrayBuffer - the page needs cross origin isolation, see web/)
+# build:  emcmake cmake -B build_web -DBUILD_WEB=ON && cmake --build build_web -j
+# output: build_web/puppetweb.js + puppetweb.wasm (+ the pthread worker js)
+
+if(BUILD_WEB)
+    add_executable(puppetweb
+        src/web_entry.cpp
+        ${PUPPET_CORE_SOURCES}
+    )
+
+    target_link_libraries(puppetweb PRIVATE Threads::Threads)
+
+    # c++ exceptions are off by default under emscripten - the code base
+    # throws for recoverable errors (invalid positions, bad arguments)
+    # lto matters: the hot leaf search relies on cross tu inlining
+    target_compile_options(puppetweb PRIVATE
+        -pthread
+        -fexceptions
+        -flto
+        $<$<CONFIG:Release>:-O3>
+        $<$<CONFIG:Debug>:-O0 -g>
+    )
+
+    target_link_options(puppetweb PRIVATE
+        -pthread
+        -fexceptions
+        -flto
+        -lembind
+        "-sPTHREAD_POOL_SIZE_STRICT=0"  # spawn pthread workers on demand
+        "-sDEFAULT_PTHREAD_STACK_SIZE=2097152"  # 2 MB: the initialization and
+                                        # search threads use ~100 KB stack
+                                        # arrays (emscripten default is 64 KB)
+        "-sALLOW_MEMORY_GROWTH=1"
+        "-sMAXIMUM_MEMORY=4GB"          # the wasm32 cap
+        "-sINITIAL_MEMORY=64MB"
+        "-sMODULARIZE=1"
+        "-sEXPORT_NAME=createPuppetModule"
+        "-sEXPORTED_RUNTIME_METHODS=wasmMemory,HEAPU8"
+        -g2
     )
 endif()

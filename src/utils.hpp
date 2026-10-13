@@ -2,8 +2,13 @@
 #include <array>
 #include <atomic>
 #include <cstddef>
+#include <functional>
 #include <string>
 #include <vector>
+
+#ifdef __GLIBC__
+#include <malloc.h>
+#endif
 
 #include "logger.hpp"
 #include "settings.hpp"
@@ -11,6 +16,34 @@
 
 using Vec3i = std::array<int, 3>;
 using Mat3i = std::array<std::array<int, 3>, 3>;
+
+
+// glibc raises its mmap threshold dynamically (up to 32 MB) whenever a large
+// mapping is freed - after the precomputation frees its first big buffer the
+// medium sized per thread buffers (e.g. the corner heuristic BFS frontiers,
+// ~280 MB total) would land in per thread arenas instead, and freed arena
+// memory is never returned to the os (the generation path ended ~0.5 GB
+// heavier than the file read path). a FIXED low threshold makes every larger
+// allocation an own mapping: freed = returned. call once per process before
+// the precomputation (measured: no runtime cost, the generation output is
+// unaffected - it only changes the allocation policy).
+inline void FixAllocatorThreshold() {
+#ifdef __GLIBC__
+    mallopt(M_MMAP_THRESHOLD, 128*1024);
+#endif
+}
+
+
+// web builds neither read nor write the precomputation files: the tables
+// are generated into memory on every start (persisting them into the
+// browser would double the memory through the virtual file system).
+// set once before the precomputation (cli/gui keep the file caching)
+inline bool no_file_io = false;
+
+// optional progress hook of the precomputation stages (the web entry pipes
+// the stage names into its event queue so the page can show them while the
+// blocking initialization runs on a pthread)
+inline std::function<void(const std::string&)> progress_hook = nullptr;
 
 
 constexpr uint64_t Factorial(int n) {
@@ -105,6 +138,18 @@ inline std::string GetFilePath (std::string file_name) {
 template<typename T, typename Generator>
 void LoadOrGenerate(const std::string& step_tag, Generator&& generate_func,
                     const std::string file_name, std::vector<T>& target, size_t expected_size) {
+    if (progress_hook) {
+        progress_hook(step_tag);
+    }
+    if (no_file_io) {
+        LOG_ALL(step_tag, "precompute ...");
+        generate_func();
+        LOG_MEMORY();
+        if (target.size() != expected_size) {
+            LOG_CRITICAL(step_tag, "Wrong precomputation size:", target.size(), "/", expected_size);
+        }
+        return;
+    }
     const std::string path = GetFilePath(file_name);
     if (std::FILE* read_file = std::fopen(path.c_str(), "rb")) {
         // read content of file
@@ -201,6 +246,15 @@ template<typename Generator, typename... Triples>
 void LoadMultipleOrGenerate(const std::string& step_tag,
                              Generator&& generate_func,
                              Triples&&... triples) {
+    if (progress_hook) {
+        progress_hook(step_tag);
+    }
+    if (no_file_io) {
+        LOG_ALL(step_tag, "precompute ...");
+        generate_func();
+        LOG_MEMORY();
+        return;
+    }
     if (TryLoadAll(step_tag, std::forward<Triples>(triples)...)) {
         LOG_ALL(step_tag, "read from file");
         LOG_MEMORY();

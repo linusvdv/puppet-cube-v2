@@ -173,7 +173,7 @@ void InitHeuristic(const std::array<Vec3i, kNumCorners>& idx_to_xyz_pos,
                 threads.emplace_back([&, thread](){
                     uint64_t left = next_range.fetch_add(1, std::memory_order_relaxed)*kRangeSize;
                     while (left < frontier.size()) {
-                        uint64_t right = std::min(left+kRangeSize, frontier.size());
+                        uint64_t right = std::min(left+kRangeSize, uint64_t(frontier.size()));
                         for (uint64_t i = left; i < right; i++) {
                             const FrontierState& state = frontier[i];
                             uint64_t cur_heuristic = depth;

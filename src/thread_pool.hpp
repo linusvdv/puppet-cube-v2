@@ -1,5 +1,11 @@
 #pragma once
+#ifdef __EMSCRIPTEN__
+#include "emscripten_barrier.hpp"
+using ThreadPoolBarrier = ems::Barrier;
+#else
 #include <barrier>
+using ThreadPoolBarrier = std::barrier<>;
+#endif
 #include <functional>
 #include <thread>
 #include <vector>
@@ -18,8 +24,8 @@ public:
 private:
     void WorkerLoop(size_t thread_id);
 
-    std::barrier<>               barrier_start_;
-    std::barrier<>               barrier_end_;
+    ThreadPoolBarrier            barrier_start_;
+    ThreadPoolBarrier            barrier_end_;
     std::function<void(size_t)>  task_;
     std::atomic<bool>            shutdown_{false};
     std::vector<std::jthread>    workers_;

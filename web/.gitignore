@@ -1,0 +1,9 @@
+# npm
+node_modules/
+
+# the wasm module - rebuilt by CI (emcmake cmake -B build_web -DBUILD_WEB=ON)
+puppetweb.js
+puppetweb.wasm
+
+# test artifacts
+tests/testdata/*.png

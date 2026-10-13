@@ -1,6 +1,12 @@
 #pragma once
 #include <parallel_hashmap/phmap.h>
+#ifdef __EMSCRIPTEN__
+#include "emscripten_barrier.hpp"
+using SearchBarrier = ems::Barrier;
+#else
 #include <barrier>
+using SearchBarrier = std::barrier<>;
+#endif
 #include <condition_variable>
 #include <functional>
 #include <optional>
@@ -29,8 +35,8 @@ struct SharedLeafSolution {
 struct SharedSearch {
     std::atomic<bool> finished{false};
 
-    std::optional<std::barrier<>> start_work;
-    std::optional<std::barrier<>> done_work;
+    std::optional<SearchBarrier> start_work;
+    std::optional<SearchBarrier> done_work;
 
     std::atomic<uint64_t> leaf_cnt{0};
 };
