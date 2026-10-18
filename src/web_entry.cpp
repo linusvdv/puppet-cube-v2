@@ -44,10 +44,11 @@ bool init_started = false;
 // --- event queue (written from pthreads, drained by the worker) ----------
 
 struct WebEvent {
-    std::string kind;   // "stage" | "ready" | "scramble" | "solution" | "error"
+    std::string kind;   // "stage" | "ready" | "scramble" | "solution" | "iteration" | "error"
     std::string text;
     uint32_t run_idx = 0;
     uint8_t depth = 0;
+    double positions = 0;      // iteration events: cumulative searched positions
     std::vector<uint8_t> moves;
 };
 
@@ -94,6 +95,11 @@ std::vector<SearchJob> job_queue;
 std::atomic<uint32_t> job_wakeup{0};    // futex word: pending jobs
 bool search_worker_started = false;
 
+// state of the CURRENTLY running search job (the jobs are serialized, and
+// the iteration hook fires from the job thread itself - no races)
+uint32_t hook_id_offset = 0;            // custom solves: the custom id offset
+uint32_t demo_run_base = 0;             // demo searches: runs already started
+
 void SearchWorkerLoop () {
     while (true) {
         while (job_wakeup.load(std::memory_order_acquire) == 0) {
@@ -107,9 +113,18 @@ void SearchWorkerLoop () {
             job_queue.erase(job_queue.begin());
         }
         if (job.custom) {
+            // custom solves report run_idx 0 internally - offset them into a
+            // distinct id space (the app identifies custom runs by
+            // runIdx >= kCustomRunOffset and remaps to its own ids)
+            hook_id_offset = kCustomRunOffset;
             SearchManagerCustom(job.state, QueueCallback(kCustomRunOffset));
         } else {
-            SearchManager(QueueCallback());
+            // every demo search starts on fresh scrambles and numbers its
+            // runs globally (the offset feeds the seeds and the events)
+            const size_t offset = demo_run_base;
+            demo_run_base += Settings::GetNumRuns();
+            hook_id_offset = 0;
+            SearchManager(QueueCallback(), offset);
         }
     }
 }
@@ -249,6 +264,17 @@ void InitializeAsync (const emscripten::val& arguments) {
         PushEvent(std::move(event));
     };
 
+    // per-iteration search progress: "no solution with depth d, n positions"
+    // (fires on the search job thread - see SearchWorkerLoop)
+    search_iteration_hook = [](size_t run_idx, uint8_t depth, uint64_t positions) {
+        WebEvent event;
+        event.kind = "iteration";
+        event.run_idx = uint32_t(run_idx) + hook_id_offset;
+        event.depth = depth;
+        event.positions = double(positions);
+        PushEvent(std::move(event));
+    };
+
     std::thread([arguments = ToStringVector(arguments)]() {
         Initialize(arguments);
         WebEvent event;
@@ -370,6 +396,7 @@ EMSCRIPTEN_BINDINGS(puppetweb) {
         .field("text", &WebEvent::text)
         .field("runIdx", &WebEvent::run_idx)
         .field("depth", &WebEvent::depth)
+        .field("positions", &WebEvent::positions)
         .field("moves", &WebEvent::moves);
 
     emscripten::value_object<ConvertResult>("ConvertResult")

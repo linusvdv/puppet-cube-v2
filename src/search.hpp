@@ -61,5 +61,14 @@ struct SearchEvent {
 using SearchEventCallback = std::function<void(const SearchEvent&)>;
 
 
-void SearchManager(const SearchEventCallback& event_callback = nullptr);
+// set by the web binding only (nullptr in native builds): called after
+// each completed IDA* iteration that found no solution, with the run
+// index, the exhausted depth and the cumulative number of searched
+// positions - lets the ui report search progress
+using SearchIterationHook = void (*)(size_t run_idx, uint8_t depth, uint64_t positions);
+extern SearchIterationHook search_iteration_hook;
+
+
+void SearchManager(const SearchEventCallback& event_callback = nullptr,
+                   size_t run_offset = 0);
 void SearchManagerCustom(const State& state, const SearchEventCallback& event_callback = nullptr);

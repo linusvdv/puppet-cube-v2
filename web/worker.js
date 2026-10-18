@@ -26,6 +26,14 @@ let threads_reported = false;
 
 const post = (msg) => postMessage(msg);
 
+// embind C++ exceptions can surface as raw objects - String() would give
+// "[object Object]"
+function errText(err) {
+    if (err && typeof err.message === 'string') return err.message;
+    if (typeof err === 'string') return err;
+    try { return JSON.stringify(err); } catch (_) { return String(err); }
+}
+
 // emscripten 6 embind returns std::vector as instances (size/get), not arrays
 function vecToArray(v) {
     const out = [];
@@ -46,7 +54,8 @@ function pollLoop() {
                 const ev = queue.get(i);
                 if (ev.kind === 'ready' || ev.kind === 'stage') report_threads = true;
                 events.push({kind: ev.kind, text: ev.text, runIdx: ev.runIdx,
-                             depth: ev.depth, moves: vecToArray(ev.moves)});
+                             depth: ev.depth, positions: ev.positions,
+                             moves: vecToArray(ev.moves)});
             }
             post({type: 'events', events: events});
             // the thread count is known once the settings are parsed (the
@@ -103,7 +112,7 @@ onmessage = (msg) => {
             post({type: 'state_after_moves', state: vecToArray(state)});
         }
     } catch (err) {
-        post({type: 'error', message: String(err)});
+        post({type: 'error', message: errText(err)});
     }
 };
 

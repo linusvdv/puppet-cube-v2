@@ -2,6 +2,8 @@
 
 [PuppetCubeV2.webm](https://github.com/user-attachments/assets/a0779cad-28bf-48d4-9e59-f1440ea8e9c0)
 
+**Try it in the browser:** <https://linusvdv.github.io/puppet-cube-v2/> — the full solver runs as WebAssembly.
+
 An optimal solver for the Puppet Cube V2, a shapeshifting variant of the Rubik's Cube with about $5 \cdot 10^{18}$ positions. It finds a shortest possible solution for any scrambled cube and proves that it is optimal. With GPU acceleration this takes a fraction of a second for a random position on high-end consumer hardware, and only slightly longer for the hardest positions. A 3D viewer replays every scramble and solution — and positions painted in the built-in editor are solved with the same optimality guarantee.
 
 <!--toc:start-->

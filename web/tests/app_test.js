@@ -50,7 +50,7 @@ async function main() {
                     solutionLen: r.solution.length, scrambleLen: r.scramble.length,
                     selected: window.app.selectedRun};
         });
-        if (showcase.label !== 'hardest (31)' || showcase.depth !== 31
+        if (showcase.label !== 'hardest proven cube' || showcase.depth !== 31
             || showcase.solutionLen !== 31 || showcase.scrambleLen !== 0
             || showcase.selected !== -1) {
             throw new Error('bad showcase run: ' + JSON.stringify(showcase));
@@ -69,6 +69,51 @@ async function main() {
         }
         console.log(`showcase ok: ${showcase.label}, replay ends solved`);
         await page.screenshot({path: path.join(__dirname, 'testdata', 'app_hardest.png')});
+
+        // --- solve before generation: refusal + red flash, no garbage ---
+        await page.evaluate(() => window.app.setEditMode(true));
+        await sleep(200);
+        const refusalWire = JSON.parse(fs.readFileSync(path.join(__dirname, 'testdata', 'run0_placements.json')));
+        await page.evaluate((wire) => {
+            const app = window.app;
+            const mesh = app.meshData;
+            const pieceOfGrid = new Map(mesh.solved.map((p, i) => [p.grid.join(','), i]));
+            for (const list of [wire.corners, wire.edges]) {
+                for (const flat of list) {
+                    const slot = flat.slice(0, 3);
+                    const pieceHome = flat.slice(3, 6);
+                    const piece = pieceOfGrid.get(pieceHome.join(','));
+                    for (let s = 0; s < (flat.length - 6) / 6; s++) {
+                        const home = flat.slice(6 + s*6, 9 + s*6);
+                        const cur = flat.slice(9 + s*6, 12 + s*6);
+                        const pg = mesh.stickerFaces[piece].findIndex(
+                            d => d[0] === home[0] && d[1] === home[1] && d[2] === home[2]);
+                        const color = mesh.stickerColors[piece][pg];
+                        const slotIdx = mesh.solved.findIndex(
+                            p => p.grid[0] === slot[0] && p.grid[1] === slot[1] && p.grid[2] === slot[2]);
+                        const sg = app.editorMeshes.groupFaces[slotIdx].findIndex(
+                            d => d[0] === cur[0] && d[1] === cur[1] && d[2] === cur[2]);
+                        app.editorState.setSticker(slotIdx, sg, color);
+                    }
+                }
+            }
+            app.paintEditorScene();
+        }, refusalWire);
+        await page.click('#solve_position');
+        await sleep(300);
+        const refusal = await page.evaluate(() => ({
+            status: document.getElementById('editor_status').textContent,
+            flash: document.getElementById('init').classList.contains('flash-red'),
+            logText: document.getElementById('log').textContent,
+        }));
+        if (refusal.status !== 'generate the tables first' || !refusal.flash) {
+            throw new Error('solve-before-init refusal failed: ' + JSON.stringify(refusal));
+        }
+        if (refusal.logText.includes('[object Object]')) {
+            throw new Error('log contains [object Object]');
+        }
+        await page.evaluate(() => window.app.setEditMode(false));
+        console.log('solve before init: refusal + red generate flash ok');
 
         // --- generation ---
         await page.click('#init');
@@ -94,6 +139,10 @@ async function main() {
         console.log('wasm verifies: hardest.json solution solves the stored position');
 
         // --- the scramble demo with playback ---
+        await page.evaluate(() => {
+            window._iterations = [];
+            window.app.solver.onEvent(ev => { if (ev.kind === 'iteration') window._iterations.push(ev); });
+        });
         await page.click('#run');
         // runs: the showcase (-1) + the demo run 0
         await page.waitForFunction(() => window.app.runs.get(0) !== undefined, null, {timeout: 600000});
@@ -116,6 +165,15 @@ async function main() {
                                    null, {timeout: 1800000});
         const depth = await page.evaluate(() => window.app.runs.get(0).depth);
         console.log(`run 0 solved, depth ${depth}`);
+        const iterations = await page.evaluate(() => window._iterations);
+        if (!iterations || iterations.length < 1) {
+            throw new Error('no iteration progress events received');
+        }
+        const iterText = await page.evaluate(() => document.getElementById('log').textContent);
+        if (!iterText.includes('no solution with depth')) {
+            throw new Error('no iteration progress in the log');
+        }
+        console.log(`iteration progress ok (${iterations.length} events)`);
 
         // jump to solved
         await page.evaluate(() => { window.app.controller.jumpSolved(); });
@@ -293,6 +351,25 @@ async function main() {
         if (!customSolved) throw new Error('the custom run replay does not end solved!');
         console.log('custom run replay ends solved');
         await page.screenshot({path: path.join(__dirname, 'testdata', 'app_custom.png')});
+
+        // --- a second demo: another click, a fresh cube (run 1) ---
+        const run0Scramble = await page.evaluate(() =>
+            window.app.runs.get(0).scramble.map(m => m.index));
+        await page.click('#run');
+        await page.waitForFunction(() => window.app.runs.get(1) !== undefined,
+                                   null, {timeout: 600000});
+        const run1 = await page.evaluate(() => {
+            const r = window.app.runs.get(1);
+            return {scramble: r.scramble.map(m => m.index), selected: window.app.selectedRun};
+        });
+        if (run1.scramble.length === 0 || JSON.stringify(run1.scramble) === JSON.stringify(run0Scramble)) {
+            throw new Error('the second demo did not produce a fresh cube');
+        }
+        if (run1.selected !== 1) throw new Error('follow did not select run 1');
+        await page.waitForFunction(() => { const r = window.app.runs.get(1); return r && r.solution !== null; },
+                                   null, {timeout: 1800000});
+        const depth1 = await page.evaluate(() => window.app.runs.get(1).depth);
+        console.log(`second demo ok: run 1 solved, depth ${depth1}, fresh scramble`);
 
         console.log('APP TEST PASSED');
     } finally {

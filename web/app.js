@@ -24,6 +24,9 @@ class App {
         this.puppetView = false;
         this.runs = new Map();       // runIdx -> {scramble, solution, depth, initial, label}
         this.customId = 1000000;
+        this.pendingCustomIds = [];  // app-side ids of queued custom solves
+        this.activeCustomId = null;
+        this.initStarted = false;
         this.selectedRun = null;
         this.follow = true;
         this.userPaused = false;
@@ -76,7 +79,7 @@ class App {
             solution: hardest.solution.map(i => this.moves[i]),
             depth: hardest.depth,
             initial: initialPlacementData(EditorState.fromWire(hardest.placements), meshData),
-            label: `hardest (${hardest.depth})`,
+            label: 'hardest proven cube',
         });
         this.refreshRunList();
         this.selectRun(-1, true);
@@ -93,12 +96,12 @@ class App {
         $('init').onclick = () => {
             $('init').disabled = true;
             $('init').textContent = 'generating ...';
+            this.initStarted = true;
             this.solver.initialize(App.bootLogArgs());
         };
         $('run').onclick = () => {
-            $('run').disabled = true;
             this.follow = true;      // the demo explicitly follows its runs
-            this.solver.run();
+            this.solver.run();       // every click: one new cube
         };
         $('edit').onclick = () => this.setEditMode(!this.editing);
         $('puppet_view').onclick = () => this.setPuppetView(!$('puppet_view').classList.contains('selected'));
@@ -177,6 +180,15 @@ class App {
     // --- solver events -------------------------------------------------------
 
     onSolverEvent(ev) {
+        // custom solves all report the fixed C++ offset id - remap to the
+        // app-side id of the solve currently in flight (searches are
+        // serialized, so at most one is active)
+        if (ev.runIdx >= 1000000) {
+            if (ev.kind === 'scramble') {
+                this.activeCustomId = this.pendingCustomIds.shift() ?? 1000000;
+            }
+            ev.runIdx = this.activeCustomId;
+        }
         if (ev.kind === 'stage') {
             this.log(`[stage] ${ev.text}`, 'stage');
         } else if (ev.kind === 'ready') {
@@ -185,8 +197,15 @@ class App {
             $('status').textContent = 'ready';
             $('init').textContent = 'tables ready';
             $('run').disabled = false;
-            $('solve_position').disabled = false;
             this.updateColorButtons();
+        } else if (ev.kind === 'iteration') {
+            // a depth was exhausted without finding a solution
+            const run = this.runs.get(ev.runIdx);
+            const label = run ? run.label : `run ${ev.runIdx}`;
+            const text = `${label}: no solution with depth ${ev.depth}, `
+                + `searched ${Math.round(ev.positions).toLocaleString('en-US')} positions`;
+            this.log(text, 'stage');
+            if (run) run.progress = text;
         } else if (ev.kind === 'scramble') {
             const custom = ev.runIdx >= 1000000;
             const label = custom ? 'custom' : `run ${ev.runIdx}`;
@@ -400,6 +419,17 @@ class App {
     }
 
     async onEditorSolve() {
+        // the solver needs its tables - refuse early with a hint instead of
+        // surfacing the raw "not initialized" error
+        if (!this.ready) {
+            if (!this.initStarted) {
+                $('editor_status').textContent = 'generate the tables first';
+                this.flashInitButton();
+            } else {
+                $('editor_status').textContent = 'the solver is still generating its tables';
+            }
+            return;
+        }
         let placements;
         try {
             placements = this.editorState.placements();
@@ -415,17 +445,24 @@ class App {
             this.reportEditorError({message: result.message, slots: null, parity: true});
             return;
         }
-        if (!this.ready) {
-            this.reportEditorError({message: 'the solver is still generating its tables', slots: null});
-            return;
-        }
         this.pendingInitial = initialPlacementData(placements, this.meshData);
         const id = this.customId++;
+        this.pendingCustomIds.push(id);
         this.autoShowCustom = id;
         this.setEditMode(false);
         $('status').textContent = 'solving the custom position ...';
         this.solver.solve(wire.corners, wire.edges);
         this.log('custom position submitted', 'stage');
+    }
+
+    // flashes the generate tables button red (solve clicked before init)
+    flashInitButton() {
+        const btn = $('init');
+        btn.classList.remove('flash-red');
+        void btn.offsetWidth;   // restart the css animation
+        btn.classList.add('flash-red');
+        if (this._flashInitTimer) clearTimeout(this._flashInitTimer);
+        this._flashInitTimer = setTimeout(() => btn.classList.remove('flash-red'), 2000);
     }
 
     reportEditorError(err) {
@@ -488,16 +525,25 @@ class App {
     // --- the render loop --------------------------------------------------------
 
     updateStatus() {
-        if (!this.editing) {
-            const run = this.selectedRun !== null ? this.runs.get(this.selectedRun) : null;
-            const total = this.controller.numMoves;
-            $('status').textContent = run
-                ? `${run.label}: move ${this.controller.boundary}/${total}`
-                + (run.solution ? '' : ', searching...')
-                : this.ready ? 'ready' : $('status').textContent;
-        }
-        $('heap').textContent = this.solver.status.heapMB !== undefined
-            ? `${Math.round(this.solver.status.heapMB)} MB` : '-';
+         if (!this.editing) {
+             const run = this.selectedRun !== null ? this.runs.get(this.selectedRun) : null;
+             const total = this.controller.numMoves;
+             if (run) {
+                 // while searching: the latest iteration progress, else the
+                 // move counter
+                 $('status').textContent = run.solution === null
+                     ? `${run.label}: ${run.progress || 'searching...'}`
+                     : `${run.label}: move ${this.controller.boundary}/${total}`;
+             } else if (this.ready) {
+                 $('status').textContent = 'ready';
+             }
+         }
+         // the spinner: table generation or an active search
+         const searching = [...this.runs.values()].some(r => r.solution === null)
+             || this.pendingCustomIds.length > 0;
+         $('spinner').classList.toggle('busy', (this.initStarted && !this.ready) || searching);
+         $('heap').textContent = this.solver.status.heapMB !== undefined
+             ? `${Math.round(this.solver.status.heapMB)} MB` : '-';
         if (this.solver.status.threads !== undefined) {
             $('threads').textContent = this.solver.status.threads;
         }

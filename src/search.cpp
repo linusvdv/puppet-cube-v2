@@ -28,6 +28,9 @@
 using Frontier = std::vector<std::vector<std::vector<std::pair<State, uint8_t>>>>;
 constexpr int kNumHeuristicLayers = 60;
 
+// see search.hpp - nullptr unless the web binding installs it
+SearchIterationHook search_iteration_hook = nullptr;
+
 std::map<State, uint8_t> upload_to_leaf_map;
 
 
@@ -313,6 +316,11 @@ void BaseSearchManager (
             LOG_EXTRA("Proven optimal solution");
             break;
         }
+        // this depth is exhausted without a solution - report the progress
+        if (search_iteration_hook != nullptr) {
+            search_iteration_hook(scramble_idx, solution_depth,
+                                  num_positions_search + shared_search.leaf_cnt.load());
+        }
     }
     solution_depth--;
 
@@ -407,7 +415,7 @@ void SolveRun(SharedSearch& shared_search, SharedLeafSolution& shared_leaf_solut
 
 // search loop shared by the scramble search and the user input position search
 void SearchManagerRuns(const std::vector<State>& start_states, const std::vector<std::vector<uint8_t>>& scrambles,
-                       const SearchEventCallback& event_callback) {
+                       const SearchEventCallback& event_callback, size_t run_offset) {
     // start timing
     std::chrono::time_point start_time = std::chrono::high_resolution_clock::now();
 
@@ -443,8 +451,10 @@ void SearchManagerRuns(const std::vector<State>& start_states, const std::vector
     // start base search on CPU
     ThreadPool search_thread_pool(Settings::GetNumThreads());
     for (size_t idx = 0; idx < start_states.size(); idx++) {
+        // the event run index and the log numbering are global (offset by
+        // the runs of previously started searches)
         SolveRun(shared_search, shared_leaf_solution, shared_leaf_states, search_thread_pool,
-                 start_states[idx], idx, start_states.size(), scrambles[idx],
+                 start_states[idx], idx + run_offset, start_states.size() + run_offset, scrambles[idx],
                  acc_depth, acc_total_num_positions, event_callback);
     }
     shared_search.finished.store(true);
@@ -461,22 +471,23 @@ void SearchManagerRuns(const std::vector<State>& start_states, const std::vector
 }
 
 
-void SearchManager (const SearchEventCallback& event_callback) {
+void SearchManager (const SearchEventCallback& event_callback, size_t run_offset) {
     if (Settings::GetNumRuns() <= 0) {
         return;
     }
 
-    // random starting positions
+    // random starting positions (the offset keeps every started search on
+    // fresh scrambles and numbers the runs globally)
     LOG_EXTRA("Start calculating random positions");
     std::vector<std::vector<uint8_t>> scrambles;
-    std::vector<State> random_positions = RandomPositions(Settings::GetNumRuns(), Settings::GetRunOffset(), scrambles);
+    std::vector<State> random_positions = RandomPositions(Settings::GetNumRuns(), int(Settings::GetRunOffset() + run_offset), scrambles);
     LOG_ALL("Calculated random positions");
 
-    SearchManagerRuns(random_positions, scrambles, event_callback);
+    SearchManagerRuns(random_positions, scrambles, event_callback, run_offset);
 }
 
 
 // solves a single user input position (no scramble, run index 0)
 void SearchManagerCustom(const State& state, const SearchEventCallback& event_callback) {
-    SearchManagerRuns({state}, {std::vector<uint8_t>()}, event_callback);
+    SearchManagerRuns({state}, {std::vector<uint8_t>()}, event_callback, 0);
 }
