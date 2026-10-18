@@ -1,0 +1,66 @@
+name: web
+
+# builds the wasm solver and deploys the github pages site on every push
+# that changes the solver sources, the web frontend or the build config.
+# the deployed site is rebuilt from scratch every time: only the wasm is
+# an artifact of this pipeline, everything else (three.js libs, meshes
+# jsons, the app) is committed.
+
+on:
+  push:
+    branches: [main]
+    paths: [src/**, web/**, CMakeLists.txt, .github/workflows/web.yml]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: placement pipeline test
+        run: node web/tests/placement_test.mjs
+
+      - name: install emsdk 6.0.12 (same version as locally)
+        run: |
+          git clone --depth 1 https://github.com/emscripten-core/emsdk.git
+          cd emsdk
+          ./emsdk install 6.0.12
+          ./emsdk activate 6.0.12
+          echo "EMSDK=$PWD" >> "$GITHUB_ENV"
+          echo "$PWD/upstream/emscripten" >> "$GITHUB_PATH"
+
+      - name: build the wasm module
+        run: |
+          emcmake cmake -B build_web -DBUILD_WEB=ON -DCMAKE_BUILD_TYPE=Release
+          cmake --build build_web -j
+          cp build_web/bin/puppetweb.js build_web/bin/puppetweb.wasm web/
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: web
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: deploy to github pages
+        id: deployment
+        uses: actions/deploy-pages@v4
