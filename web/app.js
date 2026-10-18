@@ -27,6 +27,7 @@ class App {
         this.pendingCustomIds = [];  // app-side ids of queued custom solves
         this.activeCustomId = null;
         this.initStarted = false;
+        this.lastStage = null;
         this.selectedRun = null;
         this.follow = true;
         this.userPaused = false;
@@ -190,6 +191,7 @@ class App {
             ev.runIdx = this.activeCustomId;
         }
         if (ev.kind === 'stage') {
+            this.lastStage = ev.text;
             this.log(`[stage] ${ev.text}`, 'stage');
         } else if (ev.kind === 'ready') {
             this.ready = true;
@@ -199,12 +201,13 @@ class App {
             $('run').disabled = false;
             this.updateColorButtons();
         } else if (ev.kind === 'iteration') {
-            // a depth was exhausted without finding a solution
+            // a depth-d iteration completed without a solution: no solution
+            // with <= d-1 moves exists
             const run = this.runs.get(ev.runIdx);
             const label = run ? run.label : `run ${ev.runIdx}`;
-            const text = `${label}: no solution with depth ${ev.depth}, `
+            const text = `no solution with depth ${ev.depth - 1}, `
                 + `searched ${Math.round(ev.positions).toLocaleString('en-US')} positions`;
-            this.log(text, 'stage');
+            this.log(`${label}: ${text}`, 'stage');
             if (run) run.progress = text;
         } else if (ev.kind === 'scramble') {
             const custom = ev.runIdx >= 1000000;
@@ -528,7 +531,10 @@ class App {
          if (!this.editing) {
              const run = this.selectedRun !== null ? this.runs.get(this.selectedRun) : null;
              const total = this.controller.numMoves;
-             if (run) {
+             if (this.initStarted && !this.ready) {
+                 $('status').textContent = this.lastStage
+                     ? `generating: ${this.lastStage}` : 'generating tables ...';
+             } else if (run) {
                  // while searching: the latest iteration progress, else the
                  // move counter
                  $('status').textContent = run.solution === null
