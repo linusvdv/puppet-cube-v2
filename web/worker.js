@@ -100,7 +100,7 @@ onmessage = (msg) => {
                                             error: r.error, message: r.message}});
         } else if (data.type === 'state_after_moves') {
             const state = module.state_after_moves(data.moves, data.start || []);
-            post({type: 'state_after_moves', state: state});
+            post({type: 'state_after_moves', state: vecToArray(state)});
         }
     } catch (err) {
         post({type: 'error', message: String(err)});

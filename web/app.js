@@ -33,9 +33,9 @@ class App {
     }
 
     async boot() {
-        const [meshData, editorMeshes, reps] = await Promise.all([
+        const [meshData, editorMeshes, reps, hardest] = await Promise.all([
             fetchJson('meshes.json'), fetchJson('editor_meshes.json'),
-            fetchJson('rotation_reps.json')]);
+            fetchJson('rotation_reps.json'), fetchJson('hardest.json')]);
         this.meshData = meshData;
         this.editorMeshes = editorMeshes;
         this.moves = deriveMoves(reps);
@@ -68,6 +68,19 @@ class App {
             $('status').textContent = 'module loaded';
         });
         $('isolated').textContent = crossOriginIsolated;
+
+        // the hardest known position: playable before any tables are
+        // generated (display needs no solver - the moves are stored)
+        this.runs.set(-1, {
+            scramble: [],
+            solution: hardest.solution.map(i => this.moves[i]),
+            depth: hardest.depth,
+            initial: initialPlacementData(EditorState.fromWire(hardest.placements), meshData),
+            label: `hardest (${hardest.depth})`,
+        });
+        this.refreshRunList();
+        this.selectRun(-1, true);
+
         this.renderLoop();
     }
 
@@ -79,11 +92,12 @@ class App {
     setupUi() {
         $('init').onclick = () => {
             $('init').disabled = true;
-            $('status').textContent = 'generating tables ...';
+            $('init').textContent = 'generating ...';
             this.solver.initialize(App.bootLogArgs());
         };
         $('run').onclick = () => {
             $('run').disabled = true;
+            this.follow = true;      // the demo explicitly follows its runs
             this.solver.run();
         };
         $('edit').onclick = () => this.setEditMode(!this.editing);
@@ -169,6 +183,7 @@ class App {
             this.ready = true;
             this.log(ev.text, 'ready');
             $('status').textContent = 'ready';
+            $('init').textContent = 'tables ready';
             $('run').disabled = false;
             $('solve_position').disabled = false;
             this.updateColorButtons();

@@ -24,6 +24,9 @@ export class Solver {
             } else if (data.type === 'convert') {
                 this._convertResult = data.result;
                 for (const waiter of this._waiters.splice(0)) waiter();
+            } else if (data.type === 'state_after_moves') {
+                this._stateResult = data.state;
+                for (const waiter of this._waiters.splice(0)) waiter();
             }
         };
     }
@@ -56,6 +59,18 @@ export class Solver {
             this.worker.postMessage({type: 'convert', corners, edges});
             const check = () => {
                 if (this._convertResult !== null) resolve(this._convertResult);
+                else this._waiters.push(check);
+            };
+            check();
+        });
+    }
+
+    stateAfterMoves(moves, start = []) {
+        return new Promise((resolve) => {
+            this._stateResult = null;
+            this.worker.postMessage({type: 'state_after_moves', moves, start});
+            const check = () => {
+                if (this._stateResult !== null) resolve(this._stateResult);
                 else this._waiters.push(check);
             };
             check();

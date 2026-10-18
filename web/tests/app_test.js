@@ -41,14 +41,62 @@ async function main() {
         await page.waitForFunction(() => window.app && window.app.meshData, null, {timeout: 30000});
         console.log('app booted');
 
+        // --- the showcase: playable before any tables are generated ---
+        await page.waitForFunction(() => window.app.runs.size === 1
+            && window.app.runs.get(-1) !== undefined, null, {timeout: 30000});
+        const showcase = await page.evaluate(() => {
+            const r = window.app.runs.get(-1);
+            return {label: r.label, depth: r.depth,
+                    solutionLen: r.solution.length, scrambleLen: r.scramble.length,
+                    selected: window.app.selectedRun};
+        });
+        if (showcase.label !== 'hardest (31)' || showcase.depth !== 31
+            || showcase.solutionLen !== 31 || showcase.scrambleLen !== 0
+            || showcase.selected !== -1) {
+            throw new Error('bad showcase run: ' + JSON.stringify(showcase));
+        }
+        // autoplay started on its own
+        await page.waitForFunction(() => window.app.controller.boundary > 1, null, {timeout: 30000});
+        await page.click('#play');   // pause
+        // the full solution replayed from the hardest position ends solved
+        await page.evaluate(() => { window.app.controller.jumpSolved(); });
+        await page.waitForTimeout(300);
+        const hardestSolved = await page.evaluate(() => ({
+            boundary: window.app.controller.boundary,
+            solved: window.app.cube.isSolvedBookkeeping()}));
+        if (hardestSolved.boundary !== 31 || !hardestSolved.solved) {
+            throw new Error('showcase replay does not end solved: ' + JSON.stringify(hardestSolved));
+        }
+        console.log(`showcase ok: ${showcase.label}, replay ends solved`);
+        await page.screenshot({path: path.join(__dirname, 'testdata', 'app_hardest.png')});
+
         // --- generation ---
         await page.click('#init');
         await page.waitForFunction(() => window.app.ready, null, {timeout: 600000});
         console.log('generation done, heap:', await page.textContent('#heap'));
 
+        // the showcase placements + solution verified through the wasm
+        // module: convert -> state, then the solution applied to it ends
+        // in the solved state
+        const wasmCheck = await page.evaluate(async () => {
+            const app = window.app;
+            const res = await fetch('hardest.json');
+            const hardest = await res.json();
+            const conv = await app.solver.convert(hardest.placements.corners,
+                                                  hardest.placements.edges);
+            if (!conv.ok) return {ok: false, message: conv.message};
+            const state = await app.solver.stateAfterMoves(hardest.solution, conv.state);
+            return {ok: true, solved: state.every(v => v === 0), state};
+        });
+        if (!wasmCheck.ok || !wasmCheck.solved) {
+            throw new Error('wasm showcase verification failed: ' + JSON.stringify(wasmCheck));
+        }
+        console.log('wasm verifies: hardest.json solution solves the stored position');
+
         // --- the scramble demo with playback ---
         await page.click('#run');
-        await page.waitForFunction(() => window.app.runs.size >= 1, null, {timeout: 600000});
+        // runs: the showcase (-1) + the demo run 0
+        await page.waitForFunction(() => window.app.runs.get(0) !== undefined, null, {timeout: 600000});
         // the follow mode selected the run and the replay is playing
         await page.waitForFunction(() => window.app.controller.boundary > 2, null, {timeout: 60000});
         console.log('demo run selected, replay playing (boundary > 2)');

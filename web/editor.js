@@ -233,6 +233,22 @@ export class EditorState {
         return {corners: placements.corners.map(wire),
                 edges: placements.edges.map(wire)};
     }
+
+    // inverse of toWire (flat arrays -> placement objects)
+    static fromWire(wire) {
+        const unwire = flat => {
+            const numStickers = (flat.length - 6) / 6;
+            const placement = {slot: flat.slice(0, 3), piece: flat.slice(3, 6),
+                               homeDirs: [], curDirs: []};
+            for (let i = 0; i < numStickers; i++) {
+                placement.homeDirs.push(flat.slice(6 + i*6, 9 + i*6));
+                placement.curDirs.push(flat.slice(9 + i*6, 12 + i*6));
+            }
+            return placement;
+        };
+        return {corners: wire.corners.map(unwire),
+                edges: wire.edges.map(unwire)};
+    }
 }
 
 // the visual model setup of a custom position: (piece, grid, rotation) per
